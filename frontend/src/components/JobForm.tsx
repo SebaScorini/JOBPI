@@ -19,10 +19,10 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+    <form onSubmit={handleSubmit} className="glass-card-solid p-6 md:p-8 space-y-5 rounded-3xl">
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-          Job Title *
+        <label htmlFor="title" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+          Job Title <span className="text-rose-500">*</span>
         </label>
         <input
           type="text"
@@ -31,13 +31,13 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Senior Frontend Engineer"
-          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+          className="input-field"
         />
       </div>
 
       <div>
-        <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-          Company *
+        <label htmlFor="company" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+          Company <span className="text-rose-500">*</span>
         </label>
         <input
           type="text"
@@ -46,13 +46,13 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
           value={company}
           onChange={(e) => setCompany(e.target.value)}
           placeholder="e.g. TechCorp Inc."
-          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+          className="input-field"
         />
       </div>
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-          Job Description *
+        <label htmlFor="description" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+          Job Description <span className="text-rose-500">*</span>
         </label>
         <textarea
           id="description"
@@ -61,15 +61,16 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Paste the full job description here..."
-          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-y"
+          className="input-field resize-y"
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={isLoading || !title.trim() || !company.trim() || !description.trim()}
-        className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
-      >
+      <div className="pt-2">
+        <button
+          type="submit"
+          disabled={isLoading || !title.trim() || !company.trim() || !description.trim()}
+          className="btn-primary flex justify-center items-center gap-2"
+        >
         {isLoading ? (
           <>
             <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -81,7 +82,8 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
         ) : (
           'Analyze Job Description'
         )}
-      </button>
+        </button>
+      </div>
     </form>
   );
 }

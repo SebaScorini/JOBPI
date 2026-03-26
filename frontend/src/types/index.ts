@@ -5,6 +5,7 @@ export interface JobAnalysisRequest {
 }
 
 export interface JobAnalysisResponse {
+  job_id?: number | null;
   summary: string;
   seniority: string;
   role_type: string;
@@ -27,4 +28,33 @@ export interface CvAnalysisResponse {
   resume_improvements: string[];
   interview_focus: string[];
   next_steps: string[];
+}
+
+export interface StoredCV {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface CVJobMatch {
+  id: number;
+  cv_id: number;
+  job_id: number;
+  heuristic_score: number;
+  result: CvAnalysisResponse;
+  created_at: string;
+}
+
+export interface RecommendationMatch {
+  cv_id: number;
+  score: number;
+}
+
+export interface Recommendation {
+  best_cv: {
+    id: number;
+    name: string;
+  };
+  score: number;
+  matches: RecommendationMatch[];
 }

@@ -8,6 +8,7 @@ class JobAnalysisRequest(BaseModel):
 
 
 class JobAnalysisResponse(BaseModel):
+    job_id: int | None = None
     summary: str
     seniority: str
     role_type: str

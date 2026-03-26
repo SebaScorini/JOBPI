@@ -70,3 +70,8 @@ Thumbs.db
 # Logs and databases
 *.log
 *.sqlite3
+jobpi.db
+
+# AI Assistant
+.agent/
+artifacts/

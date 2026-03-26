@@ -1,10 +1,13 @@
 import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import dspy
 from fastapi import HTTPException, status
+from sqlmodel import Session
 
 from app.core.config import configure_dspy, get_settings
+from app.db import crud
 from app.schemas.job import JobAnalysisRequest, JobAnalysisResponse
 from app.services.job_preprocessing import clean_description
 
@@ -52,9 +55,17 @@ class JobAnalyzerService:
         self._executor = ThreadPoolExecutor(max_workers=4)
         self._cache: dict[str, JobAnalysisResponse] = {}
 
-    def analyze(self, payload: JobAnalysisRequest) -> JobAnalysisResponse:
+    def analyze(self, payload: JobAnalysisRequest, session: Session | None = None) -> JobAnalysisResponse:
         cleaned_description = clean_description(payload.description)
         cache_key = _build_cache_key(payload.title, payload.company, cleaned_description)
+
+        if session is not None:
+            stored = crud.get_job_by_hash(session, cache_key)
+            if stored is not None:
+                response = JobAnalysisResponse.model_validate_json(stored.result_json)
+                response.job_id = stored.id
+                self._cache[cache_key] = response.model_copy(deep=True)
+                return response
 
         cached = self._cache.get(cache_key)
         if cached is not None:
@@ -93,6 +104,16 @@ class JobAnalyzerService:
             interview_tips=_normalize_list(result.interview),
             portfolio_project_ideas=_normalize_list(result.projects),
         )
+        if session is not None:
+            stored = crud.create_job_analysis(
+                session,
+                job_hash=cache_key,
+                title=payload.title,
+                company=payload.company,
+                cleaned_description=cleaned_description,
+                result_json=json.dumps(response.model_dump()),
+            )
+            response.job_id = stored.id
         self._cache[cache_key] = response.model_copy(deep=True)
         return response
 

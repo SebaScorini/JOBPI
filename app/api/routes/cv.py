@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
+@router.post("/cv/analyze", response_model=CvAnalysisResponse)
 @router.post("/analyze-fit", response_model=CvAnalysisResponse)
 async def analyze_fit(
     title: str = Form(..., min_length=1, max_length=200),

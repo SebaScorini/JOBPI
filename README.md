@@ -4,15 +4,12 @@
 This project is an AI-powered job analysis application that intelligently evaluates job descriptions and compares them against uploaded candidate CVs. It solves the problem of manual resume screening by automating the comparison process and providing targeted, structured career advisory. AI is used to accurately extract context, perform semantic matching, and generate reliable insights using an optimized token pipeline.
 
 ## Features
-- Job description analysis
-- CV PDF upload
-- CV-to-job fit comparison
-- Structured career advice
-- Token-optimized inference
-- FastAPI backend
-- React frontend
-- DSPy integration
-- OpenRouter free model support
+- **Intelligent Job Analysis:** Parses job descriptions with DSPy to extract core skills, responsibilities, and success metrics.
+- **Library Engine & Ad-Hoc Checks:** Advanced UI supporting both persistent CV library matching and quick one-off PDF checks.
+- **Side-by-Side Viewport:** Comprehensive, full-screen modal interface for comparing candidate strengths against job requirements simultaneously.
+- **Premium SaaS UX:** Includes buttery smooth dark/light mode transitions, glass-morphism cards, responsive tabbed navigation, and loading states.
+- **Token-Optimized Inference:** Preprocessing techniques to reduce context window load.
+- **FastAPI / React Stack:** Built with a modern, type-safe, and asynchronous architecture.
 
 ## Tech Stack
 ### Backend
