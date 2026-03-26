@@ -273,6 +273,30 @@ export const apiService = {
     return mapCV(cv);
   },
 
+  async batchUploadCVs(files: File[]): Promise<{ results: Array<{ filename: string; success: boolean; cv?: StoredCV; error?: string }>; summary: { succeeded: number; failed: number } }> {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await request<any>('/cvs/batch-upload', {
+      method: 'POST',
+      auth: true,
+      body: formData,
+    });
+
+    // Map the response, converting cv objects
+    return {
+      results: response.results.map((r: any) => ({
+        filename: r.filename,
+        success: r.success,
+        cv: r.cv ? mapCV(r.cv) : undefined,
+        error: r.error,
+      })),
+      summary: response.summary,
+    };
+  },
+
   async listCVs(): Promise<StoredCV[]> {
     const cvs = await request<BackendCVRead[]>('/cvs', { auth: true });
     return cvs.map(mapCV);

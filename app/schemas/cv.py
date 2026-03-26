@@ -26,3 +26,17 @@ class CVRead(BaseModel):
 class CVDetailRead(CVRead):
     raw_text: str
     clean_text: str
+
+
+class CVUploadResult(BaseModel):
+    """Result for a single file in batch upload."""
+    filename: str
+    success: bool
+    cv: CVRead | None = None
+    error: str | None = None
+
+
+class CVBatchUploadResponse(BaseModel):
+    """Response for batch CV upload."""
+    results: list[CVUploadResult]
+    summary: dict[str, int] = {}  # {"succeeded": 2, "failed": 1}

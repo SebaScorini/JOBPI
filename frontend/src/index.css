@@ -36,7 +36,7 @@
   }
   
   .glass-card-solid {
-    @apply bg-white border border-slate-200 shadow-sm dark:bg-[#151B2B] dark:border-slate-800;
+    @apply bg-slate-50/50 border border-slate-200/60 shadow-sm dark:bg-[#151B2B] dark:border-slate-800;
   }
 
   .interactive-card {

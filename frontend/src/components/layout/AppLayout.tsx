@@ -56,13 +56,10 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-brand-background dark:bg-[#0B0F19] transition-colors duration-500 flex selection:bg-brand-primary/20">
-      {/* Decorative gradient glow */}
-      <div className="fixed top-0 left-0 right-0 h-[500px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-primary/20 via-brand-primary/5 to-transparent dark:from-brand-primary/10 dark:via-brand-primary/[0.02] pointer-events-none transition-colors duration-500 z-0" />
-
       {/* Mobile overlay */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden"
           onClick={closeSidebar}
         />
       )}
