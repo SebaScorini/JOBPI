@@ -10,7 +10,6 @@ router = APIRouter(tags=["jobs"])
 
 
 @router.post("/jobs/analyze", response_model=JobAnalysisResponse)
-@router.post("/analyze-job", response_model=JobAnalysisResponse)
 def analyze_job(
     payload: JobAnalysisRequest,
     session: Session = Depends(get_session),

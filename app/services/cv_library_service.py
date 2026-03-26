@@ -122,11 +122,8 @@ def compute_heuristic_score(cv_text: str, job_text: str) -> float:
     if not cv_tokens or not job_tokens:
         return 0.0
 
-    union_size = len(cv_tokens | job_tokens)
-    if union_size == 0:
-        return 0.0
-
-    score = len(cv_tokens & job_tokens) / union_size
+    union = cv_tokens | job_tokens
+    score = len(cv_tokens & job_tokens) / len(union)
     return round(score, 4)
 
 

@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 
 from app.core.config import configure_dspy
 from app.schemas.cv import CvAnalysisResponse
-from app.services.job_analyzer import _normalize_text
+from app.services.job_analyzer import _normalize_list, _normalize_text
 
 
 MAX_LIST_ITEMS = 4
@@ -90,30 +90,6 @@ class CvAnalyzerService:
         return response
 
 
-def _normalize_list(value: object) -> list[str]:
-    items: list[str] = []
-
-    if isinstance(value, list):
-        items = [item for item in value if isinstance(item, str)]
-    elif isinstance(value, str):
-        normalized = value.replace("\r", "\n")
-        for line in normalized.split("\n"):
-            stripped = line.strip(" -")
-            if not stripped:
-                continue
-            if "," in stripped and not stripped.startswith("-"):
-                items.extend(part.strip(" -") for part in stripped.split(",") if part.strip(" -"))
-            else:
-                items.append(stripped)
-
-    cleaned: list[str] = []
-    for item in items:
-        short = _normalize_text(item, MAX_ITEM_CHARS)
-        if short and short not in cleaned:
-            cleaned.append(short)
-        if len(cleaned) >= MAX_LIST_ITEMS:
-            break
-    return cleaned
 
 
 _cv_service: CvAnalyzerService | None = None

@@ -55,13 +55,10 @@ export function AnalysisModal({
   if (!isOpen || !jobResult) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 isolate"
-      style={{ contain: 'strict' }}
-    >
+    <div className="fixed inset-0 z-50">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+        className="absolute inset-0 bg-slate-900/70 animate-in fade-in duration-200"
         onClick={onClose}
       />
 
@@ -72,7 +69,7 @@ export function AnalysisModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header — pinned */}
-        <div className="flex items-center justify-between px-6 py-4 md:px-8 md:py-5 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 md:px-8 md:py-5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-2xl bg-sky-100 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/20">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
@@ -93,10 +90,7 @@ export function AnalysisModal({
         </div>
 
         {/* Content — the ONLY scrollable zone */}
-        <div
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-          onWheel={(e) => e.stopPropagation()}
-        >
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="p-6 md:p-8">
             {/* Recommendation banner */}
             {recommendation && (

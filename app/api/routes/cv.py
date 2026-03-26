@@ -15,7 +15,6 @@ MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 @router.post("/cv/analyze", response_model=CvAnalysisResponse)
-@router.post("/analyze-fit", response_model=CvAnalysisResponse)
 async def analyze_fit(
     title: str = Form(..., min_length=1, max_length=200),
     description: str = Form(..., min_length=50, max_length=20000),

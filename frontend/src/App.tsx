@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CVSidebar } from './components/CVSidebar';
 import { CvForm } from './components/CvForm';
 import { CvResultCard } from './components/CvResultCard';
@@ -45,11 +45,15 @@ function App() {
   });
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('theme-transition');
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
     }
+    const timer = setTimeout(() => root.classList.remove('theme-transition'), 500);
+    return () => clearTimeout(timer);
   }, [isDarkMode]);
 
   useEffect(() => {
@@ -64,7 +68,7 @@ function App() {
     void runMatch(activeCV.id, jobResult.job_id);
   }, [activeCV, jobResult?.job_id]);
 
-  const loadStoredCVs = async () => {
+  const loadStoredCVs = useCallback(async () => {
     setLibraryLoading(true);
     try {
       const cvs = await apiService.listCVs();
@@ -75,9 +79,9 @@ function App() {
     } finally {
       setLibraryLoading(false);
     }
-  };
+  }, []);
 
-  const handleAnalyzeJob = async (data: JobAnalysisRequest) => {
+  const handleAnalyzeJob = useCallback(async (data: JobAnalysisRequest) => {
     setJobLoading(true);
     setJobError(null);
     setJobResult(null);
@@ -95,7 +99,7 @@ function App() {
     } finally {
       setJobLoading(false);
     }
-  };
+  }, []);
 
   const runMatch = async (cvId: number, jobId: number) => {
     setMatchLoading(true);
@@ -110,7 +114,7 @@ function App() {
     }
   };
 
-  const handleUploadCV = async (name: string, file: File) => {
+  const handleUploadCV = useCallback(async (name: string, file: File) => {
     setUploadingCV(true);
     try {
       const created = await apiService.uploadCV(name, file);
@@ -119,24 +123,28 @@ function App() {
     } finally {
       setUploadingCV(false);
     }
-  };
+  }, []);
 
-  const handleDeleteCV = async (cvId: number) => {
-    await apiService.deleteCV(cvId);
-    setStoredCVs((current) => {
-      const next = current.filter((cv) => cv.id !== cvId);
-      if (activeCV?.id === cvId) {
-        setActiveCV(next[0] ?? null);
-        setMatchResult(null);
+  const handleDeleteCV = useCallback(async (cvId: number) => {
+    try {
+      await apiService.deleteCV(cvId);
+      setStoredCVs((current) => {
+        const next = current.filter((cv) => cv.id !== cvId);
+        if (activeCV?.id === cvId) {
+          setActiveCV(next[0] ?? null);
+          setMatchResult(null);
+        }
+        return next;
+      });
+
+      if (recommendedCVId === cvId) {
+        setRecommendedCVId(null);
+        setRecommendation(null);
       }
-      return next;
-    });
-
-    if (recommendedCVId === cvId) {
-      setRecommendedCVId(null);
-      setRecommendation(null);
+    } catch (err) {
+      setJobError(err instanceof Error ? err.message : 'Could not delete CV.');
     }
-  };
+  }, [activeCV?.id, recommendedCVId]);
 
   const handleRecommendBestCV = async () => {
     if (!jobResult?.job_id) {
@@ -153,7 +161,7 @@ function App() {
     }
   };
 
-  const handleAnalyzeFit = async (title: string, description: string, cvFile: File) => {
+  const handleAnalyzeFit = useCallback(async (title: string, description: string, cvFile: File) => {
     setCvLoading(true);
     setCvError(null);
     setCvResult(null);
@@ -165,7 +173,7 @@ function App() {
     } finally {
       setCvLoading(false);
     }
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0B0F19] text-slate-900 dark:text-slate-100 selection:bg-sky-200 dark:selection:bg-sky-900/50 transition-colors duration-500 relative">
@@ -204,14 +212,14 @@ function App() {
         <div className="flex items-center gap-2 p-1.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-2xl w-fit mb-12 shadow-sm border border-slate-200/50 dark:border-slate-700/50">
            <button 
              onClick={() => setActiveView('library')} 
-             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${activeView === 'library' ? 'bg-white dark:bg-slate-700 shadow-sm text-sky-600 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 cursor-pointer ${activeView === 'library' ? 'bg-white dark:bg-slate-700 shadow-sm text-sky-600 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
            >
              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
              Library Engine
            </button>
            <button 
              onClick={() => setActiveView('adhoc')} 
-             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${activeView === 'adhoc' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+             className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 cursor-pointer ${activeView === 'adhoc' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
            >
              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
              Ad-Hoc Check
@@ -251,12 +259,10 @@ function App() {
                 </div>
               </div>
 
-              <div className="glass-card p-6 md:p-8 rounded-3xl">
-                <JobForm onSubmit={handleAnalyzeJob} isLoading={jobLoading} />
-              </div>
+              <JobForm onSubmit={handleAnalyzeJob} isLoading={jobLoading} />
 
               {jobError && (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+                <div className="rounded-2xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-900/10 p-4 text-rose-700 dark:text-rose-400">
                   {jobError}
                 </div>
               )}
@@ -278,7 +284,7 @@ function App() {
                   </div>
                   <button 
                     onClick={() => setIsModalOpen(true)} 
-                    className="btn-primary whitespace-nowrap py-3 px-6 shadow-md hover:shadow-lg transition-all"
+                    className="btn-primary whitespace-nowrap py-3 px-6 shadow-md hover:shadow-lg transition-all cursor-pointer"
                   >
                     Open Viewport
                   </button>
@@ -301,12 +307,10 @@ function App() {
               </div>
             </div>
 
-            <div className="glass-card p-6 md:p-8 rounded-3xl">
-              <CvForm onSubmit={handleAnalyzeFit} isLoading={cvLoading} />
-            </div>
+            <CvForm onSubmit={handleAnalyzeFit} isLoading={cvLoading} />
 
             {cvError && (
-              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+              <div className="mt-4 rounded-2xl border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-900/10 p-4 text-rose-700 dark:text-rose-400">
                 {cvError}
               </div>
             )}
