@@ -65,7 +65,7 @@ class CvAnalyzerService:
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to analyze CV: {exc}",
+                detail="Failed to analyze CV. Please try again.",
             ) from exc
         finally:
             logger.info(

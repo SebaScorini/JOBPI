@@ -1,5 +1,4 @@
 import hashlib
-import json
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import dspy
@@ -8,7 +7,8 @@ from sqlmodel import Session
 
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
-from app.schemas.job import JobAnalysisRequest, JobAnalysisResponse
+from app.models import User
+from app.schemas.job import JobAnalysisPayload, JobAnalysisRequest, JobAnalysisResponse, JobRead
 from app.services.job_preprocessing import clean_description
 
 
@@ -53,23 +53,53 @@ class JobAnalyzerService:
         self.analyzer = JobAnalyzerModule()
         self.timeout_seconds = settings.dspy_timeout_seconds
         self._executor = ThreadPoolExecutor(max_workers=4)
-        self._cache: dict[str, JobAnalysisResponse] = {}
+        self._cache: dict[str, JobAnalysisPayload] = {}
 
-    def analyze(self, payload: JobAnalysisRequest, session: Session | None = None) -> JobAnalysisResponse:
+    def analyze(
+        self,
+        payload: JobAnalysisRequest,
+        session: Session | None = None,
+        user: User | None = None,
+    ) -> JobRead:
         cleaned_description = clean_description(payload.description)
         cache_key = _build_cache_key(payload.title, payload.company, cleaned_description)
 
-        if session is not None:
-            stored = crud.get_job_by_hash(session, cache_key)
+        if session is not None and user is not None:
+            stored = crud.get_matching_job_analysis(
+                session,
+                user_id=user.id,
+                title=payload.title,
+                company=payload.company,
+                clean_description=cleaned_description,
+            )
             if stored is not None:
-                response = JobAnalysisResponse.model_validate_json(stored.result_json)
-                response.job_id = stored.id
+                response = JobAnalysisPayload(**stored.analysis_result)
                 self._cache[cache_key] = response.model_copy(deep=True)
-                return response
+                return self._serialize_job(stored)
 
         cached = self._cache.get(cache_key)
         if cached is not None:
-            return cached.model_copy(deep=True)
+            if session is not None and user is not None:
+                stored = crud.create_job_analysis(
+                    session,
+                    user_id=user.id,
+                    title=payload.title,
+                    company=payload.company,
+                    description=payload.description,
+                    clean_description=cleaned_description,
+                    analysis_result=cached.model_dump(),
+                )
+                return self._serialize_job(stored)
+
+            return JobRead(
+                id=0,
+                title=payload.title,
+                company=payload.company,
+                description=payload.description,
+                clean_description=cleaned_description,
+                analysis_result=cached.model_copy(deep=True),
+                created_at=None,
+            )
 
         try:
             future = self._executor.submit(
@@ -87,10 +117,10 @@ class JobAnalyzerService:
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to analyze job description: {exc}",
+                detail="Failed to analyze job description. Please try again.",
             ) from exc
 
-        response = JobAnalysisResponse(
+        response = JobAnalysisPayload(
             summary=_normalize_text(result.summary, MAX_SUMMARY_CHARS),
             seniority=_normalize_text(result.seniority, 40),
             role_type=_normalize_text(result.role_type, 40),
@@ -104,18 +134,48 @@ class JobAnalyzerService:
             interview_tips=_normalize_list(result.interview),
             portfolio_project_ideas=_normalize_list(result.projects),
         )
-        if session is not None:
+        if session is not None and user is not None:
             stored = crud.create_job_analysis(
                 session,
-                job_hash=cache_key,
+                user_id=user.id,
                 title=payload.title,
                 company=payload.company,
-                cleaned_description=cleaned_description,
-                result_json=json.dumps(response.model_dump()),
+                description=payload.description,
+                clean_description=cleaned_description,
+                analysis_result=response.model_dump(),
             )
-            response.job_id = stored.id
+            self._cache[cache_key] = response.model_copy(deep=True)
+            return self._serialize_job(stored)
         self._cache[cache_key] = response.model_copy(deep=True)
-        return response
+        return JobRead(
+            id=0,
+            title=payload.title,
+            company=payload.company,
+            description=payload.description,
+            clean_description=cleaned_description,
+            analysis_result=response,
+            created_at=None,
+        )
+
+    def list_jobs(self, session: Session, user: User) -> list[JobRead]:
+        return [self._serialize_job(job) for job in crud.get_jobs_for_user(session, user.id)]
+
+    def get_job(self, session: Session, user: User, job_id: int) -> JobRead:
+        job = crud.get_job_for_user(session, user.id, job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
+        return self._serialize_job(job)
+
+    def _serialize_job(self, job) -> JobRead:
+        return JobRead(
+            id=job.id,
+            title=job.title,
+            company=job.company,
+            description=job.description,
+            clean_description=job.clean_description,
+            analysis_result=JobAnalysisPayload(**job.analysis_result),
+            created_at=job.created_at,
+        )
 
 
 def _normalize_list(value: object) -> list[str]:

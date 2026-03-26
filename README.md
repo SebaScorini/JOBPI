@@ -1,150 +1,116 @@
-# AI Job Analyzer
+# AI Job Analyzer (JobPi)
 
 ## Description
-This project is an AI-powered job analysis application that intelligently evaluates job descriptions and compares them against uploaded candidate CVs. It solves the problem of manual resume screening by automating the comparison process and providing targeted, structured career advisory. AI is used to accurately extract context, perform semantic matching, and generate reliable insights using an optimized token pipeline.
+This project is an AI-powered job analysis application that intelligently evaluates job descriptions and compares them against uploaded candidate CVs. It solves the problem of manual resume screening by automating the comparison process and providing targeted, structured career advisory. AI is used to accurately extract context, perform semantic matching, and generate reliable insights using an optimized DSPy token pipeline.
 
-## Features
+## New Updates & Features
+- **User Authentication:** Secure login and registration flows with JWT.
+- **Premium SaaS UX:** Includes buttery smooth dark/light mode transitions, an expansive glass-morphism design system, responsive tabbed navigation, and loading states.
+- **CV Library System:** Save and manage multiple CVs in a persistent SQLite database.
+- **Advanced Match Analysis:** Comprehensive, full-screen side-by-side viewport for comparing candidate strengths, finding missing skills, and extracting actionable interview tips simultaneously. 
 - **Intelligent Job Analysis:** Parses job descriptions with DSPy to extract core skills, responsibilities, and success metrics.
-- **Library Engine & Ad-Hoc Checks:** Advanced UI supporting both persistent CV library matching and quick one-off PDF checks.
-- **Side-by-Side Viewport:** Comprehensive, full-screen modal interface for comparing candidate strengths against job requirements simultaneously.
-- **Premium SaaS UX:** Includes buttery smooth dark/light mode transitions, glass-morphism cards, responsive tabbed navigation, and loading states.
-- **Token-Optimized Inference:** Preprocessing techniques to reduce context window load.
-- **FastAPI / React Stack:** Built with a modern, type-safe, and asynchronous architecture.
+- **Token-Optimized Inference:** Preprocessing techniques to reduce context window load with OpenRouter integrations.
 
 ## Tech Stack
 ### Backend
-- FastAPI
-- DSPy
-- Python
-- OpenRouter
-- PDF parsing
-- REST API
+- **FastAPI** (Async Python framework)
+- **SQLite** (Persistent local database)
+- **DSPy & OpenRouter** (AI Model routing & prompt optimization)
+- **PyPDF2** (PDF parsing)
+- **python-dotenv** (Environment variables handling)
 
 ### Frontend
-- React
-- TypeScript
-- Tailwind
+- **React 18**
+- **TypeScript**
+- **Tailwind CSS 3** (Dark Mode & Glassmorphism)
+- **Vite**
 
 ## Project Structure
 ```text
 .
-├── backend/
-│   ├── main.py
-│   ├── requirements.txt
-│   ├── models/
-│   ├── routers/
-│   └── services/
-├── frontend/
-│   ├── package.json
+├── app/                  # FastAPI Backend 
+│   ├── main.py           # Entry point and FastAPI routers
+│   ├── core/             # Auth, Security, Config logic
+│   ├── models/           # SQLAlchemy DB Models
+│   ├── schemas/          # Pydantic Schemas for type safety
+│   └── services/         # DSPy logic and CV parsing services
+├── frontend/             # React Vite Frontend
 │   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   └── main.tsx
+│   │   ├── components/   # Reusable UI (Modals, Cards, Forms)
+│   │   ├── pages/        # Dashboard, Jobs, CV Library
+│   │   └── context/      # Client-side AuthContext
 │   └── tailwind.config.js
+├── iniciar.bat           # Quickstart script for Windows developers
+├── .env                  # Backend Secrets (ignored by git)
+├── .gitignore            # Git configuration rules
 └── README.md
 ```
 
-## How It Works
-1. User uploads CV: A candidate submits their resume in PDF format alongside a job description.
-2. System extracts text: The backend parses the PDF document into raw text.
-3. Preprocessing: Extracted text is cleaned and condensed to optimize token usage.
-4. DSPy analysis: The system routes the context through DSPy to interact intelligently with models.
-5. Structured output: The analysis generates a standardized JSON response comparing the CV against the job requirements.
-
 ## Getting Started
 
-1. Clone the repository:
+### 1. Clone the repository:
 ```bash
 git clone <repository_url>
 cd <repository_directory>
 ```
 
-2. Install backend dependencies:
+### 2. Environment Variables Configuration:
+- Create a `.env` file in the root directory (for backend API keys):
+```ini
+OPENROUTER_API_KEY=your_key_here
+DSPY_MODEL=openrouter/nvidia/nemotron-3-super-120b-a12b:free
+JWT_SECRET_KEY=your_secure_secret_here
+```
+- Create a `.env` inside the `frontend/` folder:
+```ini
+VITE_API_URL=http://localhost:8000
+```
+
+### 3. Install backend dependencies:
+Using a virtual environment is highly recommended.
 ```bash
-cd backend
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Install frontend dependencies:
+### 4. Install frontend dependencies:
 ```bash
 cd frontend
 npm install
+cd ..
 ```
 
-4. Set environment variables:
-Configure the appropriate `.env` files for both the backend and frontend based on the requirements below.
+### 5. Run the Application:
 
-5. Run the backend:
+**Windows (Automated):**
+You can use the provided batch file to automatically run both the frontend and backend simultaneously in separate terminal windows:
+```cmd
+iniciar.bat
+```
+
+**Manual Start:**
+Terminal 1 (Backend):
 ```bash
-cd backend
-uvicorn main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-6. Run the frontend:
+Terminal 2 (Frontend):
 ```bash
 cd frontend
 npm run dev
 ```
 
-## Environment Variables
+## .gitignore Configuration
+The project is set up to automatically ignore:
+- **Virtual environments** (`venv/`, `.venv`)
+- **OS caching files** (`.DS_Store`, `Thumbs.db`)
+- **Secret files** (`.env` files in both root and frontend)
+- **Build artifacts** (`node_modules/`, `dist/`, `__pycache__/`)
+- **Local Database variants** (`jobpi.db`, SQLite journal files, and `uploads/`)
 
-### Backend (backend/.env)
-- `OPENROUTER_API_KEY`: API key for accessing OpenRouter models
-- `DSPY_MODEL`: Identifier for the specific OpenRouter model to employ
-
-### Frontend (frontend/.env)
-- `VITE_API_URL`: The base URL for the FastAPI backend
-
-## API Endpoints
-- `POST /analyze-job`: Analyzes a provided job description and returns core requirements.
-- `POST /analyze-fit`: Accepts a PDF upload and a job description to return a fit comparison.
-
-## Example Request
-
-```http
-POST /analyze-fit HTTP/1.1
-Host: localhost:8000
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
-
-------WebKitFormBoundary
-Content-Disposition: form-data; name="cv_file"; filename="resume.pdf"
-Content-Type: application/pdf
-
-<Binary PDF Data>
-------WebKitFormBoundary
-Content-Disposition: form-data; name="job_description"
-
-We are looking for a software engineer experienced with React and Python.
-------WebKitFormBoundary--
-```
-
-## Example Response
-
-```json
-{
-  "fit_score": 85,
-  "analysis": "The candidate shows strong alignment with the core requirements.",
-  "strengths": [
-    "Python development",
-    "React component architecture"
-  ],
-  "areas_for_improvement": [
-    "Missing explicit AI model experience"
-  ],
-  "career_advice": "Highlight any self-directed AI projects to demonstrate capability."
-}
-```
-
-## Performance Notes
-- Optimized for free models
-- Token reduction implemented for context windows
-- Preprocessing executed to strip unnecessary formatting
-
-## Future Improvements
-- Better scoring
-- Caching
-- Streaming responses
-- OCR support
+## Security Considerations
+- **Environment Variables**: API keys and JWT secrets must always be kept in `.env` and never committed to version control. The `.gitignore` is precisely configured to handle this.
+- **Input Validation:** Extensive Pydantic models validate all incoming data across API boundaries.
 
 ## License
 MIT License

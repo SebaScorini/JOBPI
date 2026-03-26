@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
 
 
 class CvAnalysisResponse(BaseModel):
@@ -9,3 +11,18 @@ class CvAnalysisResponse(BaseModel):
     resume_improvements: list[str]
     interview_focus: list[str]
     next_steps: list[str]
+
+
+class CVRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    filename: str
+    display_name: str
+    summary: str
+    created_at: datetime
+
+
+class CVDetailRead(CVRead):
+    raw_text: str
+    clean_text: str

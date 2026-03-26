@@ -1,5 +1,7 @@
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -13,20 +15,24 @@ venv.bak/
 .env.test.local
 .env.production.local
 
-# Byte-compiled / optimized / DLL files
+# SQL DBs
+*.sqlite3
+jobpi.db
+jobpi.db-journal
+jobpi.db-wal
+jobpi.db-shm
+
+# Backend specific
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
 dist/
 downloads/
+uploads/
 eggs/
 .eggs/
 lib/
@@ -67,11 +73,10 @@ frontend/out/
 ehthumbs.db
 Thumbs.db
 
-# Logs and databases
+# Logs
 *.log
-*.sqlite3
-jobpi.db
 
 # AI Assistant
 .agent/
+.agents/
 artifacts/

@@ -8,8 +8,18 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif'],
+        heading: ['Space Grotesk', 'sans-serif'],
+        sans: ['DM Sans', 'Inter', 'system-ui', 'sans-serif'],
       },
+      colors: {
+        brand: {
+          primary: '#0369A1',
+          secondary: '#0EA5E9',
+          cta: '#22C55E',
+          background: '#F0F9FF',
+          text: '#0C4A6E',
+        }
+      }
     },
   },
   plugins: [],

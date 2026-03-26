@@ -1,3 +1,15 @@
+export interface User {
+  id: number;
+  email: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
 export interface JobAnalysisRequest {
   title: string;
   company: string;
@@ -5,7 +17,11 @@ export interface JobAnalysisRequest {
 }
 
 export interface JobAnalysisResponse {
-  job_id?: number | null;
+  id: number;
+  job_id: number;
+  title: string;
+  company: string;
+  description: string;
   summary: string;
   seniority: string;
   role_type: string;
@@ -18,6 +34,7 @@ export interface JobAnalysisResponse {
   resume_tips: string[];
   interview_tips: string[];
   portfolio_project_ideas: string[];
+  created_at: string | null;
 }
 
 export interface CvAnalysisResponse {
@@ -33,6 +50,7 @@ export interface CvAnalysisResponse {
 export interface StoredCV {
   id: number;
   name: string;
+  summary: string;
   created_at: string;
 }
 
@@ -43,6 +61,7 @@ export interface CVJobMatch {
   heuristic_score: number;
   result: CvAnalysisResponse;
   created_at: string;
+  recommended: boolean;
 }
 
 export interface RecommendationMatch {

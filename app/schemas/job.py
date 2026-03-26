@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class JobAnalysisRequest(BaseModel):
@@ -7,8 +9,7 @@ class JobAnalysisRequest(BaseModel):
     description: str = Field(..., min_length=50, max_length=20000)
 
 
-class JobAnalysisResponse(BaseModel):
-    job_id: int | None = None
+class JobAnalysisPayload(BaseModel):
     summary: str
     seniority: str
     role_type: str
@@ -21,3 +22,19 @@ class JobAnalysisResponse(BaseModel):
     resume_tips: list[str]
     interview_tips: list[str]
     portfolio_project_ideas: list[str]
+
+
+class JobAnalysisResponse(JobAnalysisPayload):
+    job_id: int | None = None
+
+
+class JobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    company: str
+    description: str
+    clean_description: str
+    analysis_result: JobAnalysisPayload
+    created_at: datetime | None

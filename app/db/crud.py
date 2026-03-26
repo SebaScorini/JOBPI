@@ -1,32 +1,60 @@
 from sqlmodel import Session, select
 
-from app.db.models import CVJobMatch, JobAnalysis, StoredCV
+from app.models import CV, CVJobMatch, JobAnalysis, User
 
 
-def create_cv(session: Session, name: str, file_hash: str, cleaned_text: str) -> StoredCV:
-    cv = StoredCV(name=name, file_hash=file_hash, cleaned_text=cleaned_text)
+def create_user(session: Session, email: str, hashed_password: str) -> User:
+    user = User(email=email.lower().strip(), hashed_password=hashed_password)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def get_user_by_email(session: Session, email: str) -> User | None:
+    statement = select(User).where(User.email == email.lower().strip())
+    return session.exec(statement).first()
+
+
+def get_user_by_id(session: Session, user_id: int) -> User | None:
+    return session.get(User, user_id)
+
+
+def create_cv(
+    session: Session,
+    user_id: int,
+    filename: str,
+    display_name: str,
+    raw_text: str,
+    clean_text: str,
+    summary: str,
+) -> CV:
+    cv = CV(
+        user_id=user_id,
+        filename=filename,
+        display_name=display_name,
+        raw_text=raw_text,
+        clean_text=clean_text,
+        summary=summary,
+    )
     session.add(cv)
     session.commit()
     session.refresh(cv)
     return cv
 
 
-def get_cv_by_hash(session: Session, file_hash: str) -> StoredCV | None:
-    statement = select(StoredCV).where(StoredCV.file_hash == file_hash)
-    return session.exec(statement).first()
-
-
-def get_all_cvs(session: Session) -> list[StoredCV]:
-    statement = select(StoredCV).order_by(StoredCV.created_at.desc())
+def get_cvs_for_user(session: Session, user_id: int) -> list[CV]:
+    statement = select(CV).where(CV.user_id == user_id).order_by(CV.created_at.desc())
     return list(session.exec(statement).all())
 
 
-def get_cv(session: Session, cv_id: int) -> StoredCV | None:
-    return session.get(StoredCV, cv_id)
+def get_cv_for_user(session: Session, user_id: int, cv_id: int) -> CV | None:
+    statement = select(CV).where(CV.id == cv_id, CV.user_id == user_id)
+    return session.exec(statement).first()
 
 
-def delete_cv(session: Session, cv: StoredCV) -> None:
-    statement = select(CVJobMatch).where(CVJobMatch.cv_id == cv.id)
+def delete_cv(session: Session, cv: CV) -> None:
+    statement = select(CVJobMatch).where(CVJobMatch.cv_id == cv.id, CVJobMatch.user_id == cv.user_id)
     matches = session.exec(statement).all()
     for match in matches:
         session.delete(match)
@@ -36,18 +64,20 @@ def delete_cv(session: Session, cv: StoredCV) -> None:
 
 def create_job_analysis(
     session: Session,
-    job_hash: str,
+    user_id: int,
     title: str,
     company: str,
-    cleaned_description: str,
-    result_json: str,
+    description: str,
+    clean_description: str,
+    analysis_result: dict,
 ) -> JobAnalysis:
     job = JobAnalysis(
-        job_hash=job_hash,
+        user_id=user_id,
         title=title,
         company=company,
-        cleaned_description=cleaned_description,
-        result_json=result_json,
+        description=description,
+        clean_description=clean_description,
+        analysis_result=analysis_result,
     )
     session.add(job)
     session.commit()
@@ -55,27 +85,52 @@ def create_job_analysis(
     return job
 
 
-def get_job_by_hash(session: Session, job_hash: str) -> JobAnalysis | None:
-    statement = select(JobAnalysis).where(JobAnalysis.job_hash == job_hash)
+def get_matching_job_analysis(
+    session: Session,
+    user_id: int,
+    title: str,
+    company: str,
+    clean_description: str,
+) -> JobAnalysis | None:
+    statement = select(JobAnalysis).where(
+        JobAnalysis.user_id == user_id,
+        JobAnalysis.title == title,
+        JobAnalysis.company == company,
+        JobAnalysis.clean_description == clean_description,
+    )
     return session.exec(statement).first()
 
 
-def get_job(session: Session, job_id: int) -> JobAnalysis | None:
-    return session.get(JobAnalysis, job_id)
+def get_jobs_for_user(session: Session, user_id: int) -> list[JobAnalysis]:
+    statement = select(JobAnalysis).where(JobAnalysis.user_id == user_id).order_by(JobAnalysis.created_at.desc())
+    return list(session.exec(statement).all())
+
+
+def get_job_for_user(session: Session, user_id: int, job_id: int) -> JobAnalysis | None:
+    statement = select(JobAnalysis).where(JobAnalysis.id == job_id, JobAnalysis.user_id == user_id)
+    return session.exec(statement).first()
 
 
 def create_match(
     session: Session,
+    user_id: int,
     cv_id: int,
     job_id: int,
-    result_json: str,
-    heuristic_score: float,
+    fit_level: str,
+    fit_summary: str,
+    strengths: list[str],
+    missing_skills: list[str],
+    recommended: bool = False,
 ) -> CVJobMatch:
     match = CVJobMatch(
+        user_id=user_id,
         cv_id=cv_id,
         job_id=job_id,
-        result_json=result_json,
-        heuristic_score=heuristic_score,
+        fit_level=fit_level,
+        fit_summary=fit_summary,
+        strengths=strengths,
+        missing_skills=missing_skills,
+        recommended=recommended,
     )
     session.add(match)
     session.commit()
@@ -83,14 +138,44 @@ def create_match(
     return match
 
 
-def get_match(session: Session, cv_id: int, job_id: int) -> CVJobMatch | None:
+def clear_recommendations_for_job(session: Session, user_id: int, job_id: int) -> None:
+    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.job_id == job_id)
+    for match in session.exec(statement).all():
+        match.recommended = False
+        session.add(match)
+    session.commit()
+
+
+def set_recommended_match(session: Session, match: CVJobMatch) -> CVJobMatch:
+    match.recommended = True
+    session.add(match)
+    session.commit()
+    session.refresh(match)
+    return match
+
+
+def get_match_for_user_by_cv_and_job(session: Session, user_id: int, cv_id: int, job_id: int) -> CVJobMatch | None:
     statement = select(CVJobMatch).where(
+        CVJobMatch.user_id == user_id,
         CVJobMatch.cv_id == cv_id,
         CVJobMatch.job_id == job_id,
     )
     return session.exec(statement).first()
 
 
-def get_all_matches_for_job(session: Session, job_id: int) -> list[CVJobMatch]:
-    statement = select(CVJobMatch).where(CVJobMatch.job_id == job_id)
+def get_matches_for_user(session: Session, user_id: int) -> list[CVJobMatch]:
+    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id).order_by(CVJobMatch.created_at.desc())
+    return list(session.exec(statement).all())
+
+
+def get_match_for_user(session: Session, user_id: int, match_id: int) -> CVJobMatch | None:
+    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.id == match_id)
+    return session.exec(statement).first()
+
+
+def get_matches_for_job(session: Session, user_id: int, job_id: int) -> list[CVJobMatch]:
+    statement = select(CVJobMatch).where(
+        CVJobMatch.user_id == user_id,
+        CVJobMatch.job_id == job_id,
+    )
     return list(session.exec(statement).all())

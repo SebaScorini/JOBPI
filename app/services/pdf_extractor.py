@@ -30,6 +30,11 @@ _CV_SECTION_PATTERNS = {
 
 def extract_cv_text(file_bytes: bytes) -> str:
     """Extract and preprocess text from a PDF's raw bytes."""
+    raw = extract_raw_pdf_text(file_bytes)
+    return preprocess_cv_text(raw)
+
+
+def extract_raw_pdf_text(file_bytes: bytes) -> str:
     _validate_magic_bytes(file_bytes)
 
     extraction_start = time.perf_counter()
@@ -50,7 +55,10 @@ def extract_cv_text(file_bytes: bytes) -> str:
             "Could not extract text from PDF. "
             "Please ensure the file is a text-based PDF, not a scanned image."
         )
+    return raw
 
+
+def preprocess_cv_text(raw: str) -> str:
     preprocess_start = time.perf_counter()
     processed = _preprocess_cv(raw)
     logger.info(
