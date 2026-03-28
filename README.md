@@ -88,6 +88,3 @@ The following variables are required:
 - `OPENROUTER_API_KEY`: API key for DSPy model inference.
 - `JWT_SECRET_KEY`: Secret key for signing authentication tokens.
 - `VITE_API_URL`: Backend API endpoint for the frontend application.
-
-## Screenshots Placeholder
-[Insert screenshots here]
