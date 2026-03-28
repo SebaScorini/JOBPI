@@ -10,6 +10,7 @@ import { JobsPage } from './pages/JobsPage';
 import { JobAnalysisPage } from './pages/JobAnalysisPage';
 import { JobDetailsPage } from './pages/JobDetailsPage';
 import { MatchesPage } from './pages/MatchesPage';
+import { LandingPage } from './pages/LandingPage';
 import { JSX } from 'react';
 
 // ProtectedRoute must live inside AuthProvider to access context
@@ -34,6 +35,9 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 function AppRouter() {
   return (
     <Routes>
+      {/* Public landing route */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* Public auth routes */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
@@ -48,13 +52,13 @@ function AppRouter() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/jobs/new" element={<JobAnalysisPage />} />
         <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
         <Route path="/library" element={<CVLibraryPage />} />
         <Route path="/matches" element={<MatchesPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
   );

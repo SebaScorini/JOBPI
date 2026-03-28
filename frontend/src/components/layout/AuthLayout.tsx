@@ -8,7 +8,7 @@ export function AuthLayout() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, isLoading, navigate]);
 

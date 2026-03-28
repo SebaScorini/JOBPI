@@ -46,7 +46,7 @@ export function AppLayout() {
   };
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/jobs', icon: Briefcase, label: 'Job Analysis' },
     { to: '/library', icon: FileText, label: 'CV Library' },
   ];

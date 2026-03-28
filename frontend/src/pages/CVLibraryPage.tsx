@@ -14,7 +14,7 @@ export function CVLibraryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([]);
-  const [uploadResults, setUploadResults] = useState<Array<{ filename: string; success: boolean; error?: string }>[]>([]);
+  const [uploadResults, setUploadResults] = useState<Array<{ filename: string; success: boolean; error?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

@@ -22,7 +22,7 @@ export function LoginPage() {
       const tokenData = await apiService.login(email, password);
       const user = await apiService.getMe(tokenData.access_token);
       login(tokenData.access_token, user);
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err: any) {
       setError(err.message || 'Login failed.');
     } finally {
