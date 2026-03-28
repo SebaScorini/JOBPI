@@ -14,6 +14,11 @@ export function JobDetailsPage() {
   const [isMatchLoading, setIsMatchLoading] = useState(false);
   const [matchResult, setMatchResult] = useState<CVJobMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const matchLevelTextClasses = {
+    strong: 'text-brand-cta',
+    medium: 'text-amber-500',
+    weak: 'text-rose-500',
+  } as const;
 
   useEffect(() => {
     async function loadData() {
@@ -78,7 +83,6 @@ export function JobDetailsPage() {
       </Link>
 
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Main Details */}
         <div className="flex-1 space-y-8">
           <div>
             <div className="flex items-center gap-4 mb-4">
@@ -139,7 +143,6 @@ export function JobDetailsPage() {
           </div>
         </div>
 
-        {/* Sidebar Logic Panel */}
         <div className="w-full lg:w-[400px] shrink-0 space-y-6 lg:sticky lg:top-[100px] lg:self-start">
           <div className="glass-card p-6 rounded-[2rem]">
             <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
@@ -189,35 +192,51 @@ export function JobDetailsPage() {
                  Match Results
                </h3>
                <div className="mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Fit Level</span>
-                  <div className={`mt-1 text-lg font-bold ${matchResult.result.likely_fit_level === 'Strong' ? 'text-brand-cta' : matchResult.result.likely_fit_level === 'Moderate' ? 'text-amber-500' : 'text-rose-500'}`}>
-                    {matchResult.result.likely_fit_level} Match
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Match Level</span>
+                  <div className={`mt-1 text-lg font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>
+                    {matchResult.match_level}
                   </div>
                </div>
-               
-               <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
-                 {matchResult.result.fit_summary}
-               </p>
 
                <div className="space-y-4">
+                 <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-4">
+                   <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2">Why This CV</h4>
+                   <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                     {matchResult.why_this_cv}
+                   </p>
+                 </div>
+
                  <div>
                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                      <span className="w-1.5 h-1.5 rounded-full bg-brand-cta"></span> Strengths
                    </h4>
                    <ul className="text-sm space-y-1.5">
-                     {matchResult.result.strengths?.map((s: string, i: number) => (
+                     {matchResult.strengths?.map((s: string, i: number) => (
                        <li key={i} className="text-slate-600 dark:text-slate-400" title={s}>• {s}</li>
                      ))}
                    </ul>
                  </div>
                  
-                 {matchResult.result.missing_skills?.length > 0 && (
+                 {matchResult.missing_skills?.length > 0 && (
                  <div>
                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Gaps
+                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Missing Skills
                    </h4>
                    <ul className="text-sm space-y-1.5 items-start">
-                     {matchResult.result.missing_skills?.map((s: string, i: number) => (
+                     {matchResult.missing_skills?.map((s: string, i: number) => (
+                       <li key={i} className="text-slate-600 dark:text-slate-400 text-left" title={s}>• {s}</li>
+                     ))}
+                   </ul>
+                 </div>
+                 )}
+
+                 {matchResult.improvement_suggestions?.length > 0 && (
+                 <div>
+                   <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Improvement Suggestions
+                   </h4>
+                   <ul className="text-sm space-y-1.5 items-start">
+                     {matchResult.improvement_suggestions.map((s: string, i: number) => (
                        <li key={i} className="text-slate-600 dark:text-slate-400 text-left" title={s}>• {s}</li>
                      ))}
                    </ul>

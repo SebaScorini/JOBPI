@@ -6,7 +6,7 @@ from sqlmodel import Session
 from app.db import crud
 from app.models import User
 from app.schemas.cv import CVDetailRead, CVRead, CvAnalysisResponse
-from app.schemas.match import CVJobMatchDetailRead, CVJobMatchRead
+from app.schemas.match import CVJobMatchDetailRead, CVJobMatchRead, MatchLevel
 from app.services.cv_analyzer import get_cv_analyzer_service
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 
@@ -25,8 +25,10 @@ class CvLibraryService:
         filename: str,
         file_bytes: bytes,
     ) -> CVRead:
+        # Extract and clean text once to save on downstream processing
         raw_text = extract_raw_pdf_text(file_bytes)
         cleaned_text = preprocess_cv_text(raw_text)
+        # Create a simple preview summary for the library view
         summary = self._build_cv_summary(cleaned_text)
         created = crud.create_cv(
             session,
@@ -69,13 +71,16 @@ class CvLibraryService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
+        # Real-time AI analysis of the CV against the specific job context
         result = self.cv_analyzer.analyze(
             job_title=job.title,
             job_description=job.clean_description,
             cv_text=cv.clean_text,
         )
+        # Quick Jaccard-like similarity for a baseline technical score
         heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
 
+        # Check for existing match to avoid duplicate records if user re-triggers analysis
         existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
         if existing_match is None:
             existing_match = crud.create_match(
@@ -136,8 +141,9 @@ class CvLibraryService:
             created_matches.append(self._serialize_match(created))
 
         if scored_matches:
+            # Highlight the mathematically best match based on keywords
             best_match = max(scored_matches, key=lambda item: item[0])[1]
-            crud.clear_recommendations_for_job(session, user.id, job.id)
+            crud.clear_recommendations_for_job(session, user_id=user.id, job_id=job.id)
             crud.set_recommended_match(session, best_match)
             created_matches = [self._serialize_match(match) for _, match in scored_matches]
 
@@ -154,6 +160,12 @@ class CvLibraryService:
         return self._serialize_match(match)
 
     def _serialize_match(self, match: object) -> CVJobMatchRead:
+        explanation = _build_match_explanation(
+            fit_summary=match.fit_summary,
+            strengths=list(match.strengths or []),
+            missing_skills=list(match.missing_skills or []),
+            improvement_suggestions=[],
+        )
         return CVJobMatchRead(
             id=match.id,
             user_id=match.user_id,
@@ -161,8 +173,11 @@ class CvLibraryService:
             job_id=match.job_id,
             fit_level=match.fit_level,
             fit_summary=match.fit_summary,
-            strengths=list(match.strengths or []),
-            missing_skills=list(match.missing_skills or []),
+            why_this_cv=explanation["why_this_cv"],
+            strengths=explanation["strengths"],
+            missing_skills=explanation["missing_skills"],
+            improvement_suggestions=explanation["improvement_suggestions"],
+            match_level=compute_match_level(fit_level=match.fit_level),
             recommended=match.recommended,
             created_at=match.created_at,
         )
@@ -174,8 +189,31 @@ class CvLibraryService:
         heuristic_score: float,
     ) -> CVJobMatchDetailRead:
         base_match = self._serialize_match(match)
+        base_payload = base_match.model_dump(
+            exclude={
+                "why_this_cv",
+                "strengths",
+                "missing_skills",
+                "improvement_suggestions",
+                "match_level",
+            }
+        )
+        explanation = _build_match_explanation(
+            fit_summary=result.fit_summary,
+            strengths=result.strengths,
+            missing_skills=result.missing_skills,
+            improvement_suggestions=result.resume_improvements,
+        )
         return CVJobMatchDetailRead(
-            **base_match.model_dump(),
+            **base_payload,
+            why_this_cv=explanation["why_this_cv"],
+            strengths=explanation["strengths"],
+            missing_skills=explanation["missing_skills"],
+            improvement_suggestions=explanation["improvement_suggestions"],
+            match_level=compute_match_level(
+                fit_level=result.likely_fit_level or match.fit_level,
+                heuristic_score=heuristic_score,
+            ),
             heuristic_score=heuristic_score,
             result=result,
         )
@@ -206,8 +244,79 @@ def compute_heuristic_score(cv_text: str, job_text: str) -> float:
     return round(score, 4)
 
 
+def compute_match_level(
+    fit_level: str | None = None,
+    heuristic_score: float | None = None,
+) -> MatchLevel:
+    normalized_fit = (fit_level or "").strip().lower()
+
+    if "strong" in normalized_fit:
+        return "strong"
+    if "moderate" in normalized_fit or "medium" in normalized_fit:
+        return "medium"
+    if "weak" in normalized_fit:
+        return "weak"
+
+    score = heuristic_score or 0.0
+    if score >= 0.5:
+        return "strong"
+    if score >= 0.25:
+        return "medium"
+    return "weak"
+
+
 def _tokenize(text: str) -> list[str]:
     return [token.lower() for token in WORD_RE.findall(text)]
+
+
+def _build_match_explanation(
+    fit_summary: str,
+    strengths: list[str],
+    missing_skills: list[str],
+    improvement_suggestions: list[str],
+) -> dict[str, object]:
+    clean_strengths = _clean_items(strengths, limit=4)
+    clean_missing = _clean_items(missing_skills, limit=4)
+    clean_improvements = _clean_items(improvement_suggestions, limit=3)
+
+    why_this_cv = _normalize_sentence(fit_summary, fallback="This CV aligns with the strongest matching requirements.")
+    if clean_strengths:
+        why_this_cv = _normalize_sentence(
+            f"{why_this_cv.rstrip('.')} Key strengths: {', '.join(clean_strengths[:2])}.",
+            fallback=why_this_cv,
+        )
+
+    return {
+        "why_this_cv": why_this_cv,
+        "strengths": clean_strengths,
+        "missing_skills": clean_missing,
+        "improvement_suggestions": clean_improvements,
+    }
+
+
+def _clean_items(items: list[str], limit: int) -> list[str]:
+    cleaned: list[str] = []
+    for item in items:
+        normalized = _normalize_sentence(item)
+        if normalized and normalized not in cleaned:
+            cleaned.append(normalized)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+def _normalize_sentence(value: str, fallback: str = "") -> str:
+    if not isinstance(value, str):
+        return fallback
+
+    text = " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -")
+    if not text:
+        return fallback
+    if len(text) > 220:
+        text = text[:217].rstrip(" ,;:") + "..."
+    if text[-1] not in ".!?":
+        text += "."
+    return text
 
 
 _service: CvLibraryService | None = None

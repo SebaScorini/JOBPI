@@ -44,6 +44,7 @@ def create_cv(
 
 
 def get_cvs_for_user(session: Session, user_id: int) -> list[CV]:
+    # Enforce user ownership during retrieval
     statement = select(CV).where(CV.user_id == user_id).order_by(CV.created_at.desc())
     return list(session.exec(statement).all())
 
@@ -92,6 +93,7 @@ def get_matching_job_analysis(
     company: str,
     clean_description: str,
 ) -> JobAnalysis | None:
+    # Check for identical analysis to avoid re-running slow LLM calls
     statement = select(JobAnalysis).where(
         JobAnalysis.user_id == user_id,
         JobAnalysis.title == title,
@@ -139,6 +141,7 @@ def create_match(
 
 
 def clear_recommendations_for_job(session: Session, user_id: int, job_id: int) -> None:
+    # Toggle off recommended flag before setting a new winner
     statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.job_id == job_id)
     for match in session.exec(statement).all():
         match.recommended = False

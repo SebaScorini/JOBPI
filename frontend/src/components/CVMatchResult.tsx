@@ -9,6 +9,12 @@ interface CVMatchResultProps {
 }
 
 export function CVMatchResult({ match, activeCv, isLoading, isRecommended }: CVMatchResultProps) {
+  const matchLevelClasses = {
+    strong: 'rounded-full border border-emerald-200/50 bg-emerald-100/80 px-3 py-1.5 text-xs font-bold tracking-wide text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 uppercase',
+    medium: 'rounded-full border border-amber-200/50 bg-amber-100/80 px-3 py-1.5 text-xs font-bold tracking-wide text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 uppercase',
+    weak: 'rounded-full border border-rose-200/50 bg-rose-100/80 px-3 py-1.5 text-xs font-bold tracking-wide text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400 uppercase',
+  } as const;
+
   if (isLoading) {
     return (
       <div className="glass-card p-6 md:p-8 rounded-3xl animate-pulse flex flex-col items-center justify-center text-center space-y-3">
@@ -41,21 +47,78 @@ export function CVMatchResult({ match, activeCv, isLoading, isRecommended }: CVM
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 px-5 py-4 backdrop-blur-sm">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">Selected CV</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-1">Best CV</p>
           <p className="text-lg font-bold text-slate-900 dark:text-white">{activeCv.name}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-sky-100/80 dark:bg-sky-500/10 px-3 py-1.5 text-xs font-bold tracking-wide text-sky-700 dark:text-sky-400 uppercase border border-sky-200/50 dark:border-sky-500/20">
             Score {Math.round(match.heuristic_score * 100)}%
           </span>
+          <span className={matchLevelClasses[match.match_level]}>
+            {match.match_level} match
+          </span>
           {isRecommended && (
             <span className="rounded-full bg-emerald-100/80 dark:bg-emerald-500/10 px-3 py-1.5 text-xs font-bold tracking-wide text-emerald-700 dark:text-emerald-400 uppercase border border-emerald-200/50 dark:border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)] dark:shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-              Best match
+              Recommended
             </span>
           )}
         </div>
       </div>
-      <CvResultCard result={match.result} />
+
+      <div className="glass-card rounded-3xl p-6 md:p-8 space-y-6">
+        <section className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-2">Why This CV</p>
+          <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+            {match.why_this_cv || match.result.fit_summary}
+          </p>
+        </section>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <section className="rounded-2xl border border-emerald-200/70 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 p-5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 mb-3">Strengths</h3>
+            {match.strengths.length > 0 ? (
+              <ul className="space-y-2">
+                {match.strengths.map((item) => (
+                  <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                    • {item}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No standout strengths were identified.</p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-rose-200/70 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/20 p-5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-rose-800 dark:text-rose-300 mb-3">Missing Skills</h3>
+            {match.missing_skills.length > 0 ? (
+              <ul className="space-y-2">
+                {match.missing_skills.map((item) => (
+                  <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                    • {item}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No material skill gaps were identified.</p>
+            )}
+          </section>
+        </div>
+
+        {match.improvement_suggestions.length > 0 && (
+          <section className="rounded-2xl border border-amber-200/70 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 p-5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300 mb-3">Improvement Suggestions</h3>
+            <ul className="space-y-2">
+              {match.improvement_suggestions.map((item) => (
+                <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                  • {item}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+      <CvResultCard result={match.result} matchLevel={match.match_level} />
     </div>
   );
 }

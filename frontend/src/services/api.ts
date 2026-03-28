@@ -3,6 +3,7 @@ import {
   CvAnalysisResponse,
   JobAnalysisRequest,
   JobAnalysisResponse,
+  MatchLevel,
   StoredCV,
   TokenResponse,
   User,
@@ -62,10 +63,13 @@ interface BackendMatchRead {
   user_id?: number;
   cv_id: number;
   job_id: number;
+  match_level?: MatchLevel;
   fit_level?: string;
   fit_summary?: string;
+  why_this_cv?: string;
   strengths?: string[];
   missing_skills?: string[];
+  improvement_suggestions?: string[];
   heuristic_score?: number;
   result?: Partial<CvAnalysisResponse>;
   recommended?: boolean;
@@ -188,13 +192,45 @@ function mapCvResult(match: BackendMatchRead): CvAnalysisResponse {
   };
 }
 
+function deriveMatchLevel(match: BackendMatchRead): MatchLevel {
+  if (match.match_level) {
+    return match.match_level;
+  }
+
+  const fitLevel = (match.result?.likely_fit_level ?? match.fit_level ?? '').toLowerCase();
+  if (fitLevel.includes('strong')) {
+    return 'strong';
+  }
+  if (fitLevel.includes('moderate') || fitLevel.includes('medium')) {
+    return 'medium';
+  }
+  if (fitLevel.includes('weak')) {
+    return 'weak';
+  }
+
+  const score = match.heuristic_score ?? 0;
+  if (score >= 0.5) {
+    return 'strong';
+  }
+  if (score >= 0.25) {
+    return 'medium';
+  }
+  return 'weak';
+}
+
 function mapMatch(match: BackendMatchRead): CVJobMatch {
+  const result = mapCvResult(match);
   return {
     id: match.id,
     cv_id: match.cv_id,
     job_id: match.job_id,
+    match_level: deriveMatchLevel(match),
     heuristic_score: match.heuristic_score ?? 0,
-    result: mapCvResult(match),
+    why_this_cv: match.why_this_cv ?? result.fit_summary,
+    strengths: match.strengths ?? result.strengths ?? [],
+    missing_skills: match.missing_skills ?? result.missing_skills ?? [],
+    improvement_suggestions: match.improvement_suggestions ?? result.resume_improvements ?? [],
+    result,
     created_at: match.created_at,
     recommended: Boolean(match.recommended),
   };

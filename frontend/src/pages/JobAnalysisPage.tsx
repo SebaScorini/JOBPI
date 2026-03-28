@@ -92,7 +92,7 @@ export function JobAnalysisPage() {
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
              <button
                type="submit"
-               disabled={isLoading || !description.trim()}
+               disabled={isLoading || !title.trim() || !company.trim() || !description.trim()}
                className="btn-primary w-full md:w-auto px-8 flex items-center justify-center gap-2 text-base ml-auto"
              >
                {isLoading ? (

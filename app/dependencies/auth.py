@@ -20,6 +20,7 @@ def get_current_user(
     if not isinstance(subject, str):
         raise _unauthorized()
 
+    # Support both ID (new) and Email (legacy) in JWT subject field
     user: User | None
     if subject.isdigit():
         user = get_user_by_id(session, int(subject))

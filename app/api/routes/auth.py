@@ -58,6 +58,7 @@ def login(
             detail="Inactive user.",
         )
 
+    # Create JWT with user ID as the subject
     token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token)
 

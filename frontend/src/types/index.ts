@@ -47,6 +47,8 @@ export interface CvAnalysisResponse {
   next_steps: string[];
 }
 
+export type MatchLevel = 'strong' | 'medium' | 'weak';
+
 export interface StoredCV {
   id: number;
   name: string;
@@ -58,7 +60,12 @@ export interface CVJobMatch {
   id: number;
   cv_id: number;
   job_id: number;
+  match_level: MatchLevel;
   heuristic_score: number;
+  why_this_cv: string;
+  strengths: string[];
+  missing_skills: string[];
+  improvement_suggestions: string[];
   result: CvAnalysisResponse;
   created_at: string;
   recommended: boolean;

@@ -6,6 +6,11 @@ import { Loader2, Zap, LayoutDashboard } from 'lucide-react';
 export function MatchesPage() {
   const [matches, setMatches] = useState<CVJobMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const matchLevelClasses = {
+    strong: 'bg-emerald-100 text-emerald-700',
+    medium: 'bg-amber-100 text-amber-700',
+    weak: 'bg-rose-100 text-rose-700',
+  } as const;
 
   useEffect(() => {
     async function fetchMatches() {
@@ -51,21 +56,28 @@ export function MatchesPage() {
                   <Zap size={20} />
                 </div>
                 <div className={`px-3 py-1 text-sm font-bold rounded-full ${
-                  match.result?.likely_fit_level === 'Strong' ? 'bg-brand-cta/20 text-brand-cta' :
-                  match.result?.likely_fit_level === 'Moderate' ? 'bg-amber-100 text-amber-600' :
-                  'bg-rose-100 text-rose-600'
+                  matchLevelClasses[match.match_level]
                  }`}>
-                  {match.result?.likely_fit_level || 'Unknown'} Match
+                  {match.match_level} Match
                 </div>
               </div>
               <h3 className="text-lg font-heading font-bold text-brand-text dark:text-white mb-2 line-clamp-2">
                 Job ID: {match.job_id} / CV ID: {match.cv_id}
               </h3>
               <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-1">
-                 {match.result?.fit_summary || 'No summary available.'}
+                 {match.why_this_cv || match.result?.fit_summary || 'No summary available.'}
               </p>
+              {match.strengths?.length > 0 && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {match.strengths.slice(0, 2).map((strength) => (
+                    <span key={strength} className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-xs font-semibold">
+                      {strength}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="mt-auto text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase flex items-center gap-2">
-                 <span>Score: {match.heuristic_score}%</span>
+                 <span>Score: {Math.round(match.heuristic_score * 100)}%</span>
                  <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
                  <span>Date: {new Date(match.created_at).toLocaleDateString()}</span>
               </div>

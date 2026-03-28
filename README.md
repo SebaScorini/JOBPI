@@ -1,116 +1,93 @@
-# AI Job Analyzer (JobPi)
+# JOBPI
 
 ## Description
-This project is an AI-powered job analysis application that intelligently evaluates job descriptions and compares them against uploaded candidate CVs. It solves the problem of manual resume screening by automating the comparison process and providing targeted, structured career advisory. AI is used to accurately extract context, perform semantic matching, and generate reliable insights using an optimized DSPy token pipeline.
+JOBPI is an AI-powered job analysis and resume matching platform. It evaluates job descriptions against a user's CV library to identify the best match, providing structured explanations and career insights using DSPy-optimized evaluation pipelines.
 
-## New Updates & Features
-- **User Authentication:** Secure login and registration flows with JWT.
-- **Premium SaaS UX:** Includes buttery smooth dark/light mode transitions, an expansive glass-morphism design system, responsive tabbed navigation, and loading states.
-- **CV Library System:** Save and manage multiple CVs in a persistent SQLite database.
-- **Advanced Match Analysis:** Comprehensive, full-screen side-by-side viewport for comparing candidate strengths, finding missing skills, and extracting actionable interview tips simultaneously. 
-- **Intelligent Job Analysis:** Parses job descriptions with DSPy to extract core skills, responsibilities, and success metrics.
-- **Token-Optimized Inference:** Preprocessing techniques to reduce context window load with OpenRouter integrations.
+## Features
+- Authentication (JWT)
+- Multi CV upload
+- CV library per user
+- Job analysis
+- Best CV recommendation
+- Match explanation
+- Saved jobs history
+- Dashboard
+- Dark mode UI
 
 ## Tech Stack
-### Backend
-- **FastAPI** (Async Python framework)
-- **SQLite** (Persistent local database)
-- **DSPy & OpenRouter** (AI Model routing & prompt optimization)
-- **PyPDF2** (PDF parsing)
-- **python-dotenv** (Environment variables handling)
+- FastAPI
+- SQLModel
+- SQLite
+- DSPy
+- React
+- TypeScript
+- Tailwind
+- JWT Auth
 
-### Frontend
-- **React 18**
-- **TypeScript**
-- **Tailwind CSS 3** (Dark Mode & Glassmorphism)
-- **Vite**
+## Architecture Overview
+The application follows a decoupled client-server architecture:
+- Backend: FastAPI service handling authentication, database operations with SQLModel, and AI-driven analysis using DSPy.
+- Frontend: React-based single-page application built with Vite, styled with Tailwind CSS, and using JWT for session management.
+- Database: SQLite for persistence of users, CVs, and analysis history.
 
-## Project Structure
-```text
-.
-├── app/                  # FastAPI Backend 
-│   ├── main.py           # Entry point and FastAPI routers
-│   ├── core/             # Auth, Security, Config logic
-│   ├── models/           # SQLAlchemy DB Models
-│   ├── schemas/          # Pydantic Schemas for type safety
-│   └── services/         # DSPy logic and CV parsing services
-├── frontend/             # React Vite Frontend
-│   ├── src/
-│   │   ├── components/   # Reusable UI (Modals, Cards, Forms)
-│   │   ├── pages/        # Dashboard, Jobs, CV Library
-│   │   └── context/      # Client-side AuthContext
-│   └── tailwind.config.js
-├── iniciar.bat           # Quickstart script for Windows developers
-├── .env                  # Backend Secrets (ignored by git)
-├── .gitignore            # Git configuration rules
-└── README.md
-```
+## Setup Instructions
 
-## Getting Started
+### Backend Setup
+1. Create a Python virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/Scripts/activate  # On Windows: venv\Scripts\activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Configure environment variables in a `.env` file in the root directory:
+   ```env
+   OPENROUTER_API_KEY=your_api_key
+   JWT_SECRET_KEY=your_secret_key
+   ALGORITHM=HS256
+   ACCESS_TOKEN_EXPIRE_MINUTES=30
+   ```
 
-### 1. Clone the repository:
-```bash
-git clone <repository_url>
-cd <repository_directory>
-```
+### Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a `.env` file in the `frontend` directory:
+   ```env
+   VITE_API_URL=http://localhost:8000
+   ```
 
-### 2. Environment Variables Configuration:
-- Create a `.env` file in the root directory (for backend API keys):
-```ini
-OPENROUTER_API_KEY=your_key_here
-DSPY_MODEL=openrouter/nvidia/nemotron-3-super-120b-a12b:free
-JWT_SECRET_KEY=your_secure_secret_here
-```
-- Create a `.env` inside the `frontend/` folder:
-```ini
-VITE_API_URL=http://localhost:8000
-```
+## How to Run Locally
 
-### 3. Install backend dependencies:
-Using a virtual environment is highly recommended.
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 4. Install frontend dependencies:
-```bash
-cd frontend
-npm install
-cd ..
-```
-
-### 5. Run the Application:
-
-**Windows (Automated):**
-You can use the provided batch file to automatically run both the frontend and backend simultaneously in separate terminal windows:
+### Automated (Windows)
+Run the provided batch file to start both services:
 ```cmd
 iniciar.bat
 ```
 
-**Manual Start:**
-Terminal 1 (Backend):
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-Terminal 2 (Frontend):
-```bash
-cd frontend
-npm run dev
-```
+### Manual
+1. Start the backend:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+2. Start the frontend:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
 
-## .gitignore Configuration
-The project is set up to automatically ignore:
-- **Virtual environments** (`venv/`, `.venv`)
-- **OS caching files** (`.DS_Store`, `Thumbs.db`)
-- **Secret files** (`.env` files in both root and frontend)
-- **Build artifacts** (`node_modules/`, `dist/`, `__pycache__/`)
-- **Local Database variants** (`jobpi.db`, SQLite journal files, and `uploads/`)
+## Environment Variables
+The following variables are required:
+- `OPENROUTER_API_KEY`: API key for DSPy model inference.
+- `JWT_SECRET_KEY`: Secret key for signing authentication tokens.
+- `VITE_API_URL`: Backend API endpoint for the frontend application.
 
-## Security Considerations
-- **Environment Variables**: API keys and JWT secrets must always be kept in `.env` and never committed to version control. The `.gitignore` is precisely configured to handle this.
-- **Input Validation:** Extensive Pydantic models validate all incoming data across API boundaries.
-
-## License
-MIT License
+## Screenshots Placeholder
+[Insert screenshots here]
