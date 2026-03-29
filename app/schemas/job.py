@@ -4,10 +4,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+AIResponseLanguage = Literal["english", "spanish"]
+
+
 class JobAnalysisRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     company: str = Field(..., min_length=1, max_length=200)
     description: str = Field(..., min_length=50, max_length=20000)
+    language: AIResponseLanguage = "english"
 
 
 class JobAnalysisPayload(BaseModel):
@@ -43,6 +47,7 @@ class JobNotesUpdateRequest(BaseModel):
 
 class CoverLetterGenerateRequest(BaseModel):
     selected_cv_id: int = Field(..., gt=0)
+    language: AIResponseLanguage = "english"
 
 
 class CoverLetterGenerateResponse(BaseModel):

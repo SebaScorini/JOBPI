@@ -12,6 +12,7 @@ import { JobDetailsPage } from './pages/JobDetailsPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { LandingPage } from './pages/LandingPage';
 import { JSX } from 'react';
+import { LanguageProvider } from './context/LanguageContext';
 
 // ProtectedRoute must live inside AuthProvider to access context
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -70,7 +71,9 @@ function App() {
     // AuthProvider wraps AppRouter so useAuth() is always in context.
     <BrowserRouter>
       <AuthProvider>
-        <AppRouter />
+        <LanguageProvider>
+          <AppRouter />
+        </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
   );

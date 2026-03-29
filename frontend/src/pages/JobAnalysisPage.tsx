@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Loader2, Zap } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export function JobAnalysisPage() {
+  const { aiLanguage, t } = useLanguage();
   const [title, setTitle] = useState('');
   const [company, setCompany] = useState('');
   const [description, setDescription] = useState('');
@@ -18,10 +20,10 @@ export function JobAnalysisPage() {
     setError(null);
 
     try {
-      const response = await apiService.analyzeJob({ title, company, description });
+      const response = await apiService.analyzeJob({ title, company, description, language: aiLanguage });
       navigate(`/jobs/${response.job_id}`);
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
+      setError(err.message || t('jobAnalysis.unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -35,9 +37,9 @@ export function JobAnalysisPage() {
         </div>
         <div>
           <h1 className="text-3xl font-heading font-extrabold tracking-tight text-brand-text dark:text-white">
-            Analyze New Job
+            {t('jobAnalysis.title')}
           </h1>
-          <p className="text-slate-500 mt-1">Paste a job description to extract core requirements.</p>
+          <p className="text-slate-500 mt-1">{t('jobAnalysis.subtitle')}</p>
         </div>
       </div>
 
@@ -51,7 +53,7 @@ export function JobAnalysisPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="title" className="block text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">Job Title</label>
+              <label htmlFor="title" className="block text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">{t('jobAnalysis.jobTitle')}</label>
               <input
                 id="title"
                 type="text"
@@ -59,11 +61,11 @@ export function JobAnalysisPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="input-field"
-                placeholder="e.g. Senior Frontend Engineer"
+                placeholder={t('jobAnalysis.titlePlaceholder')}
               />
             </div>
             <div>
-              <label htmlFor="company" className="block text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">Company</label>
+              <label htmlFor="company" className="block text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">{t('jobAnalysis.company')}</label>
               <input
                 id="company"
                 type="text"
@@ -71,13 +73,13 @@ export function JobAnalysisPage() {
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 className="input-field"
-                placeholder="e.g. Google"
+                placeholder={t('jobAnalysis.companyPlaceholder')}
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">Job Description</label>
+            <label htmlFor="description" className="block text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">{t('jobAnalysis.description')}</label>
             <textarea
               id="description"
               required
@@ -85,7 +87,7 @@ export function JobAnalysisPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="input-field resize-none leading-relaxed"
-              placeholder="Paste the full job description here..."
+              placeholder={t('jobAnalysis.descriptionPlaceholder')}
             />
           </div>
 
@@ -98,12 +100,12 @@ export function JobAnalysisPage() {
                {isLoading ? (
                  <>
                    <Loader2 size={20} className="animate-spin" />
-                   Decoding requirements...
+                   {t('jobAnalysis.decoding')}
                  </>
                ) : (
                  <>
                    <Zap size={20} />
-                   Extract Insights
+                   {t('jobAnalysis.extractInsights')}
                  </>
                )}
              </button>

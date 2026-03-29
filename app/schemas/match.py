@@ -4,17 +4,20 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.schemas.cv import CvAnalysisResponse
+from app.schemas.job import AIResponseLanguage
 
 MatchLevel = Literal["strong", "medium", "weak"]
 
 
 class CVMatchRequest(BaseModel):
     cv_id: int
+    language: AIResponseLanguage = "english"
 
 
 class CVCompareRequest(BaseModel):
     cv_id_a: int
     cv_id_b: int
+    language: AIResponseLanguage = "english"
 
 
 class CVComparisonBetterCV(BaseModel):

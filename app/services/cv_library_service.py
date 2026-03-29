@@ -6,6 +6,7 @@ from sqlmodel import Session
 from app.db import crud
 from app.models import User
 from app.schemas.cv import CVDetailRead, CVRead, CvAnalysisResponse
+from app.schemas.job import AIResponseLanguage
 from app.schemas.match import (
     CVComparisonBetterCV,
     CVComparisonResponse,
@@ -15,6 +16,16 @@ from app.schemas.match import (
 )
 from app.services.cv_analyzer import get_cv_analyzer_service
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
+from app.services.response_language import (
+    localized_add_evidence,
+    localized_comparison_explanation,
+    localized_match_fallback,
+    localized_match_prefix,
+    localized_move_strength_earlier,
+    localized_reorder_keyword,
+    localized_reorder_strength,
+    normalize_language,
+)
 
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
 
@@ -78,6 +89,7 @@ class CvLibraryService:
         user: User,
         job_id: int,
         cv_id: int,
+        language: AIResponseLanguage = "english",
     ) -> CVJobMatchDetailRead:
         job = crud.get_job_for_user(session, user.id, job_id)
         if job is None:
@@ -87,7 +99,7 @@ class CvLibraryService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        return self._analyze_job_cv_pair(session, user, job, cv)
+        return self._analyze_job_cv_pair(session, user, job, cv, normalize_language(language))
 
     def compare_cvs_for_job(
         self,
@@ -96,7 +108,9 @@ class CvLibraryService:
         job_id: int,
         cv_id_a: int,
         cv_id_b: int,
+        language: AIResponseLanguage = "english",
     ) -> CVComparisonResponse:
+        selected_language = normalize_language(language)
         if cv_id_a == cv_id_b:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -112,8 +126,8 @@ class CvLibraryService:
         if cv_a is None or cv_b is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        match_a = self._analyze_job_cv_pair(session, user, job, cv_a)
-        match_b = self._analyze_job_cv_pair(session, user, job, cv_b)
+        match_a = self._analyze_job_cv_pair(session, user, job, cv_a, selected_language)
+        match_b = self._analyze_job_cv_pair(session, user, job, cv_b, selected_language)
 
         winner, loser, winner_label, loser_label = self._select_better_match(
             cv_a=cv_a,
@@ -123,6 +137,7 @@ class CvLibraryService:
         )
 
         explanation = self._build_comparison_explanation(
+            language=selected_language,
             winner_label=winner_label,
             loser_label=loser_label,
             winner=winner,
@@ -204,12 +219,14 @@ class CvLibraryService:
         user: User,
         job: object,
         cv: object,
+        language: AIResponseLanguage,
     ) -> CVJobMatchDetailRead:
         # Real-time AI analysis of the CV against the specific job context
         result = self.cv_analyzer.analyze(
             job_title=job.title,
             job_description=job.clean_description,
             cv_text=cv.clean_text,
+            language=language,
         )
         # Quick Jaccard-like similarity for a baseline technical score
         heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
@@ -229,7 +246,7 @@ class CvLibraryService:
                 recommended=False,
             )
 
-        return self._serialize_match_detail(existing_match, result, heuristic_score)
+        return self._serialize_match_detail(existing_match, result, heuristic_score, language)
 
     def _select_better_match(
         self,
@@ -253,17 +270,30 @@ class CvLibraryService:
 
     def _build_comparison_explanation(
         self,
+        language: AIResponseLanguage,
         winner_label: str,
         loser_label: str,
         winner: CVJobMatchDetailRead,
         loser: CVJobMatchDetailRead,
     ) -> str:
-        winner_strength = winner.strengths[0] if winner.strengths else "better coverage of the role"
-        loser_gap = loser.missing_skills[0] if loser.missing_skills else "fewer role-specific signals"
+        if language == "spanish":
+            winner_strength = winner.strengths[0] if winner.strengths else "mejor cobertura del rol"
+            loser_gap = loser.missing_skills[0] if loser.missing_skills else "senales menos especificas del puesto"
+            fallback = f"{winner_label} es el CV con mejor encaje para este puesto."
+        else:
+            winner_strength = winner.strengths[0] if winner.strengths else "better coverage of the role"
+            loser_gap = loser.missing_skills[0] if loser.missing_skills else "fewer role-specific signals"
+            fallback = f"{winner_label} is the stronger fit for this role."
+
         return _normalize_sentence(
-            f"{winner_label} is the stronger fit because it shows {winner_strength.lower()} "
-            f"and scores better against the job requirements than {loser_label}, which shows more gaps around {loser_gap.lower()}.",
-            fallback=f"{winner_label} is the stronger fit for this role.",
+            localized_comparison_explanation(
+                language=language,
+                winner_label=winner_label,
+                loser_label=loser_label,
+                winner_strength=winner_strength,
+                loser_gap=loser_gap,
+            ),
+            fallback=fallback,
         )
 
     def _serialize_match(self, match: object) -> CVJobMatchRead:
@@ -297,6 +327,7 @@ class CvLibraryService:
         match: object,
         result: CvAnalysisResponse,
         heuristic_score: float,
+        language: AIResponseLanguage,
     ) -> CVJobMatchDetailRead:
         base_match = self._serialize_match(match)
         base_payload = base_match.model_dump(
@@ -316,6 +347,7 @@ class CvLibraryService:
             strengths=result.strengths,
             missing_skills=result.missing_skills,
             improvement_suggestions=result.resume_improvements,
+            language=language,
         )
         return CVJobMatchDetailRead(
             **base_payload,
@@ -402,6 +434,7 @@ def _build_match_explanation(
     strengths: list[str],
     missing_skills: list[str],
     improvement_suggestions: list[str],
+    language: AIResponseLanguage = "english",
 ) -> dict[str, object]:
     clean_strengths = _clean_items(strengths, limit=4)
     clean_missing = _clean_items(missing_skills, limit=4)
@@ -410,12 +443,13 @@ def _build_match_explanation(
         strengths=clean_strengths,
         missing_skills=clean_missing,
         improvement_suggestions=clean_improvements,
+        language=language,
     )
 
-    why_this_cv = _normalize_sentence(fit_summary, fallback="This CV aligns with the strongest matching requirements.")
+    why_this_cv = _normalize_sentence(fit_summary, fallback=localized_match_fallback(language))
     if clean_strengths:
         why_this_cv = _normalize_sentence(
-            f"{why_this_cv.rstrip('.')} Key strengths: {', '.join(clean_strengths[:2])}.",
+            f"{why_this_cv.rstrip('.')} {localized_match_prefix(language)}: {', '.join(clean_strengths[:2])}.",
             fallback=why_this_cv,
         )
 
@@ -459,23 +493,24 @@ def _build_improvement_payload(
     strengths: list[str],
     missing_skills: list[str],
     improvement_suggestions: list[str],
+    language: AIResponseLanguage,
 ) -> dict[str, object]:
     suggested_improvements = list(improvement_suggestions)
     missing_keywords = _clean_keywords(missing_skills, limit=6)
 
     if not suggested_improvements:
         suggested_improvements = [
-            _normalize_sentence(f"Add clear evidence of {keyword}", fallback="")
+            _normalize_sentence(localized_add_evidence(language, keyword), fallback="")
             for keyword in missing_keywords[:2]
         ]
         suggested_improvements = [item for item in suggested_improvements if item]
         if strengths:
             suggested_improvements.append(
-                _normalize_sentence(f"Move {strengths[0]} higher so it appears earlier in the CV", fallback="")
+                _normalize_sentence(localized_move_strength_earlier(language, strengths[0]), fallback="")
             )
         suggested_improvements = _clean_items(suggested_improvements, limit=3)
 
-    reorder_suggestions = _build_reorder_suggestions(strengths, missing_keywords)
+    reorder_suggestions = _build_reorder_suggestions(strengths, missing_keywords, language)
 
     return {
         "suggested_improvements": suggested_improvements,
@@ -505,18 +540,19 @@ def _normalize_keyword(value: str) -> str:
     return keyword
 
 
-def _build_reorder_suggestions(strengths: list[str], missing_keywords: list[str]) -> list[str]:
+def _build_reorder_suggestions(
+    strengths: list[str],
+    missing_keywords: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
     suggestions: list[str] = []
     if strengths:
         suggestions.append(
-            _normalize_sentence(f"Move {strengths[0]} into the top summary or first experience section", fallback="")
+            _normalize_sentence(localized_reorder_strength(language, strengths[0]), fallback="")
         )
     if missing_keywords:
         suggestions.append(
-            _normalize_sentence(
-                f"Place experience or projects that mention {missing_keywords[0]} before less relevant content",
-                fallback="",
-            )
+            _normalize_sentence(localized_reorder_keyword(language, missing_keywords[0]), fallback="")
         )
 
     return [suggestion for suggestion in suggestions if suggestion][:2]

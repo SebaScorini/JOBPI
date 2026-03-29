@@ -3,14 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse } from '../types';
 import { Briefcase, ArrowRight, Loader2, Plus } from 'lucide-react';
-
-const statusLabelMap: Record<string, string> = {
-  saved: 'Saved',
-  applied: 'Applied',
-  interview: 'Interview',
-  rejected: 'Rejected',
-  offer: 'Offer',
-};
+import { useLanguage } from '../context/LanguageContext';
 
 const statusBadgeMap: Record<string, string> = {
   saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -21,6 +14,7 @@ const statusBadgeMap: Record<string, string> = {
 };
 
 export function JobsPage() {
+  const { t, language } = useLanguage();
   const [jobs, setJobs] = useState<JobAnalysisResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -43,13 +37,13 @@ export function JobsPage() {
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-6">
         <div>
           <h1 className="text-3xl font-heading font-extrabold tracking-tight text-brand-text dark:text-white">
-            Job Analysis
+            {t('jobs.title')}
           </h1>
-          <p className="text-slate-500 mt-2">Manage and review your saved job targets.</p>
+          <p className="text-slate-500 mt-2">{t('jobs.subtitle')}</p>
         </div>
         <Link to="/jobs/new" className="btn-primary flex items-center justify-center gap-2 w-auto px-6">
           <Plus size={18} />
-          New Target
+          {t('jobs.newTarget')}
         </Link>
       </div>
 
@@ -60,10 +54,10 @@ export function JobsPage() {
       ) : jobs.length === 0 ? (
         <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
           <Briefcase size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-          <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">No targeted jobs</p>
-          <p className="text-slate-500 max-w-sm mx-auto mb-6">Start by analyzing a job description to extract required skills and requirements.</p>
+          <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">{t('jobs.emptyTitle')}</p>
+          <p className="text-slate-500 max-w-sm mx-auto mb-6">{t('jobs.emptySubtitle')}</p>
           <Link to="/jobs/new" className="btn-primary inline-flex justify-center items-center w-auto px-8 py-3">
-            Analyze First Job
+            {t('jobs.firstAnalysis')}
           </Link>
         </div>
       ) : (
@@ -82,18 +76,20 @@ export function JobsPage() {
                   <ArrowRight size={20} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-1 transition-all" />
                 </div>
                 <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors line-clamp-2">
-                  {job.title || job.role_type || 'Untitled Role'}
+                  {job.title || job.role_type || t('common.untitledRole')}
                 </h3>
                 <p className="text-slate-500 font-medium mb-4">
-                  {job.company || job.seniority || 'Company Unknown'}
+                  {job.company || job.seniority || t('common.unknownCompany')}
                 </p>
                 <div className="flex items-center gap-2 mb-4">
                   <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
-                    {statusLabelMap[job.status] ?? 'Saved'}
+                    {t(`statuses.${job.status}`)}
                   </span>
                   {job.applied_date && (
                     <span className="text-xs text-slate-500">
-                      Applied {new Date(job.applied_date).toLocaleDateString()}
+                      {t('jobs.appliedOn', {
+                        date: new Date(job.applied_date).toLocaleDateString(language),
+                      })}
                     </span>
                   )}
                 </div>

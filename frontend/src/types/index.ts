@@ -1,3 +1,6 @@
+export type UILanguage = 'en' | 'es';
+export type AIResponseLanguage = 'english' | 'spanish';
+
 export interface User {
   id: number;
   email: string;
@@ -14,6 +17,7 @@ export interface JobAnalysisRequest {
   title: string;
   company: string;
   description: string;
+  language?: AIResponseLanguage;
 }
 
 export type JobApplicationStatus = 'saved' | 'applied' | 'interview' | 'rejected' | 'offer';

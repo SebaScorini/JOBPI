@@ -80,7 +80,13 @@ def match_job_to_cvs(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVJobMatchDetailRead:
-    return get_cv_library_service().match_job_to_cv(session, current_user, job_id, payload.cv_id)
+    return get_cv_library_service().match_job_to_cv(
+        session,
+        current_user,
+        job_id,
+        payload.cv_id,
+        payload.language,
+    )
 
 
 @router.post("/{job_id}/compare-cvs", response_model=CVComparisonResponse)
@@ -96,6 +102,7 @@ def compare_cvs_for_job(
         job_id,
         payload.cv_id_a,
         payload.cv_id_b,
+        payload.language,
     )
 
 
@@ -111,5 +118,6 @@ def generate_cover_letter(
         user=current_user,
         job_id=job_id,
         selected_cv_id=payload.selected_cv_id,
+        language=payload.language,
     )
     return CoverLetterGenerateResponse(generated_cover_letter=generated_cover_letter)

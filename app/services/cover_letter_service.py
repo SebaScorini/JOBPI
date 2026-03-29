@@ -7,7 +7,9 @@ from sqlmodel import Session
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
+from app.schemas.job import AIResponseLanguage
 from app.services.job_analyzer import _normalize_text
+from app.services.response_language import language_instruction, normalize_language
 
 
 MAX_COVER_LETTER_CHARS = 2400
@@ -21,6 +23,7 @@ class CoverLetterSignature(dspy.Signature):
     job_description: str = dspy.InputField(desc="Clean job description")
     cv_summary: str = dspy.InputField(desc="Short CV summary")
     cv_text: str = dspy.InputField(desc="Clean CV text")
+    response_language: str = dspy.InputField(desc="Language instruction for all generated content")
     cover_letter: str = dspy.OutputField(
         desc="Plain text cover letter with greeting, 2-3 short paragraphs, and sign-off"
     )
@@ -38,6 +41,7 @@ class CoverLetterModule(dspy.Module):
         job_description: str,
         cv_summary: str,
         cv_text: str,
+        response_language: str,
     ):
         return self.predict(
             job_title=job_title,
@@ -45,6 +49,7 @@ class CoverLetterModule(dspy.Module):
             job_description=job_description,
             cv_summary=cv_summary,
             cv_text=cv_text,
+            response_language=response_language,
         )
 
 
@@ -62,7 +67,9 @@ class CoverLetterService:
         user: User,
         job_id: int,
         selected_cv_id: int,
+        language: AIResponseLanguage = "english",
     ) -> str:
+        selected_language = normalize_language(language)
         job = crud.get_job_for_user(session, user.id, job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
@@ -79,6 +86,7 @@ class CoverLetterService:
                 job_description=job.clean_description,
                 cv_summary=cv.summary,
                 cv_text=cv.clean_text,
+                response_language=language_instruction(selected_language),
             )
             result = future.result(timeout=self.timeout_seconds)
         except FuturesTimeoutError as exc:
