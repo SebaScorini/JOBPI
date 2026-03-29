@@ -17,21 +17,25 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_COVER_LETTER_CHARS = 1200
 MAX_COVER_LETTER_PARAGRAPHS = 3
 MAX_COVER_LETTER_PARAGRAPH_CHARS = 380
-COVER_LETTER_MAX_TOKENS = 800
+COVER_LETTER_MAX_TOKENS = 500
 logger = logging.getLogger(__name__)
 
 
 class CoverLetterSignature(dspy.Signature):
-    """Generate a short plain-text cover letter for one job using one CV."""
+    """Generate a concise, tailored cover letter for one job and one CV.
+
+    Keep it specific to job requirements and candidate evidence.
+    Exclude exaggerated claims, generic motivation, filler, and repetition.
+    """
 
     job_title: str = dspy.InputField(desc="Job title")
     company: str = dspy.InputField(desc="Company name")
     job_description: str = dspy.InputField(desc="Clean job description")
     cv_summary: str = dspy.InputField(desc="Short CV summary")
     cv_text: str = dspy.InputField(desc="Clean CV text")
-    response_language: str = dspy.InputField(desc="Language instruction for all generated content")
+    response_language: str = dspy.InputField(desc="Output language")
     cover_letter: str = dspy.OutputField(
-        desc="Plain text cover letter with greeting, 2-3 short paragraphs, concise tone, and sign-off. Keep it compact and under about 180 words."
+        desc="Plain text only: greeting, 2-3 short paragraphs, sign-off. Max ~180 words, role-specific."
     )
 
 
