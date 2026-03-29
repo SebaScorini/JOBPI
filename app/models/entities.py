@@ -49,6 +49,9 @@ class JobAnalysis(SQLModel, table=True):
     description: str = Field(sa_column=Column(Text, nullable=False))
     clean_description: str = Field(sa_column=Column(Text, nullable=False))
     analysis_result: dict = Field(sa_column=Column(JSON, nullable=False))
+    status: str = Field(sa_column=Column(String(20), nullable=False, default="saved"), default="saved")
+    applied_date: Optional[datetime] = Field(default=None, nullable=True)
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
     user: Optional[User] = Relationship(back_populates="jobs")

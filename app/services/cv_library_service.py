@@ -177,6 +177,9 @@ class CvLibraryService:
             strengths=explanation["strengths"],
             missing_skills=explanation["missing_skills"],
             improvement_suggestions=explanation["improvement_suggestions"],
+            suggested_improvements=explanation["suggested_improvements"],
+            missing_keywords=explanation["missing_keywords"],
+            reorder_suggestions=explanation["reorder_suggestions"],
             match_level=compute_match_level(fit_level=match.fit_level),
             recommended=match.recommended,
             created_at=match.created_at,
@@ -195,6 +198,9 @@ class CvLibraryService:
                 "strengths",
                 "missing_skills",
                 "improvement_suggestions",
+                "suggested_improvements",
+                "missing_keywords",
+                "reorder_suggestions",
                 "match_level",
             }
         )
@@ -210,6 +216,9 @@ class CvLibraryService:
             strengths=explanation["strengths"],
             missing_skills=explanation["missing_skills"],
             improvement_suggestions=explanation["improvement_suggestions"],
+            suggested_improvements=explanation["suggested_improvements"],
+            missing_keywords=explanation["missing_keywords"],
+            reorder_suggestions=explanation["reorder_suggestions"],
             match_level=compute_match_level(
                 fit_level=result.likely_fit_level or match.fit_level,
                 heuristic_score=heuristic_score,
@@ -278,6 +287,11 @@ def _build_match_explanation(
     clean_strengths = _clean_items(strengths, limit=4)
     clean_missing = _clean_items(missing_skills, limit=4)
     clean_improvements = _clean_items(improvement_suggestions, limit=3)
+    improvement_payload = _build_improvement_payload(
+        strengths=clean_strengths,
+        missing_skills=clean_missing,
+        improvement_suggestions=clean_improvements,
+    )
 
     why_this_cv = _normalize_sentence(fit_summary, fallback="This CV aligns with the strongest matching requirements.")
     if clean_strengths:
@@ -290,7 +304,10 @@ def _build_match_explanation(
         "why_this_cv": why_this_cv,
         "strengths": clean_strengths,
         "missing_skills": clean_missing,
-        "improvement_suggestions": clean_improvements,
+        "improvement_suggestions": improvement_payload["suggested_improvements"],
+        "suggested_improvements": improvement_payload["suggested_improvements"],
+        "missing_keywords": improvement_payload["missing_keywords"],
+        "reorder_suggestions": improvement_payload["reorder_suggestions"],
     }
 
 
@@ -317,6 +334,73 @@ def _normalize_sentence(value: str, fallback: str = "") -> str:
     if text[-1] not in ".!?":
         text += "."
     return text
+
+
+def _build_improvement_payload(
+    strengths: list[str],
+    missing_skills: list[str],
+    improvement_suggestions: list[str],
+) -> dict[str, object]:
+    suggested_improvements = list(improvement_suggestions)
+    missing_keywords = _clean_keywords(missing_skills, limit=6)
+
+    if not suggested_improvements:
+        suggested_improvements = [
+            _normalize_sentence(f"Add clear evidence of {keyword}", fallback="")
+            for keyword in missing_keywords[:2]
+        ]
+        suggested_improvements = [item for item in suggested_improvements if item]
+        if strengths:
+            suggested_improvements.append(
+                _normalize_sentence(f"Move {strengths[0]} higher so it appears earlier in the CV", fallback="")
+            )
+        suggested_improvements = _clean_items(suggested_improvements, limit=3)
+
+    reorder_suggestions = _build_reorder_suggestions(strengths, missing_keywords)
+
+    return {
+        "suggested_improvements": suggested_improvements,
+        "missing_keywords": missing_keywords,
+        "reorder_suggestions": reorder_suggestions or None,
+    }
+
+
+def _clean_keywords(items: list[str], limit: int) -> list[str]:
+    cleaned: list[str] = []
+    for item in items:
+        keyword = _normalize_keyword(item)
+        if keyword and keyword not in cleaned:
+            cleaned.append(keyword)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+def _normalize_keyword(value: str) -> str:
+    if not isinstance(value, str):
+        return ""
+
+    keyword = " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -.,;:").lower()
+    if not keyword:
+        return ""
+    return keyword
+
+
+def _build_reorder_suggestions(strengths: list[str], missing_keywords: list[str]) -> list[str]:
+    suggestions: list[str] = []
+    if strengths:
+        suggestions.append(
+            _normalize_sentence(f"Move {strengths[0]} into the top summary or first experience section", fallback="")
+        )
+    if missing_keywords:
+        suggestions.append(
+            _normalize_sentence(
+                f"Place experience or projects that mention {missing_keywords[0]} before less relevant content",
+                fallback="",
+            )
+        )
+
+    return [suggestion for suggestion in suggestions if suggestion][:2]
 
 
 _service: CvLibraryService | None = None

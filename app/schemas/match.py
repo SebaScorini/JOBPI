@@ -23,6 +23,9 @@ class CVJobMatchRead(BaseModel):
     strengths: list[str]
     missing_skills: list[str]
     improvement_suggestions: list[str]
+    suggested_improvements: list[str]
+    missing_keywords: list[str]
+    reorder_suggestions: list[str] | None = None
     match_level: MatchLevel
     recommended: bool
     created_at: datetime

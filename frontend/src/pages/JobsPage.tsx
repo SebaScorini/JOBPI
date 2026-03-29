@@ -4,6 +4,22 @@ import { apiService } from '../services/api';
 import { JobAnalysisResponse } from '../types';
 import { Briefcase, ArrowRight, Loader2, Plus } from 'lucide-react';
 
+const statusLabelMap: Record<string, string> = {
+  saved: 'Saved',
+  applied: 'Applied',
+  interview: 'Interview',
+  rejected: 'Rejected',
+  offer: 'Offer',
+};
+
+const statusBadgeMap: Record<string, string> = {
+  saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  applied: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  interview: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+  offer: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+};
+
 export function JobsPage() {
   const [jobs, setJobs] = useState<JobAnalysisResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +87,16 @@ export function JobsPage() {
                 <p className="text-slate-500 font-medium mb-4">
                   {job.company || job.seniority || 'Company Unknown'}
                 </p>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
+                    {statusLabelMap[job.status] ?? 'Saved'}
+                  </span>
+                  {job.applied_date && (
+                    <span className="text-xs text-slate-500">
+                      Applied {new Date(job.applied_date).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2 mt-auto">
                   {job.required_skills?.slice(0, 3).map((skill, i) => (
                     <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg">

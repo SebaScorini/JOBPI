@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,6 +29,18 @@ class JobAnalysisResponse(JobAnalysisPayload):
     job_id: int | None = None
 
 
+JobStatus = Literal["saved", "applied", "interview", "rejected", "offer"]
+
+
+class JobStatusUpdateRequest(BaseModel):
+    status: JobStatus
+    applied_date: datetime | None = None
+
+
+class JobNotesUpdateRequest(BaseModel):
+    notes: str | None = Field(default=None, max_length=2000)
+
+
 class JobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,4 +50,7 @@ class JobRead(BaseModel):
     description: str
     clean_description: str
     analysis_result: JobAnalysisPayload
+    status: JobStatus
+    applied_date: datetime | None
+    notes: str | None
     created_at: datetime | None

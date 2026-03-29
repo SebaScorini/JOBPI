@@ -113,6 +113,29 @@ def get_job_for_user(session: Session, user_id: int, job_id: int) -> JobAnalysis
     return session.exec(statement).first()
 
 
+def update_job_status(
+    session: Session,
+    job: JobAnalysis,
+    status: str,
+    applied_date,
+) -> JobAnalysis:
+    job.status = status
+    if applied_date is not None:
+        job.applied_date = applied_date
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
+def update_job_notes(session: Session, job: JobAnalysis, notes: str | None) -> JobAnalysis:
+    job.notes = notes
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
 def create_match(
     session: Session,
     user_id: int,

@@ -16,6 +16,8 @@ export interface JobAnalysisRequest {
   description: string;
 }
 
+export type JobApplicationStatus = 'saved' | 'applied' | 'interview' | 'rejected' | 'offer';
+
 export interface JobAnalysisResponse {
   id: number;
   job_id: number;
@@ -34,6 +36,9 @@ export interface JobAnalysisResponse {
   resume_tips: string[];
   interview_tips: string[];
   portfolio_project_ideas: string[];
+  status: JobApplicationStatus;
+  applied_date: string | null;
+  notes: string | null;
   created_at: string | null;
 }
 
@@ -66,6 +71,9 @@ export interface CVJobMatch {
   strengths: string[];
   missing_skills: string[];
   improvement_suggestions: string[];
+  suggested_improvements: string[];
+  missing_keywords: string[];
+  reorder_suggestions?: string[] | null;
   result: CvAnalysisResponse;
   created_at: string;
   recommended: boolean;

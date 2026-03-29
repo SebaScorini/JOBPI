@@ -16,6 +16,7 @@ def create_db_and_tables() -> None:
 
     _reset_legacy_dev_tables()
     SQLModel.metadata.create_all(engine)
+    _ensure_job_tracking_columns()
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -39,3 +40,22 @@ def _reset_legacy_dev_tables() -> None:
     with engine.begin() as connection:
         for table_name in legacy_tables:
             connection.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name}")
+
+
+def _ensure_job_tracking_columns() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "job_analyses" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("job_analyses")}
+
+    with engine.begin() as connection:
+        if "status" not in columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE job_analyses ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'saved'"
+            )
+        if "applied_date" not in columns:
+            connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN applied_date TIMESTAMP NULL")
+        if "notes" not in columns:
+            connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN notes TEXT NULL")

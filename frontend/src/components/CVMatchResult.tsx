@@ -9,6 +9,10 @@ interface CVMatchResultProps {
 }
 
 export function CVMatchResult({ match, activeCv, isLoading, isRecommended }: CVMatchResultProps) {
+  const suggestions = match?.suggested_improvements ?? match?.improvement_suggestions ?? [];
+  const missingKeywords = match?.missing_keywords ?? [];
+  const reorderSuggestions = match?.reorder_suggestions ?? [];
+
   const matchLevelClasses = {
     strong: 'rounded-full border border-emerald-200/50 bg-emerald-100/80 px-3 py-1.5 text-xs font-bold tracking-wide text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 uppercase',
     medium: 'rounded-full border border-amber-200/50 bg-amber-100/80 px-3 py-1.5 text-xs font-bold tracking-wide text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 uppercase',
@@ -80,7 +84,7 @@ export function CVMatchResult({ match, activeCv, isLoading, isRecommended }: CVM
               <ul className="space-y-2">
                 {match.strengths.map((item) => (
                   <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    • {item}
+                    &bull; {item}
                   </li>
                 ))}
               </ul>
@@ -95,7 +99,7 @@ export function CVMatchResult({ match, activeCv, isLoading, isRecommended }: CVM
               <ul className="space-y-2">
                 {match.missing_skills.map((item) => (
                   <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    • {item}
+                    &bull; {item}
                   </li>
                 ))}
               </ul>
@@ -105,16 +109,57 @@ export function CVMatchResult({ match, activeCv, isLoading, isRecommended }: CVM
           </section>
         </div>
 
-        {match.improvement_suggestions.length > 0 && (
+        {(suggestions.length > 0 || missingKeywords.length > 0 || reorderSuggestions.length > 0) && (
           <section className="rounded-2xl border border-amber-200/70 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 p-5">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300 mb-3">Improvement Suggestions</h3>
-            <ul className="space-y-2">
-              {match.improvement_suggestions.map((item) => (
-                <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                  • {item}
-                </li>
-              ))}
-            </ul>
+            <h3 className="text-sm font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300 mb-3">How to improve this CV</h3>
+
+            {suggestions.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-700/80 dark:text-amber-300/80">
+                  Suggested improvements
+                </p>
+                <ul className="space-y-2">
+                  {suggestions.map((item) => (
+                    <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                      &bull; {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {missingKeywords.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-700/80 dark:text-amber-300/80">
+                  Missing keywords
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {missingKeywords.map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {reorderSuggestions.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-700/80 dark:text-amber-300/80">
+                  Reorder suggestions
+                </p>
+                <ul className="space-y-2">
+                  {reorderSuggestions.map((item) => (
+                    <li key={item} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                      &bull; {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
       </div>

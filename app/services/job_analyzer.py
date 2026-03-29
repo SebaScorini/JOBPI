@@ -1,5 +1,6 @@
 import hashlib
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from datetime import datetime, timezone
 
 import dspy
 from fastapi import HTTPException, status
@@ -8,7 +9,7 @@ from sqlmodel import Session
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
-from app.schemas.job import JobAnalysisPayload, JobAnalysisRequest, JobAnalysisResponse, JobRead
+from app.schemas.job import JobAnalysisPayload, JobAnalysisRequest, JobRead, JobStatus
 from app.services.job_preprocessing import clean_description
 
 
@@ -166,6 +167,34 @@ class JobAnalyzerService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
         return self._serialize_job(job)
 
+    def update_job_status(
+        self,
+        session: Session,
+        user: User,
+        job_id: int,
+        status_value: JobStatus,
+        applied_date: datetime | None,
+    ) -> JobRead:
+        job = crud.get_job_for_user(session, user.id, job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
+
+        effective_applied_date = applied_date
+        if status_value == "applied" and effective_applied_date is None and job.applied_date is None:
+            effective_applied_date = datetime.now(timezone.utc)
+
+        updated = crud.update_job_status(session, job, status_value, effective_applied_date)
+        return self._serialize_job(updated)
+
+    def update_job_notes(self, session: Session, user: User, job_id: int, notes: str | None) -> JobRead:
+        job = crud.get_job_for_user(session, user.id, job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
+
+        normalized_notes = notes.strip() if isinstance(notes, str) else None
+        updated = crud.update_job_notes(session, job, normalized_notes or None)
+        return self._serialize_job(updated)
+
     def _serialize_job(self, job) -> JobRead:
         return JobRead(
             id=job.id,
@@ -174,6 +203,9 @@ class JobAnalyzerService:
             description=job.description,
             clean_description=job.clean_description,
             analysis_result=JobAnalysisPayload(**job.analysis_result),
+            status=job.status,
+            applied_date=job.applied_date,
+            notes=job.notes,
             created_at=job.created_at,
         )
 

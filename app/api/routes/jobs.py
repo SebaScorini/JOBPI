@@ -4,7 +4,7 @@ from sqlmodel import Session
 from app.db.database import get_session
 from app.dependencies.auth import get_current_user
 from app.models import User
-from app.schemas.job import JobAnalysisRequest, JobRead
+from app.schemas.job import JobAnalysisRequest, JobNotesUpdateRequest, JobRead, JobStatusUpdateRequest
 from app.schemas.match import CVJobMatchDetailRead, CVMatchRequest
 from app.services.cv_library_service import get_cv_library_service
 from app.services.job_analyzer import get_job_analyzer_service
@@ -37,6 +37,32 @@ def get_job(
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
     return get_job_analyzer_service().get_job(session, current_user, job_id)
+
+
+@router.patch("/{job_id}/status", response_model=JobRead)
+def update_job_status(
+    job_id: int,
+    payload: JobStatusUpdateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> JobRead:
+    return get_job_analyzer_service().update_job_status(
+        session,
+        current_user,
+        job_id,
+        payload.status,
+        payload.applied_date,
+    )
+
+
+@router.patch("/{job_id}/notes", response_model=JobRead)
+def update_job_notes(
+    job_id: int,
+    payload: JobNotesUpdateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> JobRead:
+    return get_job_analyzer_service().update_job_notes(session, current_user, job_id, payload.notes)
 
 
 @router.post("/{job_id}/match-cvs", response_model=CVJobMatchDetailRead)

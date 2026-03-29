@@ -1,6 +1,7 @@
 import {
   CVJobMatch,
   CvAnalysisResponse,
+  JobApplicationStatus,
   JobAnalysisRequest,
   JobAnalysisResponse,
   MatchLevel,
@@ -47,6 +48,9 @@ interface BackendJobRead {
   description: string;
   clean_description: string;
   analysis_result: BackendJobAnalysisPayload;
+  status?: JobApplicationStatus;
+  applied_date?: string | null;
+  notes?: string | null;
   created_at: string | null;
 }
 
@@ -70,6 +74,9 @@ interface BackendMatchRead {
   strengths?: string[];
   missing_skills?: string[];
   improvement_suggestions?: string[];
+  suggested_improvements?: string[];
+  missing_keywords?: string[];
+  reorder_suggestions?: string[] | null;
   heuristic_score?: number;
   result?: Partial<CvAnalysisResponse>;
   recommended?: boolean;
@@ -167,6 +174,9 @@ function mapJob(job: BackendJobRead): JobAnalysisResponse {
     resume_tips: job.analysis_result.resume_tips,
     interview_tips: job.analysis_result.interview_tips,
     portfolio_project_ideas: job.analysis_result.portfolio_project_ideas,
+    status: job.status ?? 'saved',
+    applied_date: job.applied_date ?? null,
+    notes: job.notes ?? null,
     created_at: job.created_at,
   };
 }
@@ -230,6 +240,9 @@ function mapMatch(match: BackendMatchRead): CVJobMatch {
     strengths: match.strengths ?? result.strengths ?? [],
     missing_skills: match.missing_skills ?? result.missing_skills ?? [],
     improvement_suggestions: match.improvement_suggestions ?? result.resume_improvements ?? [],
+    suggested_improvements: match.suggested_improvements ?? match.improvement_suggestions ?? result.resume_improvements ?? [],
+    missing_keywords: match.missing_keywords ?? match.missing_skills ?? result.missing_skills ?? [],
+    reorder_suggestions: match.reorder_suggestions ?? null,
     result,
     created_at: match.created_at,
     recommended: Boolean(match.recommended),
@@ -292,6 +305,28 @@ export const apiService = {
 
   async getJob(jobId: number): Promise<JobAnalysisResponse> {
     const job = await request<BackendJobRead>(`/jobs/${jobId}`, { auth: true });
+    return mapJob(job);
+  },
+
+  async updateJobStatus(jobId: number, status: JobApplicationStatus, appliedDate?: string | null): Promise<JobAnalysisResponse> {
+    const job = await request<BackendJobRead>(`/jobs/${jobId}/status`, {
+      method: 'PATCH',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, ...(appliedDate ? { applied_date: appliedDate } : {}) }),
+    });
+
+    return mapJob(job);
+  },
+
+  async updateJobNotes(jobId: number, notes: string | null): Promise<JobAnalysisResponse> {
+    const job = await request<BackendJobRead>(`/jobs/${jobId}/notes`, {
+      method: 'PATCH',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes }),
+    });
+
     return mapJob(job);
   },
 
