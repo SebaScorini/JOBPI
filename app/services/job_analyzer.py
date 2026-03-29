@@ -19,75 +19,50 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_LIST_ITEMS = 5
 MAX_ITEM_CHARS = 80
 MAX_SUMMARY_CHARS = 240
-JOB_ANALYSIS_MAX_TOKENS = 1000
+JOB_ANALYSIS_MAX_TOKENS = 750
 logger = logging.getLogger(__name__)
 
 
 class LeanJobAnalysisSignature(dspy.Signature):
-    """Analyze one specific job posting and return concise, actionable guidance only.
+    """Return concise, role-specific job guidance only.
 
-    Relevance Rule:
-    - Include only information that directly helps the candidate:
-        1) understand real requirements,
-        2) improve the CV for this role,
-        3) prepare for this exact interview/job,
-        4) identify concrete skill gaps.
-    - Do not include any information that is not directly actionable for getting this specific job.
-
-    Hard prohibitions:
-    - No motivational or generic coaching text.
-    - No obvious statements (for example: "experience is important").
-    - No long introductions or filler phrases.
-    - Do not repeat job description text unless it is transformed into a specific action.
-    - Do not mention technologies that are not explicitly present in the job text.
-
-    Noise Filter (apply internally before final answer):
-    - Remove generic advice.
-    - Remove repeated ideas.
-    - Remove irrelevant skills.
-    - Remove vague suggestions.
-
-    Format and tone:
-    - Keep outputs short, direct, professional.
-    - Use brief bullet-style items for list outputs.
-    - No long paragraphs.
+    Keep only actionable content for requirements, CV improvements, prep, and gaps.
+    Exclude filler, repeated ideas, generic claims, obvious statements, and irrelevant tech.
     """
 
     title: str = dspy.InputField(desc="Job title")
     company: str = dspy.InputField(desc="Company name")
     desc: str = dspy.InputField(desc="Cleaned job text")
-    response_language: str = dspy.InputField(desc="Language instruction for all generated content")
-    summary: str = dspy.OutputField(
-        desc="Max 2 short sentences. Only role-specific actionable context. No intro/filler."
-    )
+    response_language: str = dspy.InputField(desc="Output language")
+    summary: str = dspy.OutputField(desc="1-2 actionable sentences. No intro, filler, or copied JD text.")
     seniority: str = dspy.OutputField(desc="One label")
     role_type: str = dspy.OutputField(desc="One role family")
     req_skills: list[str] = dspy.OutputField(
-        desc="Max 5 concrete strengths/requirements from the posting. Short bullet-style phrases only."
+        desc="Max 5 required skills from the posting. Short phrases only."
     )
     nice_skills: list[str] = dspy.OutputField(
-        desc="Max 5 optional skills explicitly hinted by the posting. No irrelevant tech."
+        desc="Max 5 optional skills explicitly hinted in the posting."
     )
     responsibilities: list[str] = dspy.OutputField(
-        desc="Max 5 core tasks. Rewrite as concise bullet-style items, not copied text."
+        desc="Max 5 core tasks rewritten as concise items; do not copy lines verbatim."
     )
     prep: list[str] = dspy.OutputField(
-        desc="Max 5 direct preparation actions for this role. Short and actionable only."
+        desc="Max 5 preparation actions for this role. Actionable and specific."
     )
     learn: list[str] = dspy.OutputField(
-        desc="Max 5 focused learning actions tied to missing requirements in this posting."
+        desc="Max 5 learning actions tied to missing requirements in this posting."
     )
     gaps: list[str] = dspy.OutputField(
-        desc="Max 5 clear skill gaps for this job. Specific and concise; no vague advice."
+        desc="Max 5 concrete skill gaps for this job. No vague or generic advice."
     )
     resume: list[str] = dspy.OutputField(
         desc="Max 5 CV improvements for this job. Each item must be directly actionable."
     )
     interview: list[str] = dspy.OutputField(
-        desc="Max 5 interview preparation recommendations for this role. Short explanations only."
+        desc="Max 5 interview focus points for this role. Short explanations only."
     )
     projects: list[str] = dspy.OutputField(
-        desc="Max 5 portfolio/recommendation items that increase fit for this exact role."
+        desc="Max 5 portfolio project ideas that increase fit for this exact role."
     )
 
 

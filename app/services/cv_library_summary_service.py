@@ -12,7 +12,7 @@ from app.services.job_analyzer import _normalize_text
 
 MAX_LIBRARY_SUMMARY_CHARS = 180
 MAX_LIBRARY_CONTEXT_CHARS = 650
-SUMMARY_MAX_TOKENS = 300
+SUMMARY_MAX_TOKENS = 275
 logger = logging.getLogger(__name__)
 ROLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Backend-focused profile", re.compile(r"\b(backend|python|fastapi|django|flask|api|microservices?)\b", re.IGNORECASE)),
@@ -60,11 +60,15 @@ TECH_KEYWORDS = [
 
 
 class CvLibrarySummarySignature(dspy.Signature):
-    """Generate a short CV library summary."""
+    """Generate a compact CV card summary.
+
+    Include only role/seniority (if clear) and key technologies from the CV.
+    No filler, generic claims, or invented details.
+    """
 
     cv: str = dspy.InputField(desc="Clean CV excerpt")
     summary: str = dspy.OutputField(
-        desc="One or two short sentences for a CV library card. Mention role, main technologies, and seniority only if clear. Keep it compact and do not invent details."
+        desc="1-2 short sentences max. Mention profile + key technologies only if evidenced."
     )
 
 

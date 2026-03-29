@@ -16,25 +16,29 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_LIST_ITEMS = 4
 MAX_ITEM_CHARS = 60
 MAX_SUMMARY_CHARS = 280
-MATCH_EXPLANATION_MAX_TOKENS = 600
+MATCH_EXPLANATION_MAX_TOKENS = 625
 logger = logging.getLogger(__name__)
 
 
 class CvFitSignature(dspy.Signature):
-    """Return short CV-job fit insights."""
+    """Return concise CV-vs-job fit insights only.
+
+    Include only actionable, role-specific content.
+    Exclude filler, generic advice, repeated ideas, and irrelevant technologies.
+    """
 
     title: str = dspy.InputField(desc="Job title")
     job: str = dspy.InputField(desc="Key job text")
     cv: str = dspy.InputField(desc="Key CV text")
-    response_language: str = dspy.InputField(desc="Language instruction for all generated content")
+    response_language: str = dspy.InputField(desc="Output language")
 
-    fit_summary: str = dspy.OutputField(desc="1-2 short sentences, concise and UI-friendly")
-    strengths: list[str] = dspy.OutputField(desc="Up to 4 short strengths")
-    missing_skills: list[str] = dspy.OutputField(desc="Up to 4 short gaps")
+    fit_summary: str = dspy.OutputField(desc="1-2 short fit sentences. No fluff or generic claims.")
+    strengths: list[str] = dspy.OutputField(desc="Max 4 concrete strengths relevant to this job.")
+    missing_skills: list[str] = dspy.OutputField(desc="Max 4 concrete gaps that reduce fit.")
     likely_fit_level: str = dspy.OutputField(desc="Strong, Moderate, or Weak")
-    resume_improvements: list[str] = dspy.OutputField(desc="Up to 4 short resume fixes")
-    interview_focus: list[str] = dspy.OutputField(desc="Up to 4 short interview topics")
-    next_steps: list[str] = dspy.OutputField(desc="Up to 4 short next steps")
+    resume_improvements: list[str] = dspy.OutputField(desc="Max 4 targeted CV fixes for this job.")
+    interview_focus: list[str] = dspy.OutputField(desc="Max 4 interview focus points for this role.")
+    next_steps: list[str] = dspy.OutputField(desc="Max 4 direct next steps. Actionable only.")
 
 
 class CvFitModule(dspy.Module):
