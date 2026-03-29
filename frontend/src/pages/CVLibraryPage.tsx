@@ -23,10 +23,10 @@ interface UploadFile {
 export function CVLibraryPage() {
   const { t, language } = useLanguage();
   const [cvs, setCvs] = useState<StoredCV[]>([]);
+  const [selectedCvId, setSelectedCvId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([]);
-  const [uploadResults, setUploadResults] = useState<Array<{ filename: string; success: boolean; error?: string }>>([]);
   const [tagInputs, setTagInputs] = useState<Record<number, string>>({});
   const [savingTagCvId, setSavingTagCvId] = useState<number | null>(null);
   const [activeTagFilter, setActiveTagFilter] = useState<string>('');
@@ -35,6 +35,15 @@ export function CVLibraryPage() {
   useEffect(() => {
     loadCVs();
   }, []);
+
+  useEffect(() => {
+    if (selectedCvId && !cvs.some((cv) => cv.id === selectedCvId)) {
+      setSelectedCvId(cvs[0]?.id ?? null);
+    }
+    if (!selectedCvId && cvs.length > 0) {
+      setSelectedCvId(cvs[0].id);
+    }
+  }, [cvs, selectedCvId]);
 
   const loadCVs = async () => {
     try {
@@ -80,7 +89,6 @@ export function CVLibraryPage() {
     if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    setUploadResults([]);
     setSelectedFiles((prev) => prev.map((file) => ({ ...file, status: 'uploading' as const })));
 
     try {
@@ -104,12 +112,11 @@ export function CVLibraryPage() {
         }),
       );
 
-      setUploadResults(result.results);
       await loadCVs();
 
       window.setTimeout(() => {
         setSelectedFiles((prev) => prev.filter((file) => file.status === 'error'));
-      }, 2000);
+      }, 1800);
     } catch (err) {
       console.error('Failed to upload CVs', err);
       setSelectedFiles((prev) =>
@@ -123,14 +130,6 @@ export function CVLibraryPage() {
       setIsUploading(false);
     }
   };
-
-  const clearUploadState = () => {
-    setSelectedFiles([]);
-    setUploadResults([]);
-  };
-
-  const successCount = selectedFiles.filter((file) => file.status === 'success').length;
-  const errorCount = selectedFiles.filter((file) => file.status === 'error').length;
 
   const handleDelete = async (cvId: number) => {
     if (!window.confirm(t('common.confirmDeleteCv'))) return;
@@ -170,15 +169,16 @@ export function CVLibraryPage() {
     a.localeCompare(b),
   );
   const visibleCvs = activeTagFilter ? cvs.filter((cv) => cv.tags.includes(activeTagFilter)) : cvs;
+  const activeCv = visibleCvs.find((cv) => cv.id === selectedCvId) ?? visibleCvs[0] ?? null;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-6">
+    <div className="space-y-4 animate-in fade-in duration-300 h-full">
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold tracking-tight text-brand-text dark:text-white">
+          <h1 className="text-2xl lg:text-3xl font-heading font-extrabold tracking-tight text-brand-text dark:text-white">
             {t('library.title')}
           </h1>
-          <p className="text-slate-500 mt-2">{t('library.subtitle')}</p>
+          <p className="text-slate-500 mt-1 text-sm">{t('library.subtitle')}</p>
         </div>
 
         <div>
@@ -193,35 +193,21 @@ export function CVLibraryPage() {
           <button
             onClick={handleUploadClick}
             disabled={isUploading}
-            className="btn-primary flex items-center justify-center gap-2 w-auto px-6 h-12"
+            className="btn-primary flex items-center justify-center gap-2 w-auto px-4 h-10 text-xs sm:text-sm"
           >
-            {isUploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
+            {isUploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
             {t('library.uploadResumes')}
           </button>
         </div>
       </div>
 
       {selectedFiles.length > 0 && (
-        <div className="glass-card-solid p-6 rounded-3xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-brand-text dark:text-white">
-              {t('library.selectedFiles', { count: selectedFiles.length })}
-            </h2>
-            {!isUploading && (
-              <button
-                onClick={clearUploadState}
-                className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-              >
-                {t('common.clear')}
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+        <div className="glass-card-solid p-3 rounded-2xl space-y-3">
+          <div className="space-y-2 max-h-44 overflow-y-auto">
             {selectedFiles.map((item, index) => (
               <div
                 key={`${item.file.name}-${index}`}
-                className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                className={`flex items-center justify-between p-2 rounded-lg border ${
                   item.status === 'success'
                     ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
                     : item.status === 'error'
@@ -229,21 +215,18 @@ export function CVLibraryPage() {
                       : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
                 }`}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <FileText size={18} className="flex-shrink-0" />
-                  <span className="text-sm font-medium truncate">{item.file.name}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText size={16} className="shrink-0" />
+                  <span className="text-xs font-medium break-all">{item.file.name}</span>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {item.status === 'uploading' && <Loader2 size={18} className="animate-spin text-brand-primary" />}
-                  {item.status === 'success' && <CheckCircle size={18} className="text-emerald-500" />}
-                  {item.status === 'error' && <AlertCircle size={18} className="text-rose-500" />}
+                <div className="flex items-center gap-1">
+                  {item.status === 'uploading' && <Loader2 size={16} className="animate-spin text-brand-primary" />}
+                  {item.status === 'success' && <CheckCircle size={16} className="text-emerald-500" />}
+                  {item.status === 'error' && <AlertCircle size={16} className="text-rose-500" />}
                   {item.status === 'pending' && !isUploading && (
-                    <button
-                      onClick={() => removeSelectedFile(index)}
-                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
-                    >
-                      <X size={18} />
+                    <button onClick={() => removeSelectedFile(index)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded">
+                      <X size={14} />
                     </button>
                   )}
                 </div>
@@ -251,40 +234,8 @@ export function CVLibraryPage() {
             ))}
           </div>
 
-          {selectedFiles.some((file) => file.error) && (
-            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-              {selectedFiles
-                .filter((file) => file.error)
-                .map((item, index) => (
-                  <div key={`error-${index}`} className="text-sm text-rose-600 dark:text-rose-400">
-                    <span className="font-medium">{item.file.name}:</span> {item.error}
-                  </div>
-                ))}
-            </div>
-          )}
-
-          {(successCount > 0 || errorCount > 0) && (
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400">
-              {successCount > 0 && (
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                  {t('library.uploadedSuccessfully', { count: successCount })}
-                </span>
-              )}
-              {successCount > 0 && errorCount > 0 && <span> | </span>}
-              {errorCount > 0 && (
-                <span className="text-rose-600 dark:text-rose-400 font-medium">
-                  {t('library.failedUploads', { count: errorCount })}
-                </span>
-              )}
-            </div>
-          )}
-
           {selectedFiles.some((file) => file.status === 'pending' || file.status === 'error') && !isUploading && (
-            <button
-              onClick={handleBatchUpload}
-              disabled={isUploading}
-              className="w-full btn-primary !bg-emerald-600 hover:!bg-emerald-500 py-2"
-            >
+            <button onClick={handleBatchUpload} className="btn-primary !py-2 text-sm">
               {t('library.uploadFiles', {
                 count: selectedFiles.filter((file) => file.status === 'pending').length,
               })}
@@ -293,16 +244,20 @@ export function CVLibraryPage() {
         </div>
       )}
 
-      {availableTags.length > 0 && (
-        <div className="glass-card-solid p-4 rounded-3xl space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-brand-text dark:text-white">
-            <Tag size={16} />
-            <span>{t('library.filterByTag')}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-[560px]">
+        <aside className="glass-card p-3 rounded-2xl flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <Tag size={14} />
+              <span>{t('library.filterByTag')}</span>
+            </div>
+            <span className="text-xs text-slate-500">{visibleCvs.length}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex flex-wrap gap-1.5 mb-3">
             <button
               onClick={() => setActiveTagFilter('')}
-              className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+              className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
                 activeTagFilter === ''
                   ? 'bg-brand-primary text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
@@ -314,7 +269,7 @@ export function CVLibraryPage() {
               <button
                 key={tag}
                 onClick={() => setActiveTagFilter(tag)}
-                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
                   activeTagFilter === tag
                     ? 'bg-brand-primary text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
@@ -324,102 +279,108 @@ export function CVLibraryPage() {
               </button>
             ))}
           </div>
-        </div>
-      )}
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
-        </div>
-      ) : visibleCvs.length === 0 ? (
-        <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-[#151B2B]/50">
-          <FileText size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-          {cvs.length === 0 ? (
-            <>
-              <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">{t('library.emptyLibrary')}</p>
-              <p className="text-slate-500 max-w-sm mx-auto mb-6">{t('library.emptyLibraryDesc')}</p>
-              <button onClick={handleUploadClick} className="btn-secondary w-auto px-8 mx-auto inline-flex items-center justify-center">
-                {t('library.uploadPdf')}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">{t('library.noTagMatches')}</p>
-              <p className="text-slate-500 max-w-sm mx-auto mb-6">{t('library.noTagMatchesDesc')}</p>
-              <button onClick={() => setActiveTagFilter('')} className="btn-secondary w-auto px-8 mx-auto inline-flex items-center justify-center">
-                {t('library.clearFilter')}
-              </button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {visibleCvs.map((cv) => (
-            <div
-              key={cv.id}
-              className="glass-card-solid p-6 rounded-[1.5rem] flex flex-col justify-between group h-full relative"
-            >
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="animate-spin text-brand-primary h-6 w-6" />
+              </div>
+            ) : visibleCvs.length === 0 ? (
+              <p className="text-xs text-slate-500 p-2">{cvs.length === 0 ? t('library.emptyLibrary') : t('library.noTagMatches')}</p>
+            ) : (
+              visibleCvs.map((cv) => (
                 <button
-                  onClick={() => handleDelete(cv.id)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer"
-                  title={t('library.deleteTitle')}
+                  key={cv.id}
+                  onClick={() => setSelectedCvId(cv.id)}
+                  className={`w-full text-left rounded-xl px-3 py-2 border transition-colors ${
+                    activeCv?.id === cv.id
+                      ? 'border-brand-primary bg-brand-primary/10'
+                      : 'border-slate-200 bg-white/70 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/30 dark:hover:border-slate-700'
+                  }`}
                 >
-                  <Trash2 size={18} />
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">{cv.name}</p>
+                  <p
+                    className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {cv.library_summary}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{new Date(cv.created_at).toLocaleDateString(language)}</p>
+                </button>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <section className="glass-card p-4 rounded-2xl min-h-0">
+          {!activeCv ? (
+            <div className="h-full flex items-center justify-center text-center border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
+              <div>
+                <FileText size={32} className="mx-auto text-slate-400 mb-3" />
+                <p className="text-sm text-slate-500">{t('library.emptyLibraryDesc')}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white">{activeCv.name}</h2>
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Calendar size={12} /> {new Date(activeCv.created_at).toLocaleDateString(language)}</p>
+                </div>
+                <button
+                  onClick={() => handleDelete(activeCv.id)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300"
+                >
+                  <Trash2 size={14} />
+                  {t('common.delete')}
                 </button>
               </div>
 
-              <div>
-                <div className="w-12 h-12 rounded-[14px] bg-brand-primary/10 flex items-center justify-center text-brand-primary mb-5">
-                  <FileText size={24} />
-                </div>
-                <h3 className="font-heading font-bold text-lg text-brand-text dark:text-white mb-2 break-words items-center pr-8">
-                  {cv.name}
-                </h3>
-                <p className="text-sm text-slate-500 mb-4 line-clamp-3">{cv.summary}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {cv.tags.length > 0 ? (
-                    cv.tags.map((tag) => (
-                      <button
-                        key={tag}
-                        onClick={() => setActiveTagFilter(tag)}
-                        className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                      >
+              <div className="rounded-xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Summary</h3>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{activeCv.library_summary}</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('library.tags')}</h3>
+
+                <div className="flex flex-wrap gap-2">
+                  {activeCv.tags.length > 0 ? (
+                    activeCv.tags.map((tag) => (
+                      <span key={tag} className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         {tag}
-                      </button>
+                      </span>
                     ))
                   ) : (
                     <span className="text-xs text-slate-400">{t('library.noTagsYet')}</span>
                   )}
                 </div>
-                <div className="space-y-2 mb-4">
-                  <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    {t('library.tags')}
-                  </label>
-                  <input
-                    type="text"
-                    value={tagInputs[cv.id] ?? ''}
-                    onChange={(e) => setTagInputs((prev) => ({ ...prev, [cv.id]: e.target.value }))}
-                    placeholder={t('library.tagsPlaceholder')}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                  />
-                  <button
-                    onClick={() => handleSaveTags(cv.id)}
-                    disabled={savingTagCvId === cv.id}
-                    className="btn-secondary w-full py-2 disabled:opacity-60"
-                  >
-                    {savingTagCvId === cv.id ? t('common.saving') : t('library.saveTags')}
-                  </button>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-500 mt-auto">
-                  <Calendar size={14} />
-                  <span>{new Date(cv.created_at).toLocaleDateString(language)}</span>
-                </div>
+
+                <input
+                  type="text"
+                  value={tagInputs[activeCv.id] ?? ''}
+                  onChange={(e) => setTagInputs((prev) => ({ ...prev, [activeCv.id]: e.target.value }))}
+                  placeholder={t('library.tagsPlaceholder')}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                />
+
+                <button
+                  onClick={() => handleSaveTags(activeCv.id)}
+                  disabled={savingTagCvId === activeCv.id}
+                  className="btn-secondary w-full sm:w-auto px-5 !py-2 text-sm disabled:opacity-60"
+                >
+                  {savingTagCvId === activeCv.id ? t('common.saving') : t('library.saveTags')}
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
+        </section>
+      </div>
     </div>
   );
 }

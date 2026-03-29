@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.models import CV, CVJobMatch, JobAnalysis, User
@@ -6,7 +7,11 @@ from app.models import CV, CVJobMatch, JobAnalysis, User
 def create_user(session: Session, email: str, hashed_password: str) -> User:
     user = User(email=email.lower().strip(), hashed_password=hashed_password)
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise ValueError("A user with that email already exists.") from exc
     session.refresh(user)
     return user
 
@@ -28,6 +33,7 @@ def create_cv(
     raw_text: str,
     clean_text: str,
     summary: str,
+    library_summary: str,
     tags: list[str] | None = None,
 ) -> CV:
     cv = CV(
@@ -37,10 +43,15 @@ def create_cv(
         raw_text=raw_text,
         clean_text=clean_text,
         summary=summary,
+        library_summary=library_summary,
         tags=tags or [],
     )
     session.add(cv)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
     session.refresh(cv)
     return cv
 
@@ -56,6 +67,11 @@ def get_cv_for_user(session: Session, user_id: int, cv_id: int) -> CV | None:
     return session.exec(statement).first()
 
 
+def get_cv_for_user_by_clean_text(session: Session, user_id: int, clean_text: str) -> CV | None:
+    statement = select(CV).where(CV.user_id == user_id, CV.clean_text == clean_text)
+    return session.exec(statement).first()
+
+
 def delete_cv(session: Session, cv: CV) -> None:
     statement = select(CVJobMatch).where(CVJobMatch.cv_id == cv.id, CVJobMatch.user_id == cv.user_id)
     matches = session.exec(statement).all()
@@ -67,6 +83,14 @@ def delete_cv(session: Session, cv: CV) -> None:
 
 def update_cv_tags(session: Session, cv: CV, tags: list[str]) -> CV:
     cv.tags = tags
+    session.add(cv)
+    session.commit()
+    session.refresh(cv)
+    return cv
+
+
+def update_cv_library_summary(session: Session, cv: CV, library_summary: str) -> CV:
+    cv.library_summary = library_summary
     session.add(cv)
     session.commit()
     session.refresh(cv)
@@ -91,7 +115,11 @@ def create_job_analysis(
         analysis_result=analysis_result,
     )
     session.add(job)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
     session.refresh(job)
     return job
 
@@ -167,6 +195,31 @@ def create_match(
         missing_skills=missing_skills,
         recommended=recommended,
     )
+    session.add(match)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        existing = get_match_for_user_by_cv_and_job(session, user_id, cv_id, job_id)
+        if existing is not None:
+            return existing
+        raise exc
+    session.refresh(match)
+    return match
+
+
+def update_match_analysis(
+    session: Session,
+    match: CVJobMatch,
+    fit_level: str,
+    fit_summary: str,
+    strengths: list[str],
+    missing_skills: list[str],
+) -> CVJobMatch:
+    match.fit_level = fit_level
+    match.fit_summary = fit_summary
+    match.strengths = strengths
+    match.missing_skills = missing_skills
     session.add(match)
     session.commit()
     session.refresh(match)

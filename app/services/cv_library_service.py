@@ -15,6 +15,10 @@ from app.schemas.match import (
     MatchLevel,
 )
 from app.services.cv_analyzer import get_cv_analyzer_service
+from app.services.cv_library_summary_service import (
+    get_cv_library_summary_service,
+    _heuristic_library_summary,
+)
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 from app.services.response_language import (
     localized_add_evidence,
@@ -32,7 +36,9 @@ WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
 
 class CvLibraryService:
     def __init__(self) -> None:
-        self.cv_analyzer = get_cv_analyzer_service()
+        self.cv_analyzer = None
+        self.library_summary_service = None
+        self._analysis_cache: dict[tuple[int, int, int, str], CvAnalysisResponse] = {}
 
     def upload_cv(
         self,
@@ -42,31 +48,52 @@ class CvLibraryService:
         filename: str,
         file_bytes: bytes,
     ) -> CVRead:
+        normalized_display_name = " ".join(display_name.split()).strip()
+        normalized_filename = filename.strip() or "resume.pdf"
+        if not normalized_display_name:
+            raise ValueError("Display name is required.")
+        if len(normalized_display_name) > 200:
+            raise ValueError("Display name must be 200 characters or fewer.")
+        if len(normalized_filename) > 255:
+            normalized_filename = normalized_filename[:255]
+
         # Extract and clean text once to save on downstream processing
         raw_text = extract_raw_pdf_text(file_bytes)
         cleaned_text = preprocess_cv_text(raw_text)
-        # Create a simple preview summary for the library view
-        summary = self._build_cv_summary(cleaned_text)
+        existing = crud.get_cv_for_user_by_clean_text(session, user.id, cleaned_text)
+        if existing is not None:
+            if not getattr(existing, "library_summary", "").strip():
+                existing = crud.update_cv_library_summary(
+                    session,
+                    existing,
+                    self._build_library_summary(cleaned_text),
+                )
+            return CVRead.model_validate(existing)
+
+        library_summary = self._build_library_summary(cleaned_text)
+        summary = library_summary
         created = crud.create_cv(
             session,
             user_id=user.id,
-            filename=filename.strip(),
-            display_name=display_name.strip(),
+            filename=normalized_filename,
+            display_name=normalized_display_name,
             raw_text=raw_text,
             clean_text=cleaned_text,
             summary=summary,
+            library_summary=library_summary,
             tags=[],
         )
         return CVRead.model_validate(created)
 
     def list_cvs(self, session: Session, user: User) -> list[CVRead]:
-        return [CVRead.model_validate(cv) for cv in crud.get_cvs_for_user(session, user.id)]
+        return [self._serialize_cv(session, cv) for cv in crud.get_cvs_for_user(session, user.id)]
 
     def get_cv(self, session: Session, user: User, cv_id: int) -> CVDetailRead:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
-        return CVDetailRead.model_validate(cv)
+        enriched = self._ensure_library_summary(session, cv)
+        return CVDetailRead.model_validate(enriched)
 
     def delete_cv(self, session: Session, user: User, cv_id: int) -> None:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
@@ -81,7 +108,7 @@ class CvLibraryService:
 
         normalized_tags = self._normalize_tags(tags)
         updated = crud.update_cv_tags(session, cv, normalized_tags)
-        return CVRead.model_validate(updated)
+        return self._serialize_cv(session, updated)
 
     def match_job_to_cv(
         self,
@@ -174,7 +201,10 @@ class CvLibraryService:
                 created_matches.append(self._serialize_match(existing_match))
                 continue
 
-            result = self.cv_analyzer.analyze(
+            result = self._analyze_pair(
+                user_id=user.id,
+                job_id=job.id,
+                cv_id=cv.id,
                 job_title=job.title,
                 job_description=job.clean_description,
                 cv_text=cv.clean_text,
@@ -221,18 +251,19 @@ class CvLibraryService:
         cv: object,
         language: AIResponseLanguage,
     ) -> CVJobMatchDetailRead:
-        # Real-time AI analysis of the CV against the specific job context
-        result = self.cv_analyzer.analyze(
+        existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
+        heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
+        result = self._get_pair_analysis_result(
+            user_id=user.id,
+            job_id=job.id,
+            cv_id=cv.id,
             job_title=job.title,
             job_description=job.clean_description,
             cv_text=cv.clean_text,
             language=language,
+            existing_match=existing_match,
         )
-        # Quick Jaccard-like similarity for a baseline technical score
-        heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
 
-        # Check for existing match to avoid duplicate records if user re-triggers analysis
-        existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
         if existing_match is None:
             existing_match = crud.create_match(
                 session,
@@ -245,8 +276,109 @@ class CvLibraryService:
                 missing_skills=result.missing_skills,
                 recommended=False,
             )
+        elif self._match_needs_refresh(existing_match, result):
+            existing_match = crud.update_match_analysis(
+                session,
+                existing_match,
+                fit_level=result.likely_fit_level,
+                fit_summary=result.fit_summary,
+                strengths=result.strengths,
+                missing_skills=result.missing_skills,
+            )
 
         return self._serialize_match_detail(existing_match, result, heuristic_score, language)
+
+    def _get_cv_analyzer(self):
+        if self.cv_analyzer is None:
+            self.cv_analyzer = get_cv_analyzer_service()
+        return self.cv_analyzer
+
+    def _get_library_summary_service(self):
+        if self.library_summary_service is None:
+            self.library_summary_service = get_cv_library_summary_service()
+        return self.library_summary_service
+
+    def _analyze_pair(
+        self,
+        user_id: int,
+        job_id: int,
+        cv_id: int,
+        job_title: str,
+        job_description: str,
+        cv_text: str,
+        language: AIResponseLanguage = "english",
+    ) -> CvAnalysisResponse:
+        cache_key = (user_id, job_id, cv_id, language)
+        cached = self._analysis_cache.get(cache_key)
+        if cached is not None:
+            return cached.model_copy(deep=True)
+
+        result = self._get_cv_analyzer().analyze(
+            job_title=job_title,
+            job_description=job_description,
+            cv_text=cv_text,
+            language=language,
+        )
+        self._analysis_cache[cache_key] = result.model_copy(deep=True)
+        return result
+
+    def _get_pair_analysis_result(
+        self,
+        user_id: int,
+        job_id: int,
+        cv_id: int,
+        job_title: str,
+        job_description: str,
+        cv_text: str,
+        language: AIResponseLanguage,
+        existing_match: object | None,
+    ) -> CvAnalysisResponse:
+        try:
+            return self._analyze_pair(
+                user_id=user_id,
+                job_id=job_id,
+                cv_id=cv_id,
+                job_title=job_title,
+                job_description=job_description,
+                cv_text=cv_text,
+                language=language,
+            )
+        except HTTPException:
+            if existing_match is None:
+                raise
+            return self._build_cached_match_result(existing_match, language)
+
+    def _build_cached_match_result(
+        self,
+        match: object,
+        language: AIResponseLanguage,
+    ) -> CvAnalysisResponse:
+        explanation = _build_match_explanation(
+            fit_summary=match.fit_summary,
+            strengths=list(match.strengths or []),
+            missing_skills=list(match.missing_skills or []),
+            improvement_suggestions=[],
+            language=language,
+        )
+        return CvAnalysisResponse(
+            fit_summary=match.fit_summary,
+            strengths=list(match.strengths or []),
+            missing_skills=list(match.missing_skills or []),
+            likely_fit_level=match.fit_level,
+            resume_improvements=explanation["suggested_improvements"],
+            interview_focus=[],
+            next_steps=[],
+        )
+
+    def _match_needs_refresh(self, match: object, result: CvAnalysisResponse) -> bool:
+        return any(
+            [
+                match.fit_level != result.likely_fit_level,
+                match.fit_summary != result.fit_summary,
+                list(match.strengths or []) != list(result.strengths or []),
+                list(match.missing_skills or []) != list(result.missing_skills or []),
+            ]
+        )
 
     def _select_better_match(
         self,
@@ -366,18 +498,21 @@ class CvLibraryService:
             result=result,
         )
 
-    def _build_cv_summary(self, clean_text: str) -> str:
-        parts: list[str] = []
-        for line in clean_text.splitlines():
-            stripped = line.strip()
-            if stripped and stripped not in parts:
-                parts.append(stripped)
-            if len(" ".join(parts)) >= 220 or len(parts) >= 3:
-                break
-        summary = " ".join(parts).strip()
-        if len(summary) > 220:
-            summary = summary[:217].rstrip(" ,;:.") + "..."
-        return summary or "CV uploaded and processed."
+    def _build_library_summary(self, clean_text: str) -> str:
+        try:
+            return self._get_library_summary_service().generate(clean_text)
+        except Exception:
+            return _heuristic_library_summary(clean_text)
+
+    def _ensure_library_summary(self, session: Session, cv: object):
+        current = getattr(cv, "library_summary", "")
+        if isinstance(current, str) and current.strip():
+            return cv
+        return crud.update_cv_library_summary(session, cv, self._build_library_summary(cv.clean_text))
+
+    def _serialize_cv(self, session: Session, cv: object) -> CVRead:
+        enriched = self._ensure_library_summary(session, cv)
+        return CVRead.model_validate(enriched)
 
     def _normalize_tags(self, tags: list[str]) -> list[str]:
         normalized: list[str] = []
@@ -482,8 +617,6 @@ def _normalize_sentence(value: str, fallback: str = "") -> str:
     text = " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -")
     if not text:
         return fallback
-    if len(text) > 220:
-        text = text[:217].rstrip(" ,;:") + "..."
     if text[-1] not in ".!?":
         text += "."
     return text

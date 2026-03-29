@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.cv import CvAnalysisResponse
 from app.schemas.job import AIResponseLanguage
@@ -10,13 +10,13 @@ MatchLevel = Literal["strong", "medium", "weak"]
 
 
 class CVMatchRequest(BaseModel):
-    cv_id: int
+    cv_id: int = Field(..., gt=0)
     language: AIResponseLanguage = "english"
 
 
 class CVCompareRequest(BaseModel):
-    cv_id_a: int
-    cv_id_b: int
+    cv_id_a: int = Field(..., gt=0)
+    cv_id_b: int = Field(..., gt=0)
     language: AIResponseLanguage = "english"
 
 

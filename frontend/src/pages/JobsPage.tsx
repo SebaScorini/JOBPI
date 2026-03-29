@@ -75,7 +75,7 @@ export function JobsPage() {
                   </div>
                   <ArrowRight size={20} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-1 transition-all" />
                 </div>
-                <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors line-clamp-2">
+                <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors break-words">
                   {job.title || job.role_type || t('common.untitledRole')}
                 </h3>
                 <p className="text-slate-500 font-medium mb-4">

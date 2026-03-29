@@ -62,6 +62,7 @@ interface BackendCVRead {
   filename: string;
   display_name: string;
   summary: string;
+  library_summary: string;
   tags: string[];
   created_at: string;
 }
@@ -200,6 +201,7 @@ function mapCV(cv: BackendCVRead): StoredCV {
     id: cv.id,
     name: cv.display_name,
     summary: cv.summary,
+    library_summary: cv.library_summary || cv.summary,
     tags: cv.tags ?? [],
     created_at: cv.created_at,
   };

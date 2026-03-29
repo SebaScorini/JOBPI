@@ -13,6 +13,7 @@ import { MatchesPage } from './pages/MatchesPage';
 import { LandingPage } from './pages/LandingPage';
 import { JSX } from 'react';
 import { LanguageProvider } from './context/LanguageContext';
+import { TrackerPage } from './pages/TrackerPage';
 
 // ProtectedRoute must live inside AuthProvider to access context
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -59,6 +60,7 @@ function AppRouter() {
         <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
         <Route path="/library" element={<CVLibraryPage />} />
         <Route path="/matches" element={<MatchesPage />} />
+        <Route path="/tracker" element={<TrackerPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

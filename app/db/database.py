@@ -7,7 +7,11 @@ from app.core.config import get_settings
 
 
 settings = get_settings()
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+connect_args = (
+    {"check_same_thread": False, "timeout": 30}
+    if settings.database_url.startswith("sqlite")
+    else {}
+)
 engine = create_engine(settings.database_url, connect_args=connect_args)
 
 
@@ -18,6 +22,7 @@ def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
     _ensure_job_tracking_columns()
     _ensure_cv_tags_column()
+    _ensure_cv_library_summary_column()
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -74,3 +79,17 @@ def _ensure_cv_tags_column() -> None:
 
     with engine.begin() as connection:
         connection.exec_driver_sql("ALTER TABLE cvs ADD COLUMN tags JSON NOT NULL DEFAULT '[]'")
+
+
+def _ensure_cv_library_summary_column() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "cvs" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("cvs")}
+    if "library_summary" in columns:
+        return
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql("ALTER TABLE cvs ADD COLUMN library_summary TEXT NOT NULL DEFAULT ''")
