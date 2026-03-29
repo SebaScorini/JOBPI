@@ -1,15 +1,19 @@
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import re
+import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import dspy
 from fastapi import HTTPException, status
 
+from app.core.ai import dspy_lm_override, run_ai_call_with_timeout
 from app.core.config import configure_dspy, get_settings
 from app.services.job_analyzer import _normalize_text
 
 
 MAX_LIBRARY_SUMMARY_CHARS = 180
 MAX_LIBRARY_CONTEXT_CHARS = 650
+SUMMARY_MAX_TOKENS = 300
+logger = logging.getLogger(__name__)
 ROLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Backend-focused profile", re.compile(r"\b(backend|python|fastapi|django|flask|api|microservices?)\b", re.IGNORECASE)),
     ("Full-stack profile", re.compile(r"\b(full[- ]stack|react|node\.?js|typescript|javascript|frontend|backend)\b", re.IGNORECASE)),
@@ -60,7 +64,7 @@ class CvLibrarySummarySignature(dspy.Signature):
 
     cv: str = dspy.InputField(desc="Clean CV excerpt")
     summary: str = dspy.OutputField(
-        desc="One or two short sentences for a CV library card. Mention role or profile, main technologies, and seniority only if clear. Do not invent details."
+        desc="One or two short sentences for a CV library card. Mention role, main technologies, and seniority only if clear. Keep it compact and do not invent details."
     )
 
 
@@ -69,32 +73,50 @@ class CvLibrarySummaryModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(CvLibrarySummarySignature)
 
-    def forward(self, cv: str):
-        return self.predict(cv=cv)
+    def forward(self, cv: str, max_tokens: int | None = None):
+        if max_tokens is None:
+            return self.predict(cv=cv)
+
+        with dspy_lm_override(max_tokens=max_tokens):
+            return self.predict(cv=cv)
 
 
 class CvLibrarySummaryService:
     def __init__(self) -> None:
         settings = get_settings()
         self.generator: CvLibrarySummaryModule | None = None
-        self.timeout_seconds = max(10, min(settings.dspy_timeout_seconds, 30))
+        self.timeout_seconds = max(10, min(settings.ai_timeout_seconds, 30))
         self._executor = ThreadPoolExecutor(max_workers=2)
 
     def generate(self, clean_text: str) -> str:
         context = _prepare_cv_context(clean_text)
         if not context:
+            logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_empty_context")
             return _heuristic_library_summary(clean_text)
 
         try:
             generator = self._get_generator()
-            future = self._executor.submit(generator, cv=context)
-            result = future.result(timeout=self.timeout_seconds)
+            logger.info("ai_call operation=cv_library_summary")
+            result = run_ai_call_with_timeout(
+                executor=self._executor,
+                timeout_seconds=self.timeout_seconds,
+                operation="cv_library_summary",
+                logger=logger,
+                callable_=generator,
+                lm_max_tokens=SUMMARY_MAX_TOKENS,
+                cv=context,
+                max_tokens=SUMMARY_MAX_TOKENS,
+            )
             summary = _normalize_library_summary(result.summary)
             if summary:
                 return summary
-        except (HTTPException, FuturesTimeoutError, Exception):
+        except HTTPException:
+            logger.warning("cv_library_summary_fallback reason=timeout_or_http")
+        except Exception:
+            logger.exception("cv_library_summary_fallback reason=unexpected_error")
             pass
 
+        logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_fallback")
         return _heuristic_library_summary(clean_text)
 
     def _get_generator(self) -> CvLibrarySummaryModule:

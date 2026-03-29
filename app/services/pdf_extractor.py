@@ -4,8 +4,8 @@ import time
 
 import fitz  # PyMuPDF
 
+from app.core.config import get_settings
 
-MAX_CV_CHARS = 800
 logger = logging.getLogger(__name__)
 _FILLER_LINE_RE = re.compile(
     r"\b(curriculum vitae|resume|references available|available upon request|profile|summary)\b",
@@ -29,10 +29,10 @@ _CV_SECTION_PATTERNS = {
 }
 
 
-def extract_cv_text(file_bytes: bytes) -> str:
+def extract_cv_text(file_bytes: bytes, max_chars: int | None = None) -> str:
     """Extract and preprocess text from a PDF's raw bytes."""
     raw = extract_raw_pdf_text(file_bytes)
-    return preprocess_cv_text(raw)
+    return preprocess_cv_text(raw, max_chars=max_chars)
 
 
 def extract_raw_pdf_text(file_bytes: bytes) -> str:
@@ -60,9 +60,9 @@ def extract_raw_pdf_text(file_bytes: bytes) -> str:
     return raw
 
 
-def preprocess_cv_text(raw: str) -> str:
+def preprocess_cv_text(raw: str, max_chars: int | None = None) -> str:
     preprocess_start = time.perf_counter()
-    processed = _preprocess_cv(raw)
+    processed = _preprocess_cv(raw, max_chars=max_chars)
     logger.info(
         "cv_fit cv_preprocess_ms=%.1f",
         (time.perf_counter() - preprocess_start) * 1000,
@@ -75,7 +75,7 @@ def _validate_magic_bytes(data: bytes) -> None:
         raise ValueError("Uploaded file is not a valid PDF.")
 
 
-def _preprocess_cv(raw: str) -> str:
+def _preprocess_cv(raw: str, max_chars: int | None = None) -> str:
     normalized = re.sub(r"\r\n?", "\n", raw)
     normalized = re.sub(r"[ \t]+", " ", normalized)
 
@@ -102,7 +102,7 @@ def _preprocess_cv(raw: str) -> str:
 
     focused = _extract_relevant_cv_sections(deduped)
     text = "\n".join(focused or deduped).strip()
-    return _truncate_cv(text)
+    return _truncate_cv(text, max_chars=max_chars)
 
 
 def _extract_relevant_cv_sections(lines: list[str]) -> list[str]:
@@ -167,13 +167,15 @@ def _looks_like_high_value_cv_line(line: str) -> bool:
     return any(keyword in lowered for keyword in keywords)
 
 
-def _truncate_cv(text: str) -> str:
-    if len(text) <= MAX_CV_CHARS:
+def _truncate_cv(text: str, max_chars: int | None = None) -> str:
+    max_cv_chars = max_chars if max_chars is not None else get_settings().max_cv_text_chars
+
+    if len(text) <= max_cv_chars:
         return text
     # Skip the first 100 chars (usually name/address block)
     start = min(100, len(text) // 4)
-    excerpt = text[start: start + MAX_CV_CHARS]
+    excerpt = text[start: start + max_cv_chars]
     cutoff = excerpt.rfind("\n")
-    if cutoff < int(MAX_CV_CHARS * 0.6):
-        cutoff = MAX_CV_CHARS
+    if cutoff < int(max_cv_chars * 0.6):
+        cutoff = max_cv_chars
     return excerpt[:cutoff].strip()

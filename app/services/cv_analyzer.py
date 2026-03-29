@@ -1,10 +1,12 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.config import configure_dspy
+from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_timeout
+from app.core.config import configure_dspy, get_settings
 from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
 from app.services.job_analyzer import _normalize_list, _normalize_text
@@ -13,6 +15,8 @@ from app.services.response_language import language_instruction, normalize_langu
 
 MAX_LIST_ITEMS = 4
 MAX_ITEM_CHARS = 60
+MAX_SUMMARY_CHARS = 280
+MATCH_EXPLANATION_MAX_TOKENS = 600
 logger = logging.getLogger(__name__)
 
 
@@ -24,13 +28,13 @@ class CvFitSignature(dspy.Signature):
     cv: str = dspy.InputField(desc="Key CV text")
     response_language: str = dspy.InputField(desc="Language instruction for all generated content")
 
-    fit_summary: str = dspy.OutputField(desc="A complete 2-4 sentence summary without truncation")
-    strengths: list[str] = dspy.OutputField(desc="Up to 4 strengths")
-    missing_skills: list[str] = dspy.OutputField(desc="Up to 4 gaps")
+    fit_summary: str = dspy.OutputField(desc="1-2 short sentences, concise and UI-friendly")
+    strengths: list[str] = dspy.OutputField(desc="Up to 4 short strengths")
+    missing_skills: list[str] = dspy.OutputField(desc="Up to 4 short gaps")
     likely_fit_level: str = dspy.OutputField(desc="Strong, Moderate, or Weak")
-    resume_improvements: list[str] = dspy.OutputField(desc="Up to 4 resume fixes")
-    interview_focus: list[str] = dspy.OutputField(desc="Up to 4 interview topics")
-    next_steps: list[str] = dspy.OutputField(desc="Up to 4 next steps")
+    resume_improvements: list[str] = dspy.OutputField(desc="Up to 4 short resume fixes")
+    interview_focus: list[str] = dspy.OutputField(desc="Up to 4 short interview topics")
+    next_steps: list[str] = dspy.OutputField(desc="Up to 4 short next steps")
 
 
 class CvFitModule(dspy.Module):
@@ -38,18 +42,37 @@ class CvFitModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(CvFitSignature)
 
-    def forward(self, job_title: str, job_description: str, cv_text: str, response_language: str):
-        return self.predict(
-            title=job_title,
-            job=job_description,
-            cv=cv_text,
-            response_language=response_language,
-        )
+    def forward(
+        self,
+        job_title: str,
+        job_description: str,
+        cv_text: str,
+        response_language: str,
+        max_tokens: int | None = None,
+    ):
+        if max_tokens is None:
+            return self.predict(
+                title=job_title,
+                job=job_description,
+                cv=cv_text,
+                response_language=response_language,
+            )
+
+        with dspy_lm_override(max_tokens=max_tokens):
+            return self.predict(
+                title=job_title,
+                job=job_description,
+                cv=cv_text,
+                response_language=response_language,
+            )
 
 
 class CvAnalyzerService:
     def __init__(self) -> None:
+        settings = get_settings()
         self.analyzer: CvFitModule | None = None
+        self.timeout_seconds = settings.ai_timeout_seconds
+        self._executor = ThreadPoolExecutor(max_workers=4)
 
     def _get_analyzer(self) -> CvFitModule:
         if self.analyzer is None:
@@ -73,18 +96,27 @@ class CvAnalyzerService:
         selected_language = normalize_language(language)
         dspy_start = time.perf_counter()
         try:
-            result = self._get_analyzer()(
+            result = run_ai_call_with_timeout(
+                executor=self._executor,
+                timeout_seconds=self.timeout_seconds,
+                operation="cv_match_analysis",
+                logger=logger,
+                callable_=self._get_analyzer(),
+                lm_max_tokens=MATCH_EXPLANATION_MAX_TOKENS,
                 job_title=job_title,
                 job_description=job_description,
                 cv_text=cv_text,
                 response_language=language_instruction(selected_language),
+                max_tokens=MATCH_EXPLANATION_MAX_TOKENS,
             )
         except HTTPException:
             raise
         except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to analyze CV. Please try again.",
+            raise build_ai_failure_http_exception(
+                exc=exc,
+                logger=logger,
+                operation="cv_match_analysis",
+                default_detail="Failed to analyze CV. Please try again.",
             ) from exc
         finally:
             logger.info(
@@ -113,8 +145,8 @@ class CvAnalyzerService:
         if not isinstance(value, str):
             return ""
 
-        # Preserve full AI summary while cleaning whitespace/newlines.
-        return " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -")
+        text = " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -")
+        return _normalize_text(text, MAX_SUMMARY_CHARS)
 
 
 

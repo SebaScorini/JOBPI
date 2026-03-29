@@ -174,6 +174,52 @@ def update_job_notes(session: Session, job: JobAnalysis, notes: str | None) -> J
     return job
 
 
+def update_job_analysis_result(session: Session, job: JobAnalysis, analysis_result: dict) -> JobAnalysis:
+    job.analysis_result = analysis_result
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
+def get_cached_cover_letter(
+    session: Session,
+    user_id: int,
+    job_id: int,
+    cv_id: int,
+    language: str,
+) -> str | None:
+    job = get_job_for_user(session, user_id, job_id)
+    if job is None:
+        return None
+
+    if (
+        job.cover_letter_cv_id == cv_id
+        and job.cover_letter_language == language
+        and isinstance(job.generated_cover_letter, str)
+        and job.generated_cover_letter.strip()
+    ):
+        return job.generated_cover_letter
+
+    return None
+
+
+def update_job_cover_letter(
+    session: Session,
+    job: JobAnalysis,
+    cv_id: int,
+    language: str,
+    cover_letter: str,
+) -> JobAnalysis:
+    job.cover_letter_cv_id = cv_id
+    job.cover_letter_language = language
+    job.generated_cover_letter = cover_letter
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
 def create_match(
     session: Session,
     user_id: int,

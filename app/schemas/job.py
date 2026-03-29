@@ -12,6 +12,7 @@ class JobAnalysisRequest(BaseModel):
     company: str = Field(..., min_length=1, max_length=200)
     description: str = Field(..., min_length=50, max_length=20000)
     language: AIResponseLanguage = "english"
+    regenerate: bool = False
 
 
 class JobAnalysisPayload(BaseModel):
@@ -48,6 +49,7 @@ class JobNotesUpdateRequest(BaseModel):
 class CoverLetterGenerateRequest(BaseModel):
     selected_cv_id: int = Field(..., gt=0)
     language: AIResponseLanguage = "english"
+    regenerate: bool = False
 
 
 class CoverLetterGenerateResponse(BaseModel):

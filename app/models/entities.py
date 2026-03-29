@@ -54,6 +54,12 @@ class JobAnalysis(SQLModel, table=True):
     status: str = Field(sa_column=Column(String(20), nullable=False, default="saved"), default="saved")
     applied_date: Optional[datetime] = Field(default=None, nullable=True)
     notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    generated_cover_letter: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    cover_letter_cv_id: Optional[int] = Field(default=None, nullable=True)
+    cover_letter_language: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(20), nullable=True),
+    )
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
     user: Optional[User] = Relationship(back_populates="jobs")

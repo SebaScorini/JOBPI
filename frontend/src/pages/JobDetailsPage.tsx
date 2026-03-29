@@ -15,6 +15,26 @@ const statusBadgeMap: Record<JobApplicationStatus, string> = {
   offer: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
 };
 
+function splitReadableText(text?: string | null): string[] {
+  if (!text) return [];
+
+  const blocks = text
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (blocks.length !== 1) {
+    return blocks;
+  }
+
+  const sentenceBlocks = blocks[0]
+    .split(/(?<=[.!?])\s+(?=\S)/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return sentenceBlocks.length > 1 ? sentenceBlocks : blocks;
+}
+
 export function JobDetailsPage() {
   const { aiLanguage, language, t } = useLanguage();
   const { jobId } = useParams<{ jobId: string }>();
@@ -47,6 +67,8 @@ export function JobDetailsPage() {
   const matchSuggestions = matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? [];
   const matchMissingKeywords = matchResult?.missing_keywords ?? [];
   const matchReorderSuggestions = matchResult?.reorder_suggestions ?? [];
+  const comparisonExplanationBlocks = splitReadableText(comparisonResult?.explanation);
+  const matchWhyBlocks = splitReadableText(matchResult?.why_this_cv);
 
   const statusOptions: Array<{ value: JobApplicationStatus; label: string }> = [
     { value: 'saved', label: t('statuses.saved') },
@@ -266,7 +288,7 @@ export function JobDetailsPage() {
         <ArrowLeft size={16} className="mr-2" /> {t('jobDetails.backToAnalysis')}
       </Link>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
         <section className="min-w-0 space-y-4">
           <div className="glass-card p-4 lg:p-5 rounded-3xl">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -366,7 +388,7 @@ export function JobDetailsPage() {
             )}
 
             {activeTab === 'match' && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-4 lg:gap-5">
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.matchTitle')}</h3>
@@ -425,22 +447,88 @@ export function JobDetailsPage() {
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 min-w-0">
                   {comparisonResult && cvA && cvB && (
-                    <div className="rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 p-4 bg-emerald-50/70 dark:bg-emerald-950/20">
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.recommendedCv')}</p>
-                      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{comparisonResult.better_cv.label}</p>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">{comparisonResult.explanation}</p>
+                    <div className="rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 p-5 lg:p-6 bg-emerald-50/70 dark:bg-emerald-950/20 space-y-4">
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.recommendedCv')}</p>
+                        <p className="text-base lg:text-lg font-semibold text-emerald-700 dark:text-emerald-300 break-words leading-7">{comparisonResult.better_cv.label}</p>
+                      </div>
+
+                      {comparisonExplanationBlocks.length > 0 && (
+                        <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-white/80 dark:bg-slate-950/30 px-4 py-3">
+                          {comparisonExplanationBlocks.length > 1 ? (
+                            <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                              {comparisonExplanationBlocks.map((item, i) => (
+                                <li key={i} className="break-words">{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-slate-700 dark:text-slate-300 leading-7 break-words">{comparisonExplanationBlocks[0]}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {matchResult && (
-                    <div className="rounded-2xl border border-brand-primary/20 p-4 bg-brand-primary/5">
-                      <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="rounded-2xl border border-brand-primary/20 p-5 lg:p-6 bg-brand-primary/5 space-y-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.matchResults')}</h3>
                         <span className={`text-sm font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>{matchResult.match_level}</span>
                       </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{matchResult.why_this_cv}</p>
+
+                      <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.whyThisCv')}</p>
+                        {matchWhyBlocks.length > 1 ? (
+                          <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                            {matchWhyBlocks.map((item, i) => (
+                              <li key={i} className="break-words">{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-700 dark:text-slate-300 leading-7 break-words">{matchWhyBlocks[0] ?? matchResult.why_this_cv}</p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+                        <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30 px-4 py-3 min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.strengths')}</p>
+                          {matchResult.strengths?.length ? (
+                            <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                              {matchResult.strengths.map((item, i) => (
+                                <li key={i} className="break-words">{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+                          )}
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30 px-4 py-3 min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.missingSkills')}</p>
+                          {matchMissingKeywords.length > 0 ? (
+                            <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                              {matchMissingKeywords.map((item, i) => (
+                                <li key={`${item}-${i}`} className="break-words">{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {(matchSuggestions.length > 0 || matchReorderSuggestions.length > 0) && (
+                        <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.improveCv')}</p>
+                          <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                            {[...matchSuggestions, ...matchReorderSuggestions].map((item, i) => (
+                              <li key={i} className="break-words">{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -456,35 +544,58 @@ export function JobDetailsPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
+                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-5 bg-white/70 dark:bg-slate-950/20">
                       <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.strengths')}</h3>
-                      <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                        {matchResult.strengths?.map((item, i) => <li key={i}>&bull; {item}</li>)}
+                      <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                        {matchResult.strengths?.map((item, i) => <li key={i} className="break-words">{item}</li>)}
                       </ul>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
+                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-5 bg-white/70 dark:bg-slate-950/20 space-y-4">
                       <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.improveCv')}</h3>
+
                       {matchSuggestions.length > 0 && (
-                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300 mb-3">
-                          {matchSuggestions.map((item, i) => <li key={i}>&bull; {item}</li>)}
-                        </ul>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.improveCv')}</p>
+                          <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                            {matchSuggestions.map((item, i) => <li key={i} className="break-words">{item}</li>)}
+                          </ul>
+                        </div>
+                      )}
+
+                      {matchResult.missing_skills?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.missingSkills')}</p>
+                          <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                            {matchResult.missing_skills.map((item, i) => <li key={i} className="break-words">{item}</li>)}
+                          </ul>
+                        </div>
                       )}
 
                       {matchMissingKeywords.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {matchMissingKeywords.map((keyword) => (
-                            <span key={keyword} className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200">
-                              {keyword}
-                            </span>
-                          ))}
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.missingSkills')}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {matchMissingKeywords.map((keyword) => (
+                              <span key={keyword} className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200 break-words">
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 
                       {matchReorderSuggestions.length > 0 && (
-                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                          {matchReorderSuggestions.map((item, i) => <li key={i}>&bull; {item}</li>)}
-                        </ul>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.improveCv')}</p>
+                          <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                            {matchReorderSuggestions.map((item, i) => <li key={i} className="break-words">{item}</li>)}
+                          </ul>
+                        </div>
+                      )}
+
+                      {matchSuggestions.length === 0 && matchResult.missing_skills?.length === 0 && matchMissingKeywords.length === 0 && matchReorderSuggestions.length === 0 && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
                       )}
                     </div>
                   </>
@@ -567,7 +678,7 @@ export function JobDetailsPage() {
           </div>
         </section>
 
-        <aside className="hidden xl:flex xl:flex-col gap-4 sticky top-[84px] h-fit">
+        <aside className="hidden 2xl:flex 2xl:flex-col gap-4 sticky top-[84px] h-fit">
           <div className="glass-card p-4 rounded-2xl">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Insights</h3>
             <div className="space-y-3 text-sm">

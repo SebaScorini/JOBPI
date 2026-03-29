@@ -21,6 +21,7 @@ def create_db_and_tables() -> None:
     _reset_legacy_dev_tables()
     SQLModel.metadata.create_all(engine)
     _ensure_job_tracking_columns()
+    _ensure_job_cover_letter_columns()
     _ensure_cv_tags_column()
     _ensure_cv_library_summary_column()
 
@@ -65,6 +66,23 @@ def _ensure_job_tracking_columns() -> None:
             connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN applied_date TIMESTAMP NULL")
         if "notes" not in columns:
             connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN notes TEXT NULL")
+
+
+def _ensure_job_cover_letter_columns() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "job_analyses" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("job_analyses")}
+
+    with engine.begin() as connection:
+        if "generated_cover_letter" not in columns:
+            connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN generated_cover_letter TEXT NULL")
+        if "cover_letter_cv_id" not in columns:
+            connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN cover_letter_cv_id INTEGER NULL")
+        if "cover_letter_language" not in columns:
+            connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN cover_letter_language VARCHAR(20) NULL")
 
 
 def _ensure_cv_tags_column() -> None:
