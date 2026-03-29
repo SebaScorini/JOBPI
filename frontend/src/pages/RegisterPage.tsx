@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { UserPlus, Loader2 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -9,6 +10,7 @@ export function RegisterPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,7 +23,7 @@ export function RegisterPage() {
       // Directly login after registration
       navigate('/login');
     } catch (err: any) {
-      setError(err.message || 'Registration failed.');
+      setError(err.message || t('auth.registrationFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -36,7 +38,7 @@ export function RegisterPage() {
       )}
       
       <div>
-        <label className="block text-sm font-semibold mb-2">Email Address</label>
+        <label className="block text-sm font-semibold mb-2">{t('auth.emailAddress')}</label>
         <input 
           type="email" 
           required 
@@ -48,7 +50,7 @@ export function RegisterPage() {
       </div>
 
       <div>
-        <label className="block text-sm font-semibold mb-2">Password</label>
+        <label className="block text-sm font-semibold mb-2">{t('auth.password')}</label>
         <input 
           type="password" 
           required 
@@ -62,13 +64,13 @@ export function RegisterPage() {
 
       <button type="submit" disabled={isLoading} className="btn-primary flex items-center justify-center gap-2 mt-2">
         {isLoading ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
-        Create Account
+        {t('auth.createAccount')}
       </button>
       
       <p className="text-center text-sm font-medium text-slate-500 mt-6">
-        Already have an account?{' '}
+        {t('auth.alreadyHaveAccount')}{' '}
         <Link to="/login" className="text-brand-primary hover:underline">
-          Sign In
+          {t('auth.signIn')}
         </Link>
       </p>
     </form>

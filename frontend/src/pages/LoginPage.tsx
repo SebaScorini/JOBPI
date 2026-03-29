@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, Loader2 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,6 +12,7 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   const { login } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,7 +26,7 @@ export function LoginPage() {
       login(tokenData.access_token, user);
       navigate('/dashboard', { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Login failed.');
+      setError(err.message || t('auth.loginFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -39,7 +41,7 @@ export function LoginPage() {
       )}
       
       <div>
-        <label className="block text-sm font-semibold mb-2">Email Address</label>
+        <label className="block text-sm font-semibold mb-2">{t('auth.emailAddress')}</label>
         <input 
           type="email" 
           required 
@@ -51,7 +53,7 @@ export function LoginPage() {
       </div>
 
       <div>
-        <label className="block text-sm font-semibold mb-2">Password</label>
+        <label className="block text-sm font-semibold mb-2">{t('auth.password')}</label>
         <input 
           type="password" 
           required 
@@ -64,13 +66,13 @@ export function LoginPage() {
 
       <button type="submit" disabled={isLoading} className="btn-primary flex items-center justify-center gap-2 mt-2">
         {isLoading ? <Loader2 size={18} className="animate-spin" /> : <LogIn size={18} />}
-        Sign In
+        {t('auth.signIn')}
       </button>
       
       <p className="text-center text-sm font-medium text-slate-500 mt-6">
-        Don't have an account?{' '}
+        {t('auth.noAccount')}{' '}
         <Link to="/register" className="text-brand-primary hover:underline">
-          Create one now
+          {t('auth.createOneNow')}
         </Link>
       </p>
     </form>

@@ -12,9 +12,12 @@ import {
   X,
   User,
 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
+import { LanguageSelector } from '../LanguageSelector';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
@@ -42,13 +45,13 @@ export function AppLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
 
   const navItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/jobs', icon: Briefcase, label: 'Job Analysis' },
-    { to: '/library', icon: FileText, label: 'CV Library' },
+    { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { to: '/jobs', icon: Briefcase, label: t('nav.jobAnalysis') },
+    { to: '/library', icon: FileText, label: t('nav.cvLibrary') },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
@@ -86,7 +89,7 @@ export function AppLayout() {
 
         <nav className="flex-1 px-4 space-y-2 relative z-10">
           <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            Menu
+            {t('nav.menu')}
           </p>
           {navItems.map((item) => (
             <NavLink
@@ -113,8 +116,8 @@ export function AppLayout() {
               <User size={16} className="text-slate-500 dark:text-slate-400" />
             </div>
             <div className="overflow-hidden">
-              <p className="text-sm font-semibold truncate text-brand-text dark:text-slate-200">
-                {user?.email ?? 'Signed in'}
+                <p className="text-sm font-semibold truncate text-brand-text dark:text-slate-200">
+                {user?.email ?? t('common.signedIn')}
               </p>
             </div>
           </div>
@@ -123,7 +126,7 @@ export function AppLayout() {
             className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors"
           >
             <LogOut size={16} />
-            Sign Out
+            {t('nav.signOut')}
           </button>
         </div>
       </aside>
@@ -139,10 +142,13 @@ export function AppLayout() {
           </button>
           
           <div className="flex items-center gap-4 ml-auto">
+            <LanguageSelector
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-brand-primary focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+            />
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-brand-primary dark:hover:text-brand-secondary hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              aria-label="Toggle dark mode"
+              aria-label={t('common.themeToggle')}
             >
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>

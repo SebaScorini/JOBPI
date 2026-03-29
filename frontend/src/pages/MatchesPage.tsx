@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
 import { CVJobMatch } from '../types';
 import { Loader2, Zap, LayoutDashboard } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export function MatchesPage() {
+  const { t, language } = useLanguage();
   const [matches, setMatches] = useState<CVJobMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const matchLevelClasses = {
@@ -31,9 +33,9 @@ export function MatchesPage() {
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-6">
         <div>
           <h1 className="text-3xl font-heading font-extrabold tracking-tight text-brand-text dark:text-white">
-            Match History
+            {t('matches.title')}
           </h1>
-          <p className="text-slate-500 mt-2">Review your past evaluations and fitment results.</p>
+          <p className="text-slate-500 mt-2">{t('matches.subtitle')}</p>
         </div>
       </div>
 
@@ -44,8 +46,8 @@ export function MatchesPage() {
       ) : matches.length === 0 ? (
         <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
            <LayoutDashboard size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-           <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">No Match History</p>
-           <p className="text-slate-500 max-w-sm mx-auto">Run a match analysis from a targeted Job description page.</p>
+           <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">{t('matches.emptyTitle')}</p>
+           <p className="text-slate-500 max-w-sm mx-auto">{t('matches.emptySubtitle')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -58,14 +60,14 @@ export function MatchesPage() {
                 <div className={`px-3 py-1 text-sm font-bold rounded-full ${
                   matchLevelClasses[match.match_level]
                  }`}>
-                  {match.match_level} Match
+                  {t('matches.matchBadge', { level: match.match_level })}
                 </div>
               </div>
               <h3 className="text-lg font-heading font-bold text-brand-text dark:text-white mb-2 line-clamp-2">
-                Job ID: {match.job_id} / CV ID: {match.cv_id}
+                {t('matches.jobAndCv', { jobId: match.job_id, cvId: match.cv_id })}
               </h3>
               <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-1">
-                 {match.why_this_cv || match.result?.fit_summary || 'No summary available.'}
+                 {match.why_this_cv || match.result?.fit_summary || t('jobDetails.noSummary')}
               </p>
               {match.strengths?.length > 0 && (
                 <div className="mb-4 flex flex-wrap gap-2">
@@ -77,9 +79,9 @@ export function MatchesPage() {
                 </div>
               )}
               <div className="mt-auto text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase flex items-center gap-2">
-                 <span>Score: {Math.round(match.heuristic_score * 100)}%</span>
+                 <span>{t('common.score')}: {Math.round(match.heuristic_score * 100)}%</span>
                  <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                 <span>Date: {new Date(match.created_at).toLocaleDateString()}</span>
+                 <span>{t('common.date')}: {new Date(match.created_at).toLocaleDateString(language)}</span>
               </div>
             </div>
           ))}

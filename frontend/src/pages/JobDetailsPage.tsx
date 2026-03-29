@@ -3,14 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse, StoredCV, CVJobMatch, CVComparisonResult, JobApplicationStatus } from '../types';
 import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check } from 'lucide-react';
-
-const statusOptions: Array<{ value: JobApplicationStatus; label: string }> = [
-  { value: 'saved', label: 'Saved' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'interview', label: 'Interview' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'offer', label: 'Offer' },
-];
+import { useLanguage } from '../context/LanguageContext';
 
 const statusBadgeMap: Record<JobApplicationStatus, string> = {
   saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -20,15 +13,8 @@ const statusBadgeMap: Record<JobApplicationStatus, string> = {
   offer: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
 };
 
-const statusLabelMap: Record<JobApplicationStatus, string> = {
-  saved: 'Saved',
-  applied: 'Applied',
-  interview: 'Interview',
-  rejected: 'Rejected',
-  offer: 'Offer',
-};
-
 export function JobDetailsPage() {
+  const { aiLanguage, language, t } = useLanguage();
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<JobAnalysisResponse | null>(null);
   const [cvs, setCvs] = useState<StoredCV[]>([]);
@@ -56,6 +42,13 @@ export function JobDetailsPage() {
   const matchSuggestions = matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? [];
   const matchMissingKeywords = matchResult?.missing_keywords ?? [];
   const matchReorderSuggestions = matchResult?.reorder_suggestions ?? [];
+  const statusOptions: Array<{ value: JobApplicationStatus; label: string }> = [
+    { value: 'saved', label: t('statuses.saved') },
+    { value: 'applied', label: t('statuses.applied') },
+    { value: 'interview', label: t('statuses.interview') },
+    { value: 'rejected', label: t('statuses.rejected') },
+    { value: 'offer', label: t('statuses.offer') },
+  ];
 
   useEffect(() => {
     async function loadData() {
@@ -77,13 +70,13 @@ export function JobDetailsPage() {
         }
       } catch (err) {
         console.error('Failed to load data', err);
-        setError('Failed to load job details.');
+        setError(t('jobDetails.failedLoad'));
       } finally {
         setIsJobLoading(false);
       }
     }
     loadData();
-  }, [jobId]);
+  }, [jobId, t]);
 
   useEffect(() => {
     setCoverLetter('');
@@ -98,10 +91,10 @@ export function JobDetailsPage() {
     setError(null);
 
     try {
-      const result = await apiService.matchCVToJob(parseInt(jobId), Number(selectedCvId));
+      const result = await apiService.matchCVToJob(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setMatchResult(result);
     } catch (err: any) {
-      setError(err.message || 'Failed to match CV.');
+      setError(err.message || t('jobDetails.failedMatch'));
     } finally {
       setIsMatchLoading(false);
     }
@@ -115,10 +108,10 @@ export function JobDetailsPage() {
     setError(null);
 
     try {
-      const result = await apiService.compareCVsForJob(parseInt(jobId), Number(compareCvIdA), Number(compareCvIdB));
+      const result = await apiService.compareCVsForJob(parseInt(jobId), Number(compareCvIdA), Number(compareCvIdB), aiLanguage);
       setComparisonResult(result);
     } catch (err: any) {
-      setError(err.message || 'Failed to compare CVs.');
+      setError(err.message || t('jobDetails.failedCompare'));
     } finally {
       setIsCompareLoading(false);
     }
@@ -134,7 +127,7 @@ export function JobDetailsPage() {
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
     } catch (err: any) {
-      setError(err.message || 'Failed to update status.');
+      setError(err.message || t('jobDetails.failedStatus'));
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -149,7 +142,7 @@ export function JobDetailsPage() {
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
     } catch (err: any) {
-      setError(err.message || 'Failed to save notes.');
+      setError(err.message || t('jobDetails.failedNotes'));
     } finally {
       setIsSavingNotes(false);
     }
@@ -163,10 +156,10 @@ export function JobDetailsPage() {
     setError(null);
 
     try {
-      const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId));
+      const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setCoverLetter(result.generated_cover_letter);
     } catch (err: any) {
-      setError(err.message || 'Failed to generate cover letter.');
+      setError(err.message || t('jobDetails.failedCoverLetter'));
     } finally {
       setIsCoverLetterLoading(false);
     }
@@ -180,7 +173,7 @@ export function JobDetailsPage() {
       setIsCopied(true);
       window.setTimeout(() => setIsCopied(false), 2000);
     } catch (err: any) {
-      setError(err.message || 'Failed to copy cover letter.');
+      setError(err.message || t('jobDetails.failedCopy'));
     }
   };
 
@@ -198,8 +191,8 @@ export function JobDetailsPage() {
   if (!job) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-2xl font-bold mb-4">Job Not Found</h2>
-        <Link to="/jobs" className="text-brand-primary hover:underline">Return to jobs</Link>
+        <h2 className="text-2xl font-bold mb-4">{t('jobDetails.notFound')}</h2>
+        <Link to="/jobs" className="text-brand-primary hover:underline">{t('jobDetails.returnToJobs')}</Link>
       </div>
     );
   }
@@ -207,7 +200,7 @@ export function JobDetailsPage() {
   return (
     <div className="animate-in fade-in duration-300 pb-20">
       <Link to="/jobs" className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-brand-primary mb-6 transition-colors">
-        <ArrowLeft size={16} className="mr-2" /> Back to Analysis
+        <ArrowLeft size={16} className="mr-2" /> {t('jobDetails.backToAnalysis')}
       </Link>
 
       <div className="flex flex-col lg:flex-row gap-8">
@@ -219,18 +212,18 @@ export function JobDetailsPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-heading font-extrabold text-brand-text dark:text-white leading-tight">
-                  {job.title || job.role_type || 'Untitled Role'}
+                  {job.title || job.role_type || t('common.untitledRole')}
                 </h1>
                 <p className="text-lg text-slate-500 font-medium">
-                  {job.company || job.seniority || 'Unknown Company'}
+                  {job.company || job.seniority || t('common.unknownCompany')}
                 </p>
                 <div className="mt-2 flex items-center gap-2">
                   <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status]}`}>
-                    {statusLabelMap[job.status]}
+                    {t(`statuses.${job.status}`)}
                   </span>
                   {job.applied_date && (
                     <span className="text-xs text-slate-500">
-                      Applied {new Date(job.applied_date).toLocaleDateString()}
+                      {t('jobs.appliedOn', { date: new Date(job.applied_date).toLocaleDateString(language) })}
                     </span>
                   )}
                 </div>
@@ -238,14 +231,14 @@ export function JobDetailsPage() {
             </div>
 
             <div className="glass-card-solid p-6 rounded-2xl">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">Executive Summary</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.executiveSummary')}</h2>
               <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-[15px]">{job.summary}</p>
             </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-6">
             <div className="glass-card-solid p-6 rounded-2xl border-l-[4px] border-l-brand-primary">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2"> Required Skills</h3>
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">{t('jobDetails.requiredSkills')}</h3>
               <ul className="space-y-3">
                 {job.required_skills?.map((skill: string, i: number) => (
                   <li key={i} className="flex items-start text-[15px] text-slate-700 dark:text-slate-300 font-medium leading-tight">
@@ -258,7 +251,7 @@ export function JobDetailsPage() {
 
             <div className="glass-card-solid p-6 rounded-2xl border-l-[4px] border-l-brand-secondary/50">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                 Nice to Have
+                 {t('jobDetails.niceToHave')}
               </h3>
               <ul className="space-y-3">
                 {job.nice_to_have_skills?.map((skill: string, i: number) => (
@@ -272,7 +265,7 @@ export function JobDetailsPage() {
           </div>
 
           <div className="glass-card-solid p-6 rounded-2xl">
-            <h3 className="font-bold text-lg mb-4">Core Responsibilities</h3>
+            <h3 className="font-bold text-lg mb-4">{t('jobDetails.responsibilities')}</h3>
             <ul className="space-y-3 list-disc pl-5">
               {job.responsibilities?.map((res: string, i: number) => (
                 <li key={i} className="text-slate-700 dark:text-slate-300 leading-relaxed">{res}</li>
@@ -284,12 +277,12 @@ export function JobDetailsPage() {
         <div className="w-full lg:w-[400px] shrink-0 space-y-6 lg:sticky lg:top-[100px] lg:self-start">
           <div className="glass-card p-6 rounded-[2rem]">
             <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-4">
-              Application Tracker
+              {t('jobDetails.trackerTitle')}
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">Status</label>
+                <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.status')}</label>
                 <select
                   value={job.status}
                   onChange={(e) => handleStatusChange(e.target.value as JobApplicationStatus)}
@@ -305,12 +298,12 @@ export function JobDetailsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">Notes</label>
+                <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.notes')}</label>
                 <textarea
                   value={notesDraft}
                   onChange={(e) => setNotesDraft(e.target.value)}
                   rows={4}
-                  placeholder="Add interview notes, recruiter updates, or reminders..."
+                  placeholder={t('jobDetails.notesPlaceholder')}
                   className="input-field resize-y"
                 />
               </div>
@@ -321,9 +314,9 @@ export function JobDetailsPage() {
                 className="btn-secondary w-full flex items-center justify-center gap-2"
               >
                 {isSavingNotes ? (
-                  <><Loader2 size={16} className="animate-spin" /> Saving notes...</>
+                  <><Loader2 size={16} className="animate-spin" /> {t('jobDetails.savingNotes')}</>
                 ) : (
-                  'Save Notes'
+                  t('jobDetails.saveNotes')
                 )}
               </button>
             </div>
@@ -331,24 +324,24 @@ export function JobDetailsPage() {
 
           <div className="glass-card p-6 rounded-[2rem]">
             <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
-              Match Analysis
+              {t('jobDetails.matchTitle')}
             </h2>
-            <p className="text-sm text-slate-500 mb-6">Select a CV from your library to evaluate fitment against this role.</p>
+            <p className="text-sm text-slate-500 mb-6">{t('jobDetails.matchSubtitle')}</p>
 
             {cvs.length === 0 ? (
               <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
-                You need to <Link to="/library" className="text-brand-primary hover:underline">upload a CV</Link> first.
+                {t('jobDetails.uploadCvFirst')}
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">Target CV</label>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.targetCv')}</label>
                   <select
                     value={selectedCvId}
                     onChange={e => setSelectedCvId(Number(e.target.value))}
                     className="input-field"
                   >
-                    <option value="" disabled>Select CV...</option>
+                    <option value="" disabled>{t('common.selectCv')}</option>
                     {cvs.map(cv => (
                       <option key={cv.id} value={cv.id}>{cv.name}</option>
                     ))}
@@ -360,9 +353,9 @@ export function JobDetailsPage() {
                   className="btn-primary flex items-center justify-center gap-2 text-[15px]"
                 >
                   {isMatchLoading ? (
-                    <><Loader2 size={18} className="animate-spin" /> Evaluating...</>
+                    <><Loader2 size={18} className="animate-spin" /> {t('jobDetails.evaluating')}</>
                   ) : (
-                    <><Zap size={18} /> Run Algorithm</>
+                    <><Zap size={18} /> {t('jobDetails.runAlgorithm')}</>
                   )}
                 </button>
               </div>
@@ -373,24 +366,24 @@ export function JobDetailsPage() {
 
           <div className="glass-card p-6 rounded-[2rem]">
             <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
-              Compare Two CVs
+              {t('jobDetails.compareTitle')}
             </h2>
-            <p className="text-sm text-slate-500 mb-6">Select two CVs and compare which one fits this role better.</p>
+            <p className="text-sm text-slate-500 mb-6">{t('jobDetails.compareSubtitle')}</p>
 
             {cvs.length < 2 ? (
               <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
-                Upload at least two CVs to compare candidates for this job.
+                {t('jobDetails.uploadTwoCvs')}
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">CV A</label>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.cvA')}</label>
                   <select
                     value={compareCvIdA}
                     onChange={e => setCompareCvIdA(Number(e.target.value))}
                     className="input-field"
                   >
-                    <option value="" disabled>Select CV...</option>
+                    <option value="" disabled>{t('common.selectCv')}</option>
                     {cvs.map(cv => (
                       <option key={`compare-a-${cv.id}`} value={cv.id}>{cv.name}</option>
                     ))}
@@ -398,13 +391,13 @@ export function JobDetailsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">CV B</label>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.cvB')}</label>
                   <select
                     value={compareCvIdB}
                     onChange={e => setCompareCvIdB(Number(e.target.value))}
                     className="input-field"
                   >
-                    <option value="" disabled>Select CV...</option>
+                    <option value="" disabled>{t('common.selectCv')}</option>
                     {cvs.map(cv => (
                       <option key={`compare-b-${cv.id}`} value={cv.id}>{cv.name}</option>
                     ))}
@@ -417,9 +410,9 @@ export function JobDetailsPage() {
                   className="btn-secondary w-full flex items-center justify-center gap-2 text-[15px]"
                 >
                   {isCompareLoading ? (
-                    <><Loader2 size={18} className="animate-spin" /> Comparing...</>
+                    <><Loader2 size={18} className="animate-spin" /> {t('jobDetails.comparing')}</>
                   ) : (
-                    'Compare CVs'
+                    t('jobDetails.compareCvs')
                   )}
                 </button>
               </div>
@@ -428,13 +421,13 @@ export function JobDetailsPage() {
 
           <div className="glass-card p-6 rounded-[2rem]">
             <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
-              Cover Letter
+              {t('jobDetails.coverLetterTitle')}
             </h2>
-            <p className="text-sm text-slate-500 mb-6">Generate a plain-text cover letter for this job using the selected CV.</p>
+            <p className="text-sm text-slate-500 mb-6">{t('jobDetails.coverLetterSubtitle')}</p>
 
             {cvs.length === 0 ? (
               <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
-                You need to <Link to="/library" className="text-brand-primary hover:underline">upload a CV</Link> first.
+                {t('jobDetails.uploadCvFirst')}
               </div>
             ) : (
               <div className="space-y-4">
@@ -444,9 +437,9 @@ export function JobDetailsPage() {
                   className="btn-primary w-full flex items-center justify-center gap-2 text-[15px]"
                 >
                   {isCoverLetterLoading ? (
-                    <><Loader2 size={18} className="animate-spin" /> Generating...</>
+                    <><Loader2 size={18} className="animate-spin" /> {t('jobDetails.generating')}</>
                   ) : (
-                    'Generate cover letter'
+                    t('jobDetails.generateCoverLetter')
                   )}
                 </button>
 
@@ -463,9 +456,9 @@ export function JobDetailsPage() {
                       className="btn-secondary w-full flex items-center justify-center gap-2"
                     >
                       {isCopied ? (
-                        <><Check size={16} /> Copied</>
+                        <><Check size={16} /> {t('common.copied')}</>
                       ) : (
-                        <><Copy size={16} /> Copy to clipboard</>
+                        <><Copy size={16} /> {t('common.copyToClipboard')}</>
                       )}
                     </button>
                   </>
@@ -477,11 +470,11 @@ export function JobDetailsPage() {
           {comparisonResult && cvA && cvB && (
             <div className="glass-card border-sky-200/60 bg-sky-50/60 dark:border-sky-900/40 dark:bg-sky-950/20 p-6 rounded-[2rem] animate-in slide-in-from-bottom-4 duration-500">
               <h3 className="font-heading font-bold text-xl mb-4 text-brand-text dark:text-white">
-                Comparison Result
+                {t('jobDetails.comparisonResult')}
               </h3>
 
               <div className="rounded-2xl border border-emerald-200/70 bg-white/80 dark:border-emerald-900/60 dark:bg-slate-950/30 p-4 mb-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Recommended CV</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.recommendedCv')}</div>
                 <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{comparisonResult.better_cv.label}</div>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">{comparisonResult.explanation}</p>
               </div>
@@ -505,7 +498,7 @@ export function JobDetailsPage() {
                         <div className="font-semibold text-slate-900 dark:text-white">{cv.name}</div>
                         {isRecommended && (
                           <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            Recommended
+                            {t('common.recommended')}
                           </span>
                         )}
                       </div>
@@ -519,7 +512,7 @@ export function JobDetailsPage() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-sm text-slate-500">No standout strengths were returned for this CV.</p>
+                        <p className="text-sm text-slate-500">{t('jobDetails.noStrengthsForCv')}</p>
                       )}
                     </div>
                   );
@@ -531,10 +524,10 @@ export function JobDetailsPage() {
           {matchResult && matchResult.result && (
             <div className="glass-card border-brand-primary/20 bg-brand-primary/5 p-6 rounded-[2rem] animate-in slide-in-from-bottom-4 duration-500">
               <h3 className="font-heading font-bold text-xl mb-4 text-brand-text dark:text-white">
-                Match Results
+                {t('jobDetails.matchResults')}
               </h3>
               <div className="mb-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Match Level</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.matchLevel')}</span>
                 <div className={`mt-1 text-lg font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>
                   {matchResult.match_level}
                 </div>
@@ -542,7 +535,7 @@ export function JobDetailsPage() {
 
               <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-4">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2">Why This CV</h4>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{t('jobDetails.whyThisCv')}</h4>
                   <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                     {matchResult.why_this_cv}
                   </p>
@@ -550,7 +543,7 @@ export function JobDetailsPage() {
 
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-cta"></span> Strengths
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-cta"></span> {t('jobDetails.strengths')}
                   </h4>
                   <ul className="text-sm space-y-1.5">
                     {matchResult.strengths?.map((s: string, i: number) => (
@@ -562,7 +555,7 @@ export function JobDetailsPage() {
                 {matchResult.missing_skills?.length > 0 && (
                   <div>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Missing Skills
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> {t('jobDetails.missingSkills')}
                     </h4>
                     <ul className="text-sm space-y-1.5 items-start">
                       {matchResult.missing_skills?.map((s: string, i: number) => (
@@ -575,7 +568,7 @@ export function JobDetailsPage() {
                 {(matchSuggestions.length > 0 || matchMissingKeywords.length > 0 || matchReorderSuggestions.length > 0) && (
                   <div>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> How to improve this CV
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> {t('jobDetails.improveCv')}
                     </h4>
 
                     {matchSuggestions.length > 0 && (

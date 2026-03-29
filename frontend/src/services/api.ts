@@ -1,5 +1,6 @@
 import {
   CoverLetterResponse,
+  AIResponseLanguage,
   CVComparisonResult,
   CVJobMatch,
   CvAnalysisResponse,
@@ -410,32 +411,41 @@ export const apiService = {
     });
   },
 
-  async matchCVToJob(jobId: number, cvId: number): Promise<CVJobMatch> {
+  async matchCVToJob(jobId: number, cvId: number, language: AIResponseLanguage = 'english'): Promise<CVJobMatch> {
     const match = await request<BackendMatchRead>(`/jobs/${jobId}/match-cvs`, {
       method: 'POST',
       auth: true,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cv_id: cvId }),
+      body: JSON.stringify({ cv_id: cvId, language }),
     });
 
     return mapMatch(match);
   },
 
-  async compareCVsForJob(jobId: number, cvIdA: number, cvIdB: number): Promise<CVComparisonResult> {
+  async compareCVsForJob(
+    jobId: number,
+    cvIdA: number,
+    cvIdB: number,
+    language: AIResponseLanguage = 'english',
+  ): Promise<CVComparisonResult> {
     return request<BackendCVComparisonResponse>(`/jobs/${jobId}/compare-cvs`, {
       method: 'POST',
       auth: true,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cv_id_a: cvIdA, cv_id_b: cvIdB }),
+      body: JSON.stringify({ cv_id_a: cvIdA, cv_id_b: cvIdB, language }),
     });
   },
 
-  async generateCoverLetter(jobId: number, selectedCvId: number): Promise<CoverLetterResponse> {
+  async generateCoverLetter(
+    jobId: number,
+    selectedCvId: number,
+    language: AIResponseLanguage = 'english',
+  ): Promise<CoverLetterResponse> {
     return request<CoverLetterResponse>(`/jobs/${jobId}/cover-letter`, {
       method: 'POST',
       auth: true,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selected_cv_id: selectedCvId }),
+      body: JSON.stringify({ selected_cv_id: selectedCvId, language }),
     });
   },
 

@@ -9,8 +9,9 @@ from sqlmodel import Session
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
-from app.schemas.job import JobAnalysisPayload, JobAnalysisRequest, JobRead, JobStatus
+from app.schemas.job import AIResponseLanguage, JobAnalysisPayload, JobAnalysisRequest, JobRead, JobStatus
 from app.services.job_preprocessing import clean_description
+from app.services.response_language import language_instruction, normalize_language
 
 
 MAX_LIST_ITEMS = 5
@@ -24,6 +25,7 @@ class LeanJobAnalysisSignature(dspy.Signature):
     title: str = dspy.InputField(desc="Job title")
     company: str = dspy.InputField(desc="Company name")
     desc: str = dspy.InputField(desc="Cleaned job text")
+    response_language: str = dspy.InputField(desc="Language instruction for all generated content")
     summary: str = dspy.OutputField(desc="1-2 short sentences")
     seniority: str = dspy.OutputField(desc="One label")
     role_type: str = dspy.OutputField(desc="One role family")
@@ -43,8 +45,13 @@ class JobAnalyzerModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(LeanJobAnalysisSignature)
 
-    def forward(self, title: str, company: str, description: str):
-        return self.predict(title=title, company=company, desc=description)
+    def forward(self, title: str, company: str, description: str, response_language: str):
+        return self.predict(
+            title=title,
+            company=company,
+            desc=description,
+            response_language=response_language,
+        )
 
 
 class JobAnalyzerService:
@@ -63,7 +70,8 @@ class JobAnalyzerService:
         user: User | None = None,
     ) -> JobRead:
         cleaned_description = clean_description(payload.description)
-        cache_key = _build_cache_key(payload.title, payload.company, cleaned_description)
+        selected_language = normalize_language(payload.language)
+        cache_key = _build_cache_key(payload.title, payload.company, cleaned_description, selected_language)
 
         if session is not None and user is not None:
             stored = crud.get_matching_job_analysis(
@@ -73,7 +81,7 @@ class JobAnalyzerService:
                 company=payload.company,
                 clean_description=cleaned_description,
             )
-            if stored is not None:
+            if stored is not None and _analysis_language(stored.analysis_result) == selected_language:
                 response = JobAnalysisPayload(**stored.analysis_result)
                 self._cache[cache_key] = response.model_copy(deep=True)
                 return self._serialize_job(stored)
@@ -88,7 +96,7 @@ class JobAnalyzerService:
                     company=payload.company,
                     description=payload.description,
                     clean_description=cleaned_description,
-                    analysis_result=cached.model_dump(),
+                    analysis_result={**cached.model_dump(), "_language": selected_language},
                 )
                 return self._serialize_job(stored)
 
@@ -108,6 +116,7 @@ class JobAnalyzerService:
                 title=payload.title,
                 company=payload.company,
                 description=cleaned_description,
+                response_language=language_instruction(selected_language),
             )
             result = future.result(timeout=self.timeout_seconds)
         except FuturesTimeoutError as exc:
@@ -143,7 +152,7 @@ class JobAnalyzerService:
                 company=payload.company,
                 description=payload.description,
                 clean_description=cleaned_description,
-                analysis_result=response.model_dump(),
+                analysis_result={**response.model_dump(), "_language": selected_language},
             )
             self._cache[cache_key] = response.model_copy(deep=True)
             return self._serialize_job(stored)
@@ -253,9 +262,14 @@ def _normalize_text(value: object, limit: int) -> str:
     return text[:cutoff].rstrip(" ,;:.")
 
 
-def _build_cache_key(title: str, company: str, description: str) -> str:
-    payload = f"{title.strip().lower()}|{company.strip().lower()}|{description.strip().lower()}"
+def _build_cache_key(title: str, company: str, description: str, language: AIResponseLanguage) -> str:
+    payload = f"{title.strip().lower()}|{company.strip().lower()}|{description.strip().lower()}|{language}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _analysis_language(analysis_result: dict) -> AIResponseLanguage:
+    language = analysis_result.get("_language") if isinstance(analysis_result, dict) else None
+    return normalize_language(language)
 
 
 _service: JobAnalyzerService | None = None

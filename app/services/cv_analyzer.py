@@ -5,8 +5,10 @@ import dspy
 from fastapi import HTTPException, status
 
 from app.core.config import configure_dspy
+from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
 from app.services.job_analyzer import _normalize_list, _normalize_text
+from app.services.response_language import language_instruction, normalize_language
 
 
 MAX_LIST_ITEMS = 4
@@ -21,6 +23,7 @@ class CvFitSignature(dspy.Signature):
     title: str = dspy.InputField(desc="Job title")
     job: str = dspy.InputField(desc="Key job text")
     cv: str = dspy.InputField(desc="Key CV text")
+    response_language: str = dspy.InputField(desc="Language instruction for all generated content")
 
     fit_summary: str = dspy.OutputField(desc="One short summary")
     strengths: list[str] = dspy.OutputField(desc="Up to 4 strengths")
@@ -36,11 +39,12 @@ class CvFitModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(CvFitSignature)
 
-    def forward(self, job_title: str, job_description: str, cv_text: str):
+    def forward(self, job_title: str, job_description: str, cv_text: str, response_language: str):
         return self.predict(
             title=job_title,
             job=job_description,
             cv=cv_text,
+            response_language=response_language,
         )
 
 
@@ -54,13 +58,16 @@ class CvAnalyzerService:
         job_title: str,
         job_description: str,
         cv_text: str,
+        language: AIResponseLanguage = "english",
     ) -> CvAnalysisResponse:
+        selected_language = normalize_language(language)
         dspy_start = time.perf_counter()
         try:
             result = self.analyzer(
                 job_title=job_title,
                 job_description=job_description,
                 cv_text=cv_text,
+                response_language=language_instruction(selected_language),
             )
         except Exception as exc:
             raise HTTPException(
