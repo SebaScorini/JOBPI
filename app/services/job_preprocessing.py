@@ -1,9 +1,6 @@
 import re
 
-
-MAX_DESC_CHARS = 1400
-FALLBACK_DESC_CHARS = 1000
-LONG_DESC_THRESHOLD = 5000
+from app.core.config import get_settings
 
 _NOISE_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
@@ -52,6 +49,7 @@ _USEFUL_SECTION_PATTERNS = [
 
 
 def clean_description(text: str) -> str:
+    settings = get_settings()
     normalized = re.sub(r"\r\n?", "\n", text or "")
     normalized = re.sub(r"[ \t]+", " ", normalized)
 
@@ -63,7 +61,10 @@ def clean_description(text: str) -> str:
     compact = "\n".join(focused or lines)
     compact = re.sub(r"\n{2,}", "\n", compact).strip()
 
-    limit = FALLBACK_DESC_CHARS if len(text or "") > LONG_DESC_THRESHOLD else MAX_DESC_CHARS
+    hard_limit = settings.max_job_description_chars
+    fallback_limit = max(500, min(hard_limit, int(hard_limit * 0.8)))
+    long_desc_threshold = max(hard_limit, 5000)
+    limit = fallback_limit if len(text or "") > long_desc_threshold else hard_limit
     return _truncate_text(compact, limit)
 
 

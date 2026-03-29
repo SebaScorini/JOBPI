@@ -1,11 +1,13 @@
 import hashlib
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import dspy
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_timeout
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
@@ -17,27 +19,76 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_LIST_ITEMS = 5
 MAX_ITEM_CHARS = 80
 MAX_SUMMARY_CHARS = 240
+JOB_ANALYSIS_MAX_TOKENS = 1000
+logger = logging.getLogger(__name__)
 
 
 class LeanJobAnalysisSignature(dspy.Signature):
-    """Return short structured job insights."""
+    """Analyze one specific job posting and return concise, actionable guidance only.
+
+    Relevance Rule:
+    - Include only information that directly helps the candidate:
+        1) understand real requirements,
+        2) improve the CV for this role,
+        3) prepare for this exact interview/job,
+        4) identify concrete skill gaps.
+    - Do not include any information that is not directly actionable for getting this specific job.
+
+    Hard prohibitions:
+    - No motivational or generic coaching text.
+    - No obvious statements (for example: "experience is important").
+    - No long introductions or filler phrases.
+    - Do not repeat job description text unless it is transformed into a specific action.
+    - Do not mention technologies that are not explicitly present in the job text.
+
+    Noise Filter (apply internally before final answer):
+    - Remove generic advice.
+    - Remove repeated ideas.
+    - Remove irrelevant skills.
+    - Remove vague suggestions.
+
+    Format and tone:
+    - Keep outputs short, direct, professional.
+    - Use brief bullet-style items for list outputs.
+    - No long paragraphs.
+    """
 
     title: str = dspy.InputField(desc="Job title")
     company: str = dspy.InputField(desc="Company name")
     desc: str = dspy.InputField(desc="Cleaned job text")
     response_language: str = dspy.InputField(desc="Language instruction for all generated content")
-    summary: str = dspy.OutputField(desc="1-2 short sentences")
+    summary: str = dspy.OutputField(
+        desc="Max 2 short sentences. Only role-specific actionable context. No intro/filler."
+    )
     seniority: str = dspy.OutputField(desc="One label")
     role_type: str = dspy.OutputField(desc="One role family")
-    req_skills: list[str] = dspy.OutputField(desc="Up to 5 must-have skills")
-    nice_skills: list[str] = dspy.OutputField(desc="Up to 5 preferred skills")
-    responsibilities: list[str] = dspy.OutputField(desc="Up to 5 core tasks")
-    prep: list[str] = dspy.OutputField(desc="Up to 5 prep actions")
-    learn: list[str] = dspy.OutputField(desc="Up to 5 learning steps")
-    gaps: list[str] = dspy.OutputField(desc="Up to 5 likely missing skills")
-    resume: list[str] = dspy.OutputField(desc="Up to 5 resume tips")
-    interview: list[str] = dspy.OutputField(desc="Up to 5 interview tips")
-    projects: list[str] = dspy.OutputField(desc="Up to 5 project ideas")
+    req_skills: list[str] = dspy.OutputField(
+        desc="Max 5 concrete strengths/requirements from the posting. Short bullet-style phrases only."
+    )
+    nice_skills: list[str] = dspy.OutputField(
+        desc="Max 5 optional skills explicitly hinted by the posting. No irrelevant tech."
+    )
+    responsibilities: list[str] = dspy.OutputField(
+        desc="Max 5 core tasks. Rewrite as concise bullet-style items, not copied text."
+    )
+    prep: list[str] = dspy.OutputField(
+        desc="Max 5 direct preparation actions for this role. Short and actionable only."
+    )
+    learn: list[str] = dspy.OutputField(
+        desc="Max 5 focused learning actions tied to missing requirements in this posting."
+    )
+    gaps: list[str] = dspy.OutputField(
+        desc="Max 5 clear skill gaps for this job. Specific and concise; no vague advice."
+    )
+    resume: list[str] = dspy.OutputField(
+        desc="Max 5 CV improvements for this job. Each item must be directly actionable."
+    )
+    interview: list[str] = dspy.OutputField(
+        desc="Max 5 interview preparation recommendations for this role. Short explanations only."
+    )
+    projects: list[str] = dspy.OutputField(
+        desc="Max 5 portfolio/recommendation items that increase fit for this exact role."
+    )
 
 
 class JobAnalyzerModule(dspy.Module):
@@ -45,20 +96,36 @@ class JobAnalyzerModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(LeanJobAnalysisSignature)
 
-    def forward(self, title: str, company: str, description: str, response_language: str):
-        return self.predict(
-            title=title,
-            company=company,
-            desc=description,
-            response_language=response_language,
-        )
+    def forward(
+        self,
+        title: str,
+        company: str,
+        description: str,
+        response_language: str,
+        max_tokens: int | None = None,
+    ):
+        if max_tokens is None:
+            return self.predict(
+                title=title,
+                company=company,
+                desc=description,
+                response_language=response_language,
+            )
+
+        with dspy_lm_override(max_tokens=max_tokens):
+            return self.predict(
+                title=title,
+                company=company,
+                desc=description,
+                response_language=response_language,
+            )
 
 
 class JobAnalyzerService:
     def __init__(self) -> None:
         settings = get_settings()
         self.analyzer: JobAnalyzerModule | None = None
-        self.timeout_seconds = settings.dspy_timeout_seconds
+        self.timeout_seconds = settings.ai_timeout_seconds
         self._executor = ThreadPoolExecutor(max_workers=4)
         self._cache: dict[str, JobAnalysisPayload] = {}
 
@@ -84,7 +151,7 @@ class JobAnalyzerService:
         selected_language = normalize_language(payload.language)
         cache_key = _build_cache_key(payload.title, payload.company, cleaned_description, selected_language)
 
-        if session is not None and user is not None:
+        if session is not None and user is not None and not payload.regenerate:
             stored = crud.get_matching_job_analysis(
                 session,
                 user_id=user.id,
@@ -93,12 +160,14 @@ class JobAnalyzerService:
                 clean_description=cleaned_description,
             )
             if stored is not None and _analysis_language(stored.analysis_result) == selected_language:
+                logger.info("ai_cache_reuse operation=job_analysis source=db job_id=%s", stored.id)
                 response = JobAnalysisPayload(**stored.analysis_result)
                 self._cache[cache_key] = response.model_copy(deep=True)
                 return self._serialize_job(stored)
 
-        cached = self._cache.get(cache_key)
+        cached = None if payload.regenerate else self._cache.get(cache_key)
         if cached is not None:
+            logger.info("ai_cache_reuse operation=job_analysis source=memory")
             if session is not None and user is not None:
                 stored = crud.create_job_analysis(
                     session,
@@ -123,25 +192,33 @@ class JobAnalyzerService:
 
         try:
             analyzer = self._get_analyzer()
-            future = self._executor.submit(
-                analyzer,
+            logger.info(
+                "ai_call operation=job_analysis title=%s company=%s regenerate=%s",
+                payload.title,
+                payload.company,
+                payload.regenerate,
+            )
+            result = run_ai_call_with_timeout(
+                executor=self._executor,
+                timeout_seconds=self.timeout_seconds,
+                operation="job_analysis",
+                logger=logger,
+                callable_=analyzer,
+                lm_max_tokens=JOB_ANALYSIS_MAX_TOKENS,
                 title=payload.title,
                 company=payload.company,
                 description=cleaned_description,
                 response_language=language_instruction(selected_language),
+                max_tokens=JOB_ANALYSIS_MAX_TOKENS,
             )
-            result = future.result(timeout=self.timeout_seconds)
         except HTTPException:
             raise
-        except FuturesTimeoutError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="Job analysis timed out. Try a shorter description or retry later.",
-            ) from exc
         except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to analyze job description. Please try again.",
+            raise build_ai_failure_http_exception(
+                exc=exc,
+                logger=logger,
+                operation="job_analysis",
+                default_detail="Failed to analyze job description. Please try again.",
             ) from exc
 
         response = JobAnalysisPayload(
@@ -159,6 +236,23 @@ class JobAnalyzerService:
             portfolio_project_ideas=_normalize_list(result.projects),
         )
         if session is not None and user is not None:
+            if payload.regenerate:
+                stored = crud.get_matching_job_analysis(
+                    session,
+                    user_id=user.id,
+                    title=payload.title,
+                    company=payload.company,
+                    clean_description=cleaned_description,
+                )
+                if stored is not None:
+                    stored = crud.update_job_analysis_result(
+                        session,
+                        stored,
+                        {**response.model_dump(), "_language": selected_language},
+                    )
+                    self._cache[cache_key] = response.model_copy(deep=True)
+                    return self._serialize_job(stored)
+
             stored = crud.create_job_analysis(
                 session,
                 user_id=user.id,

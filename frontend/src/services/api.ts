@@ -88,6 +88,10 @@ interface BackendMatchRead {
   created_at: string;
 }
 
+interface RegenerateOption {
+  regenerate?: boolean;
+}
+
 interface BackendCVComparisonResponse {
   better_cv: {
     cv_id: number;
@@ -413,12 +417,17 @@ export const apiService = {
     });
   },
 
-  async matchCVToJob(jobId: number, cvId: number, language: AIResponseLanguage = 'english'): Promise<CVJobMatch> {
+  async matchCVToJob(
+    jobId: number,
+    cvId: number,
+    language: AIResponseLanguage = 'english',
+    options: RegenerateOption = {},
+  ): Promise<CVJobMatch> {
     const match = await request<BackendMatchRead>(`/jobs/${jobId}/match-cvs`, {
       method: 'POST',
       auth: true,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cv_id: cvId, language }),
+      body: JSON.stringify({ cv_id: cvId, language, regenerate: options.regenerate ?? false }),
     });
 
     return mapMatch(match);
@@ -442,12 +451,17 @@ export const apiService = {
     jobId: number,
     selectedCvId: number,
     language: AIResponseLanguage = 'english',
+    options: RegenerateOption = {},
   ): Promise<CoverLetterResponse> {
     return request<CoverLetterResponse>(`/jobs/${jobId}/cover-letter`, {
       method: 'POST',
       auth: true,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selected_cv_id: selectedCvId, language }),
+      body: JSON.stringify({
+        selected_cv_id: selectedCvId,
+        language,
+        regenerate: options.regenerate ?? false,
+      }),
     });
   },
 

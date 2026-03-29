@@ -1,8 +1,10 @@
 import re
+import logging
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.config import get_settings
 from app.db import crud
 from app.models import User
 from app.schemas.cv import CVDetailRead, CVRead, CvAnalysisResponse
@@ -32,6 +34,7 @@ from app.services.response_language import (
 )
 
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
+logger = logging.getLogger(__name__)
 
 
 class CvLibraryService:
@@ -58,18 +61,24 @@ class CvLibraryService:
             normalized_filename = normalized_filename[:255]
 
         # Extract and clean text once to save on downstream processing
+        settings = get_settings()
+        max_cv_chars = None if settings.should_bypass_user_limits(user.email) else settings.max_cv_text_chars
         raw_text = extract_raw_pdf_text(file_bytes)
-        cleaned_text = preprocess_cv_text(raw_text)
+        cleaned_text = preprocess_cv_text(raw_text, max_chars=max_cv_chars)
         existing = crud.get_cv_for_user_by_clean_text(session, user.id, cleaned_text)
         if existing is not None:
             if not getattr(existing, "library_summary", "").strip():
+                logger.info("ai_call operation=cv_library_summary reason=missing_summary cv_id=%s", existing.id)
                 existing = crud.update_cv_library_summary(
                     session,
                     existing,
                     self._build_library_summary(cleaned_text),
                 )
+            else:
+                logger.info("ai_cache_reuse operation=cv_library_summary source=db cv_id=%s", existing.id)
             return CVRead.model_validate(existing)
 
+        logger.info("ai_call operation=cv_library_summary reason=new_cv")
         library_summary = self._build_library_summary(cleaned_text)
         summary = library_summary
         created = crud.create_cv(
@@ -117,6 +126,7 @@ class CvLibraryService:
         job_id: int,
         cv_id: int,
         language: AIResponseLanguage = "english",
+        regenerate: bool = False,
     ) -> CVJobMatchDetailRead:
         job = crud.get_job_for_user(session, user.id, job_id)
         if job is None:
@@ -126,7 +136,14 @@ class CvLibraryService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        return self._analyze_job_cv_pair(session, user, job, cv, normalize_language(language))
+        return self._analyze_job_cv_pair(
+            session,
+            user,
+            job,
+            cv,
+            normalize_language(language),
+            regenerate=regenerate,
+        )
 
     def compare_cvs_for_job(
         self,
@@ -250,6 +267,7 @@ class CvLibraryService:
         job: object,
         cv: object,
         language: AIResponseLanguage,
+        regenerate: bool = False,
     ) -> CVJobMatchDetailRead:
         existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
         heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
@@ -262,6 +280,7 @@ class CvLibraryService:
             cv_text=cv.clean_text,
             language=language,
             existing_match=existing_match,
+            regenerate=regenerate,
         )
 
         if existing_match is None:
@@ -332,8 +351,25 @@ class CvLibraryService:
         cv_text: str,
         language: AIResponseLanguage,
         existing_match: object | None,
+        regenerate: bool = False,
     ) -> CvAnalysisResponse:
+        if existing_match is not None and not regenerate:
+            logger.info(
+                "ai_cache_reuse operation=cv_match_analysis source=db user_id=%s job_id=%s cv_id=%s",
+                user_id,
+                job_id,
+                cv_id,
+            )
+            return self._build_cached_match_result(existing_match, language)
+
         try:
+            logger.info(
+                "ai_call operation=cv_match_analysis user_id=%s job_id=%s cv_id=%s regenerate=%s",
+                user_id,
+                job_id,
+                cv_id,
+                regenerate,
+            )
             return self._analyze_pair(
                 user_id=user_id,
                 job_id=job_id,
@@ -387,18 +423,41 @@ class CvLibraryService:
         cv_b: object,
         match_b: CVJobMatchDetailRead,
     ) -> tuple[CVJobMatchDetailRead, CVJobMatchDetailRead, str, str]:
-        score_a = self._comparison_score(match_a)
-        score_b = self._comparison_score(match_b)
+        # Keep recommendation deterministic and aligned with the keyword-overlap score
+        # used across the rest of the matching flow.
+        heuristic_delta = match_a.heuristic_score - match_b.heuristic_score
+        if abs(heuristic_delta) > 0.01:
+            if heuristic_delta > 0:
+                return match_a, match_b, cv_a.display_name, cv_b.display_name
+            return match_b, match_a, cv_b.display_name, cv_a.display_name
 
-        if score_a >= score_b:
+        rank_a = self._fit_rank(match_a.match_level)
+        rank_b = self._fit_rank(match_b.match_level)
+        if rank_a != rank_b:
+            if rank_a > rank_b:
+                return match_a, match_b, cv_a.display_name, cv_b.display_name
+            return match_b, match_a, cv_b.display_name, cv_a.display_name
+
+        missing_a = len(match_a.missing_skills)
+        missing_b = len(match_b.missing_skills)
+        if missing_a != missing_b:
+            if missing_a < missing_b:
+                return match_a, match_b, cv_a.display_name, cv_b.display_name
+            return match_b, match_a, cv_b.display_name, cv_a.display_name
+
+        strengths_a = len(match_a.strengths)
+        strengths_b = len(match_b.strengths)
+        if strengths_a != strengths_b:
+            if strengths_a > strengths_b:
+                return match_a, match_b, cv_a.display_name, cv_b.display_name
+            return match_b, match_a, cv_b.display_name, cv_a.display_name
+
+        if cv_a.id <= cv_b.id:
             return match_a, match_b, cv_a.display_name, cv_b.display_name
         return match_b, match_a, cv_b.display_name, cv_a.display_name
 
-    def _comparison_score(self, match: CVJobMatchDetailRead) -> float:
-        level_weight = {"strong": 3.0, "medium": 2.0, "weak": 1.0}.get(match.match_level, 1.0)
-        strengths_bonus = min(len(match.strengths), 4) * 0.08
-        missing_penalty = min(len(match.missing_skills), 4) * 0.05
-        return round(level_weight + match.heuristic_score + strengths_bonus - missing_penalty, 4)
+    def _fit_rank(self, match_level: MatchLevel) -> int:
+        return {"strong": 3, "medium": 2, "weak": 1}.get(match_level, 1)
 
     def _build_comparison_explanation(
         self,

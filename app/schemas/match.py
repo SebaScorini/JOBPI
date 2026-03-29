@@ -12,6 +12,7 @@ MatchLevel = Literal["strong", "medium", "weak"]
 class CVMatchRequest(BaseModel):
     cv_id: int = Field(..., gt=0)
     language: AIResponseLanguage = "english"
+    regenerate: bool = False
 
 
 class CVCompareRequest(BaseModel):

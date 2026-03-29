@@ -85,8 +85,24 @@ npm run dev
 ### Backend (.env in project root)
 
 ```env
+APP_ENV=development
 OPENROUTER_API_KEY=your_openrouter_api_key
+RATE_LIMIT_ENABLED=false
+TRUSTED_USER_EMAIL=
+MAX_PDF_SIZE_MB=5
+MAX_CVS_PER_UPLOAD=10
+MAX_JOB_DESCRIPTION_CHARS=12000
+MAX_CV_TEXT_CHARS=8000
+MAX_OUTPUT_TOKENS=800
+AI_TIMEOUT_SECONDS=45
 ```
+
+`APP_ENV` controls the default behavior:
+
+- `development`: relaxed defaults for local work
+- `production`: conservative defaults for free-tier protection
+
+You can override any individual limit explicitly through environment variables.
 
 ### Frontend (.env in frontend/)
 
