@@ -10,8 +10,8 @@ from app.models import User
 from app.schemas.cv import CVDetailRead, CVRead, CvAnalysisResponse
 from app.schemas.job import AIResponseLanguage
 from app.schemas.match import (
-    CVComparisonBetterCV,
     CVComparisonResponse,
+    CVComparisonWinner,
     CVJobMatchDetailRead,
     CVJobMatchRead,
     MatchLevel,
@@ -24,7 +24,6 @@ from app.services.cv_library_summary_service import (
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 from app.services.response_language import (
     localized_add_evidence,
-    localized_comparison_explanation,
     localized_match_fallback,
     localized_match_prefix,
     localized_move_strength_earlier,
@@ -180,19 +179,30 @@ class CvLibraryService:
             match_b=match_b,
         )
 
-        explanation = self._build_comparison_explanation(
+        overall_reason = self._build_overall_reason(
             language=selected_language,
             winner_label=winner_label,
             loser_label=loser_label,
             winner=winner,
             loser=loser,
         )
+        comparative_strengths = self._build_comparative_strengths(winner=winner, loser=loser)
+        comparative_weaknesses = self._build_comparative_weaknesses(winner=winner, loser=loser)
+        job_alignment_breakdown = self._build_job_alignment_breakdown(
+            job=job,
+            winner=winner,
+            loser=loser,
+            winner_label=winner_label,
+            loser_label=loser_label,
+            language=selected_language,
+        )
 
         return CVComparisonResponse(
-            better_cv=CVComparisonBetterCV(cv_id=winner.cv_id, label=winner_label),
-            explanation=explanation,
-            strengths_a=match_a.strengths,
-            strengths_b=match_b.strengths,
+            winner=CVComparisonWinner(cv_id=winner.cv_id, label=winner_label),
+            overall_reason=overall_reason,
+            comparative_strengths=comparative_strengths,
+            comparative_weaknesses=comparative_weaknesses,
+            job_alignment_breakdown=job_alignment_breakdown,
         )
 
     def match_job_to_all_cvs(self, session: Session, user: User, job_id: int) -> list[CVJobMatchRead]:
@@ -459,7 +469,7 @@ class CvLibraryService:
     def _fit_rank(self, match_level: MatchLevel) -> int:
         return {"strong": 3, "medium": 2, "weak": 1}.get(match_level, 1)
 
-    def _build_comparison_explanation(
+    def _build_overall_reason(
         self,
         language: AIResponseLanguage,
         winner_label: str,
@@ -470,22 +480,115 @@ class CvLibraryService:
         if language == "spanish":
             winner_strength = winner.strengths[0] if winner.strengths else "mejor cobertura del rol"
             loser_gap = loser.missing_skills[0] if loser.missing_skills else "senales menos especificas del puesto"
+            reason = (
+                f"{winner_label} muestra mejor alineacion con los requisitos clave "
+                f"({winner_strength}) y menos brechas que {loser_label} ({loser_gap})."
+            )
             fallback = f"{winner_label} es el CV con mejor encaje para este puesto."
         else:
             winner_strength = winner.strengths[0] if winner.strengths else "better coverage of the role"
             loser_gap = loser.missing_skills[0] if loser.missing_skills else "fewer role-specific signals"
+            reason = (
+                f"{winner_label} shows stronger alignment with key requirements "
+                f"({winner_strength}) and fewer gaps than {loser_label} ({loser_gap})."
+            )
             fallback = f"{winner_label} is the stronger fit for this role."
 
-        return _normalize_sentence(
-            localized_comparison_explanation(
-                language=language,
-                winner_label=winner_label,
-                loser_label=loser_label,
-                winner_strength=winner_strength,
-                loser_gap=loser_gap,
-            ),
-            fallback=fallback,
-        )
+        return _normalize_sentence(reason, fallback=fallback)
+
+    def _build_comparative_strengths(
+        self,
+        winner: CVJobMatchDetailRead,
+        loser: CVJobMatchDetailRead,
+    ) -> list[str]:
+        winner_strengths = _clean_items(list(winner.strengths or []), limit=4)
+        loser_strengths = {item.lower() for item in _clean_items(list(loser.strengths or []), limit=4)}
+        unique = [item for item in winner_strengths if item.lower() not in loser_strengths]
+        return (unique or winner_strengths)[:4]
+
+    def _build_comparative_weaknesses(
+        self,
+        winner: CVJobMatchDetailRead,
+        loser: CVJobMatchDetailRead,
+    ) -> list[str]:
+        loser_gaps = _clean_items(list(loser.missing_skills or []), limit=4)
+        winner_gaps = {item.lower() for item in _clean_items(list(winner.missing_skills or []), limit=4)}
+        unique = [item for item in loser_gaps if item.lower() not in winner_gaps]
+        return (unique or loser_gaps)[:4]
+
+    def _build_job_alignment_breakdown(
+        self,
+        job: object,
+        winner: CVJobMatchDetailRead,
+        loser: CVJobMatchDetailRead,
+        winner_label: str,
+        loser_label: str,
+        language: AIResponseLanguage,
+    ) -> list[str]:
+        requirements = self._extract_job_requirements(job)
+        if not requirements:
+            if language == "spanish":
+                winner_line = f"{winner_label}: {len(winner.strengths)} fortalezas, {len(winner.missing_skills)} brechas"
+                loser_line = f"{loser_label}: {len(loser.strengths)} fortalezas, {len(loser.missing_skills)} brechas"
+            else:
+                winner_line = f"{winner_label}: {len(winner.strengths)} strengths, {len(winner.missing_skills)} gaps"
+                loser_line = f"{loser_label}: {len(loser.strengths)} strengths, {len(loser.missing_skills)} gaps"
+
+            return [
+                _normalize_sentence(winner_line),
+                _normalize_sentence(loser_line),
+            ][:4]
+
+        breakdown: list[str] = []
+        for requirement in requirements[:4]:
+            winner_score = self._requirement_alignment_score(requirement, winner)
+            loser_score = self._requirement_alignment_score(requirement, loser)
+
+            if winner_score > loser_score:
+                if language == "spanish":
+                    line = f"{requirement}: mayor alineacion en {winner_label}"
+                else:
+                    line = f"{requirement}: stronger match in {winner_label}"
+            elif loser_score > winner_score:
+                if language == "spanish":
+                    line = f"{requirement}: mayor alineacion en {loser_label}"
+                else:
+                    line = f"{requirement}: stronger match in {loser_label}"
+            else:
+                if language == "spanish":
+                    line = f"{requirement}: cobertura similar en ambos CVs"
+                else:
+                    line = f"{requirement}: similar coverage in both CVs"
+
+            breakdown.append(_normalize_sentence(line))
+
+        return _clean_items(breakdown, limit=4)
+
+    def _extract_job_requirements(self, job: object) -> list[str]:
+        analysis_result = getattr(job, "analysis_result", {})
+        if not isinstance(analysis_result, dict):
+            return []
+
+        raw_required = analysis_result.get("required_skills", [])
+        if not isinstance(raw_required, list):
+            return []
+
+        return _clean_items([item for item in raw_required if isinstance(item, str)], limit=4)
+
+    def _requirement_alignment_score(self, requirement: str, match: CVJobMatchDetailRead) -> int:
+        req_tokens = set(_tokenize(requirement))
+        if not req_tokens:
+            return 0
+
+        score = 0
+        for strength in match.strengths:
+            if req_tokens & set(_tokenize(strength)):
+                score += 2
+        for gap in match.missing_skills:
+            if req_tokens & set(_tokenize(gap)):
+                score -= 1
+
+        return score
 
     def _serialize_match(self, match: object) -> CVJobMatchRead:
         explanation = _build_match_explanation(

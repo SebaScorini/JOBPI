@@ -21,16 +21,17 @@ class CVCompareRequest(BaseModel):
     language: AIResponseLanguage = "english"
 
 
-class CVComparisonBetterCV(BaseModel):
+class CVComparisonWinner(BaseModel):
     cv_id: int
     label: str
 
 
 class CVComparisonResponse(BaseModel):
-    better_cv: CVComparisonBetterCV
-    explanation: str
-    strengths_a: list[str]
-    strengths_b: list[str]
+    winner: CVComparisonWinner
+    overall_reason: str
+    comparative_strengths: list[str]
+    comparative_weaknesses: list[str]
+    job_alignment_breakdown: list[str]
 
 
 class CVJobMatchRead(BaseModel):

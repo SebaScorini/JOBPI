@@ -67,7 +67,7 @@ export function JobDetailsPage() {
   const matchSuggestions = matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? [];
   const matchMissingKeywords = matchResult?.missing_keywords ?? [];
   const matchReorderSuggestions = matchResult?.reorder_suggestions ?? [];
-  const comparisonExplanationBlocks = splitReadableText(comparisonResult?.explanation);
+  const comparisonExplanationBlocks = splitReadableText(comparisonResult?.overall_reason);
   const matchWhyBlocks = splitReadableText(matchResult?.why_this_cv);
 
   const statusOptions: Array<{ value: JobApplicationStatus; label: string }> = [
@@ -252,7 +252,7 @@ export function JobDetailsPage() {
   const cvA = cvs.find((cv) => cv.id === Number(compareCvIdA)) ?? null;
   const cvB = cvs.find((cv) => cv.id === Number(compareCvIdB)) ?? null;
   const selectedCv = cvs.find((cv) => cv.id === Number(selectedCvId)) ?? null;
-  const bestCvLabel = comparisonResult?.better_cv?.label ?? selectedCv?.name ?? t('jobDetails.noCvSelected');
+  const bestCvLabel = comparisonResult?.winner?.label ?? selectedCv?.name ?? t('jobDetails.noCvSelected');
 
   const tabs: Array<{ id: DetailsTab; label: string }> = useMemo(
     () => [
@@ -452,7 +452,7 @@ export function JobDetailsPage() {
                     <div className="rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 p-5 lg:p-6 bg-emerald-50/70 dark:bg-emerald-950/20 space-y-4">
                       <div className="space-y-1.5">
                         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.recommendedCv')}</p>
-                        <p className="text-base lg:text-lg font-semibold text-emerald-700 dark:text-emerald-300 break-words leading-7">{comparisonResult.better_cv.label}</p>
+                        <p className="text-base lg:text-lg font-semibold text-emerald-700 dark:text-emerald-300 break-words leading-7">{comparisonResult.winner.label}</p>
                       </div>
 
                       {comparisonExplanationBlocks.length > 0 && (
@@ -468,6 +468,47 @@ export function JobDetailsPage() {
                           )}
                         </div>
                       )}
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+                        <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-white/80 dark:bg-slate-950/30 px-4 py-3 min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.comparativeStrengths')}</p>
+                          {comparisonResult.comparative_strengths.length > 0 ? (
+                            <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                              {comparisonResult.comparative_strengths.map((item, i) => (
+                                <li key={`cmp-strength-${i}`} className="break-words">{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+                          )}
+                        </div>
+
+                        <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-white/80 dark:bg-slate-950/30 px-4 py-3 min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.comparativeWeaknesses')}</p>
+                          {comparisonResult.comparative_weaknesses.length > 0 ? (
+                            <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                              {comparisonResult.comparative_weaknesses.map((item, i) => (
+                                <li key={`cmp-weak-${i}`} className="break-words">{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-white/80 dark:bg-slate-950/30 px-4 py-3 min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.jobAlignmentBreakdown')}</p>
+                        {comparisonResult.job_alignment_breakdown.length > 0 ? (
+                          <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
+                            {comparisonResult.job_alignment_breakdown.map((item, i) => (
+                              <li key={`cmp-align-${i}`} className="break-words">{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+                        )}
+                      </div>
                     </div>
                   )}
 

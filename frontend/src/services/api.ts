@@ -93,13 +93,14 @@ interface RegenerateOption {
 }
 
 interface BackendCVComparisonResponse {
-  better_cv: {
+  winner: {
     cv_id: number;
     label: string;
   };
-  explanation: string;
-  strengths_a: string[];
-  strengths_b: string[];
+  overall_reason: string;
+  comparative_strengths: string[];
+  comparative_weaknesses: string[];
+  job_alignment_breakdown: string[];
 }
 
 class ApiError extends Error {

@@ -26,7 +26,7 @@ def dspy_lm_override(*, max_tokens: int) -> Any:
         model=settings.dspy_model,
         api_key=settings.openrouter_api_key,
         api_base=settings.openrouter_base_url,
-        temperature=min(max(settings.dspy_temperature, 0.0), 0.2),
+        temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
         max_tokens=clamp_lm_max_tokens(max_tokens),
         extra_body={"reasoning": {"enabled": False}},
     )

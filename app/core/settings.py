@@ -211,7 +211,7 @@ class Settings(BaseModel):
 
     def model_post_init(self, __context) -> None:
         self.trusted_user_email = self.trusted_user_email.lower()
-        self.dspy_temperature = min(max(self.dspy_temperature, 0.0), 0.2)
+        self.dspy_temperature = min(max(self.dspy_temperature, 0.2), 0.4)
         self.auth_window_seconds = max(60, self.auth_window_seconds)
         self.auth_register_limit = max(1, self.auth_register_limit)
         self.auth_login_limit = max(1, self.auth_login_limit)
@@ -264,7 +264,7 @@ def configure_dspy() -> dspy.LM:
         model=settings.dspy_model,
         api_key=settings.openrouter_api_key,
         api_base=settings.openrouter_base_url,
-        temperature=min(max(settings.dspy_temperature, 0.0), 0.2),
+        temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
         max_tokens=max(50, min(400, settings.max_output_tokens, 900)),
         extra_body={"reasoning": {"enabled": False}},
     )
