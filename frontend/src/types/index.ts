@@ -86,13 +86,14 @@ export interface CVJobMatch {
 }
 
 export interface CVComparisonResult {
-  better_cv: {
+  winner: {
     cv_id: number;
     label: string;
   };
-  explanation: string;
-  strengths_a: string[];
-  strengths_b: string[];
+  overall_reason: string;
+  comparative_strengths: string[];
+  comparative_weaknesses: string[];
+  job_alignment_breakdown: string[];
 }
 
 export interface CoverLetterResponse {
