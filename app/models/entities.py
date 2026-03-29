@@ -33,6 +33,7 @@ class CV(SQLModel, table=True):
     raw_text: str = Field(sa_column=Column(Text, nullable=False))
     clean_text: str = Field(sa_column=Column(Text, nullable=False))
     summary: str = Field(sa_column=Column(Text, nullable=False))
+    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False, default=list))
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
     user: Optional[User] = Relationship(back_populates="cvs")

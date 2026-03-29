@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { JobAnalysisResponse, StoredCV, CVJobMatch, JobApplicationStatus } from '../types';
-import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import { JobAnalysisResponse, StoredCV, CVJobMatch, CVComparisonResult, JobApplicationStatus } from '../types';
+import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check } from 'lucide-react';
 
 const statusOptions: Array<{ value: JobApplicationStatus; label: string }> = [
   { value: 'saved', label: 'Saved' },
@@ -33,13 +33,20 @@ export function JobDetailsPage() {
   const [job, setJob] = useState<JobAnalysisResponse | null>(null);
   const [cvs, setCvs] = useState<StoredCV[]>([]);
   const [selectedCvId, setSelectedCvId] = useState<number | ''>('');
+  const [compareCvIdA, setCompareCvIdA] = useState<number | ''>('');
+  const [compareCvIdB, setCompareCvIdB] = useState<number | ''>('');
 
   const [isJobLoading, setIsJobLoading] = useState(true);
   const [isMatchLoading, setIsMatchLoading] = useState(false);
+  const [isCompareLoading, setIsCompareLoading] = useState(false);
+  const [isCoverLetterLoading, setIsCoverLetterLoading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
   const [matchResult, setMatchResult] = useState<CVJobMatch | null>(null);
+  const [comparisonResult, setComparisonResult] = useState<CVComparisonResult | null>(null);
+  const [coverLetter, setCoverLetter] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const matchLevelTextClasses = {
     strong: 'text-brand-cta',
@@ -63,6 +70,10 @@ export function JobDetailsPage() {
         setCvs(cvsData);
         if (cvsData.length > 0) {
           setSelectedCvId(cvsData[0].id);
+          setCompareCvIdA(cvsData[0].id);
+        }
+        if (cvsData.length > 1) {
+          setCompareCvIdB(cvsData[1].id);
         }
       } catch (err) {
         console.error('Failed to load data', err);
@@ -74,10 +85,16 @@ export function JobDetailsPage() {
     loadData();
   }, [jobId]);
 
+  useEffect(() => {
+    setCoverLetter('');
+    setIsCopied(false);
+  }, [selectedCvId, jobId]);
+
   const handleMatch = async () => {
     if (!jobId || !selectedCvId) return;
     setIsMatchLoading(true);
     setMatchResult(null);
+    setComparisonResult(null);
     setError(null);
 
     try {
@@ -87,6 +104,23 @@ export function JobDetailsPage() {
       setError(err.message || 'Failed to match CV.');
     } finally {
       setIsMatchLoading(false);
+    }
+  };
+
+  const handleCompare = async () => {
+    if (!jobId || !compareCvIdA || !compareCvIdB) return;
+
+    setIsCompareLoading(true);
+    setComparisonResult(null);
+    setError(null);
+
+    try {
+      const result = await apiService.compareCVsForJob(parseInt(jobId), Number(compareCvIdA), Number(compareCvIdB));
+      setComparisonResult(result);
+    } catch (err: any) {
+      setError(err.message || 'Failed to compare CVs.');
+    } finally {
+      setIsCompareLoading(false);
     }
   };
 
@@ -120,6 +154,38 @@ export function JobDetailsPage() {
       setIsSavingNotes(false);
     }
   };
+
+  const handleGenerateCoverLetter = async () => {
+    if (!jobId || !selectedCvId) return;
+
+    setIsCoverLetterLoading(true);
+    setIsCopied(false);
+    setError(null);
+
+    try {
+      const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId));
+      setCoverLetter(result.generated_cover_letter);
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate cover letter.');
+    } finally {
+      setIsCoverLetterLoading(false);
+    }
+  };
+
+  const handleCopyCoverLetter = async () => {
+    if (!coverLetter) return;
+
+    try {
+      await navigator.clipboard.writeText(coverLetter);
+      setIsCopied(true);
+      window.setTimeout(() => setIsCopied(false), 2000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to copy cover letter.');
+    }
+  };
+
+  const cvA = cvs.find((cv) => cv.id === Number(compareCvIdA)) ?? null;
+  const cvB = cvs.find((cv) => cv.id === Number(compareCvIdB)) ?? null;
 
   if (isJobLoading) {
     return (
@@ -304,6 +370,163 @@ export function JobDetailsPage() {
 
             {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
           </div>
+
+          <div className="glass-card p-6 rounded-[2rem]">
+            <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
+              Compare Two CVs
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">Select two CVs and compare which one fits this role better.</p>
+
+            {cvs.length < 2 ? (
+              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
+                Upload at least two CVs to compare candidates for this job.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">CV A</label>
+                  <select
+                    value={compareCvIdA}
+                    onChange={e => setCompareCvIdA(Number(e.target.value))}
+                    className="input-field"
+                  >
+                    <option value="" disabled>Select CV...</option>
+                    {cvs.map(cv => (
+                      <option key={`compare-a-${cv.id}`} value={cv.id}>{cv.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">CV B</label>
+                  <select
+                    value={compareCvIdB}
+                    onChange={e => setCompareCvIdB(Number(e.target.value))}
+                    className="input-field"
+                  >
+                    <option value="" disabled>Select CV...</option>
+                    {cvs.map(cv => (
+                      <option key={`compare-b-${cv.id}`} value={cv.id}>{cv.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleCompare}
+                  disabled={isCompareLoading || !compareCvIdA || !compareCvIdB}
+                  className="btn-secondary w-full flex items-center justify-center gap-2 text-[15px]"
+                >
+                  {isCompareLoading ? (
+                    <><Loader2 size={18} className="animate-spin" /> Comparing...</>
+                  ) : (
+                    'Compare CVs'
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="glass-card p-6 rounded-[2rem]">
+            <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
+              Cover Letter
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">Generate a plain-text cover letter for this job using the selected CV.</p>
+
+            {cvs.length === 0 ? (
+              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
+                You need to <Link to="/library" className="text-brand-primary hover:underline">upload a CV</Link> first.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <button
+                  onClick={handleGenerateCoverLetter}
+                  disabled={isCoverLetterLoading || !selectedCvId}
+                  className="btn-primary w-full flex items-center justify-center gap-2 text-[15px]"
+                >
+                  {isCoverLetterLoading ? (
+                    <><Loader2 size={18} className="animate-spin" /> Generating...</>
+                  ) : (
+                    'Generate cover letter'
+                  )}
+                </button>
+
+                {coverLetter && (
+                  <>
+                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-4">
+                      <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300 font-sans">
+                        {coverLetter}
+                      </pre>
+                    </div>
+
+                    <button
+                      onClick={handleCopyCoverLetter}
+                      className="btn-secondary w-full flex items-center justify-center gap-2"
+                    >
+                      {isCopied ? (
+                        <><Check size={16} /> Copied</>
+                      ) : (
+                        <><Copy size={16} /> Copy to clipboard</>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {comparisonResult && cvA && cvB && (
+            <div className="glass-card border-sky-200/60 bg-sky-50/60 dark:border-sky-900/40 dark:bg-sky-950/20 p-6 rounded-[2rem] animate-in slide-in-from-bottom-4 duration-500">
+              <h3 className="font-heading font-bold text-xl mb-4 text-brand-text dark:text-white">
+                Comparison Result
+              </h3>
+
+              <div className="rounded-2xl border border-emerald-200/70 bg-white/80 dark:border-emerald-900/60 dark:bg-slate-950/30 p-4 mb-4">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Recommended CV</div>
+                <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{comparisonResult.better_cv.label}</div>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">{comparisonResult.explanation}</p>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { cv: cvA, strengths: comparisonResult.strengths_a },
+                  { cv: cvB, strengths: comparisonResult.strengths_b },
+                ].map(({ cv, strengths }) => {
+                  const isRecommended = comparisonResult.better_cv.cv_id === cv.id;
+                  return (
+                    <div
+                      key={cv.id}
+                      className={`rounded-2xl border p-4 ${
+                        isRecommended
+                          ? 'border-emerald-300 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/20'
+                          : 'border-slate-200/70 bg-white/70 dark:border-slate-800 dark:bg-slate-950/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="font-semibold text-slate-900 dark:text-white">{cv.name}</div>
+                        {isRecommended && (
+                          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            Recommended
+                          </span>
+                        )}
+                      </div>
+
+                      {strengths.length > 0 ? (
+                        <ul className="text-sm space-y-1.5">
+                          {strengths.map((strength) => (
+                            <li key={`${cv.id}-${strength}`} className="text-slate-600 dark:text-slate-400">
+                              &bull; {strength}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-slate-500">No standout strengths were returned for this CV.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {matchResult && matchResult.result && (
             <div className="glass-card border-brand-primary/20 bg-brand-primary/5 p-6 rounded-[2rem] animate-in slide-in-from-bottom-4 duration-500">

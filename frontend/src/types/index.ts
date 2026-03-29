@@ -58,6 +58,7 @@ export interface StoredCV {
   id: number;
   name: string;
   summary: string;
+  tags: string[];
   created_at: string;
 }
 
@@ -77,6 +78,20 @@ export interface CVJobMatch {
   result: CvAnalysisResponse;
   created_at: string;
   recommended: boolean;
+}
+
+export interface CVComparisonResult {
+  better_cv: {
+    cv_id: number;
+    label: string;
+  };
+  explanation: string;
+  strengths_a: string[];
+  strengths_b: string[];
+}
+
+export interface CoverLetterResponse {
+  generated_cover_letter: string;
 }
 
 export interface RecommendationMatch {

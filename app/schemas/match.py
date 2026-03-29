@@ -12,6 +12,23 @@ class CVMatchRequest(BaseModel):
     cv_id: int
 
 
+class CVCompareRequest(BaseModel):
+    cv_id_a: int
+    cv_id_b: int
+
+
+class CVComparisonBetterCV(BaseModel):
+    cv_id: int
+    label: str
+
+
+class CVComparisonResponse(BaseModel):
+    better_cv: CVComparisonBetterCV
+    explanation: str
+    strengths_a: list[str]
+    strengths_b: list[str]
+
+
 class CVJobMatchRead(BaseModel):
     id: int
     user_id: int

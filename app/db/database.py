@@ -17,6 +17,7 @@ def create_db_and_tables() -> None:
     _reset_legacy_dev_tables()
     SQLModel.metadata.create_all(engine)
     _ensure_job_tracking_columns()
+    _ensure_cv_tags_column()
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -59,3 +60,17 @@ def _ensure_job_tracking_columns() -> None:
             connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN applied_date TIMESTAMP NULL")
         if "notes" not in columns:
             connection.exec_driver_sql("ALTER TABLE job_analyses ADD COLUMN notes TEXT NULL")
+
+
+def _ensure_cv_tags_column() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "cvs" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("cvs")}
+    if "tags" in columns:
+        return
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql("ALTER TABLE cvs ADD COLUMN tags JSON NOT NULL DEFAULT '[]'")

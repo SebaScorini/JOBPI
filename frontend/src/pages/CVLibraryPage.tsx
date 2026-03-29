@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { apiService } from '../services/api';
 import { StoredCV } from '../types';
-import { FileText, Loader2, UploadCloud, Trash2, Calendar, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { FileText, Loader2, UploadCloud, Trash2, Calendar, CheckCircle, AlertCircle, X, Tag } from 'lucide-react';
 
 interface UploadFile {
   file: File;
@@ -15,6 +15,9 @@ export function CVLibraryPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([]);
   const [uploadResults, setUploadResults] = useState<Array<{ filename: string; success: boolean; error?: string }>>([]);
+  const [tagInputs, setTagInputs] = useState<Record<number, string>>({});
+  const [savingTagCvId, setSavingTagCvId] = useState<number | null>(null);
+  const [activeTagFilter, setActiveTagFilter] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -25,6 +28,12 @@ export function CVLibraryPage() {
     try {
       const data = await apiService.listCVs();
       setCvs(data);
+      setTagInputs(
+        data.reduce((acc, cv) => {
+          acc[cv.id] = cv.tags.join(', ');
+          return acc;
+        }, {} as Record<number, string>)
+      );
     } catch (err) {
       console.error('Failed to load CVs', err);
     } finally {
@@ -135,6 +144,37 @@ export function CVLibraryPage() {
       console.error('Failed to delete CV', err);
     }
   };
+
+  const handleSaveTags = async (cvId: number) => {
+    const rawValue = tagInputs[cvId] ?? '';
+    const tags = rawValue
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    setSavingTagCvId(cvId);
+    try {
+      const updatedCv = await apiService.updateCVTags(cvId, tags);
+      setCvs((prev) => prev.map((cv) => (cv.id === cvId ? updatedCv : cv)));
+      setTagInputs((prev) => ({ ...prev, [cvId]: updatedCv.tags.join(', ') }));
+
+      if (activeTagFilter && !updatedCv.tags.includes(activeTagFilter)) {
+        setActiveTagFilter('');
+      }
+    } catch (err) {
+      console.error('Failed to update CV tags', err);
+    } finally {
+      setSavingTagCvId(null);
+    }
+  };
+
+  const availableTags = Array.from(
+    new Set(cvs.flatMap((cv) => cv.tags))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const visibleCvs = activeTagFilter
+    ? cvs.filter((cv) => cv.tags.includes(activeTagFilter))
+    : cvs;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -266,22 +306,68 @@ export function CVLibraryPage() {
         </div>
       )}
 
+      {availableTags.length > 0 && (
+        <div className="glass-card-solid p-4 rounded-3xl space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-brand-text dark:text-white">
+            <Tag size={16} />
+            <span>Filter by tag</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveTagFilter('')}
+              className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                activeTagFilter === ''
+                  ? 'bg-brand-primary text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+              }`}
+            >
+              All
+            </button>
+            {availableTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setActiveTagFilter(tag)}
+                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  activeTagFilter === tag
+                    ? 'bg-brand-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
         </div>
-      ) : cvs.length === 0 ? (
+      ) : visibleCvs.length === 0 ? (
         <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-[#151B2B]/50">
           <FileText size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-          <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">Your library is empty</p>
-          <p className="text-slate-500 max-w-sm mx-auto mb-6">Upload one or more resumes in PDF format to build your candidate pool.</p>
-          <button onClick={handleUploadClick} className="btn-secondary w-auto px-8 mx-auto inline-flex items-center justify-center">
-            Upload PDF
-          </button>
+          {cvs.length === 0 ? (
+            <>
+              <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">Your library is empty</p>
+              <p className="text-slate-500 max-w-sm mx-auto mb-6">Upload one or more resumes in PDF format to build your candidate pool.</p>
+              <button onClick={handleUploadClick} className="btn-secondary w-auto px-8 mx-auto inline-flex items-center justify-center">
+                Upload PDF
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">No CVs match that tag</p>
+              <p className="text-slate-500 max-w-sm mx-auto mb-6">Clear the filter or update tags on a CV to see it here.</p>
+              <button onClick={() => setActiveTagFilter('')} className="btn-secondary w-auto px-8 mx-auto inline-flex items-center justify-center">
+                Clear filter
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cvs.map((cv) => (
+          {visibleCvs.map((cv) => (
             <div 
               key={cv.id} 
               className="glass-card-solid p-6 rounded-[1.5rem] flex flex-col justify-between group h-full relative"
@@ -303,6 +389,43 @@ export function CVLibraryPage() {
                 <h3 className="font-heading font-bold text-lg text-brand-text dark:text-white mb-2 break-words items-center pr-8">
                   {cv.name}
                 </h3>
+                <p className="text-sm text-slate-500 mb-4 line-clamp-3">{cv.summary}</p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {cv.tags.length > 0 ? (
+                    cv.tags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => setActiveTagFilter(tag)}
+                        className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                      >
+                        {tag}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400">No tags yet</span>
+                  )}
+                </div>
+                <div className="space-y-2 mb-4">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Tags
+                  </label>
+                  <input
+                    type="text"
+                    value={tagInputs[cv.id] ?? ''}
+                    onChange={(e) =>
+                      setTagInputs((prev) => ({ ...prev, [cv.id]: e.target.value }))
+                    }
+                    placeholder="frontend, react, english"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  />
+                  <button
+                    onClick={() => handleSaveTags(cv.id)}
+                    disabled={savingTagCvId === cv.id}
+                    className="btn-secondary w-full py-2 disabled:opacity-60"
+                  >
+                    {savingTagCvId === cv.id ? 'Saving...' : 'Save tags'}
+                  </button>
+                </div>
                 <div className="flex items-center gap-2 text-sm text-slate-500 mt-auto">
                    <Calendar size={14} />
                    <span>{new Date(cv.created_at).toLocaleDateString()}</span>

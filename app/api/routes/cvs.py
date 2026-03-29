@@ -4,7 +4,7 @@ from sqlmodel import Session
 from app.db.database import get_session
 from app.dependencies.auth import get_current_user
 from app.models import User
-from app.schemas.cv import CVDetailRead, CVRead, CVBatchUploadResponse, CVUploadResult
+from app.schemas.cv import CVDetailRead, CVRead, CVBatchUploadResponse, CVTagsUpdate, CVUploadResult
 from app.services.cv_library_service import get_cv_library_service
 
 
@@ -157,6 +157,16 @@ def get_cv(
     current_user: User = Depends(get_current_user),
 ) -> CVDetailRead:
     return get_cv_library_service().get_cv(session, current_user, cv_id)
+
+
+@router.patch("/{cv_id}/tags", response_model=CVRead)
+def update_cv_tags(
+    cv_id: int,
+    payload: CVTagsUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CVRead:
+    return get_cv_library_service().update_cv_tags(session, current_user, cv_id, payload.tags)
 
 
 @router.delete("/{cv_id}")

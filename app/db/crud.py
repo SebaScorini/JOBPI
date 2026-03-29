@@ -28,6 +28,7 @@ def create_cv(
     raw_text: str,
     clean_text: str,
     summary: str,
+    tags: list[str] | None = None,
 ) -> CV:
     cv = CV(
         user_id=user_id,
@@ -36,6 +37,7 @@ def create_cv(
         raw_text=raw_text,
         clean_text=clean_text,
         summary=summary,
+        tags=tags or [],
     )
     session.add(cv)
     session.commit()
@@ -61,6 +63,14 @@ def delete_cv(session: Session, cv: CV) -> None:
         session.delete(match)
     session.delete(cv)
     session.commit()
+
+
+def update_cv_tags(session: Session, cv: CV, tags: list[str]) -> CV:
+    cv.tags = tags
+    session.add(cv)
+    session.commit()
+    session.refresh(cv)
+    return cv
 
 
 def create_job_analysis(
