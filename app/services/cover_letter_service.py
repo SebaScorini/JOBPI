@@ -55,11 +55,22 @@ class CoverLetterModule(dspy.Module):
 
 class CoverLetterService:
     def __init__(self) -> None:
-        configure_dspy()
         settings = get_settings()
-        self.generator = CoverLetterModule()
+        self.generator: CoverLetterModule | None = None
         self.timeout_seconds = settings.dspy_timeout_seconds
         self._executor = ThreadPoolExecutor(max_workers=2)
+
+    def _get_generator(self) -> CoverLetterModule:
+        if self.generator is None:
+            try:
+                configure_dspy()
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI analysis is not configured.",
+                ) from exc
+            self.generator = CoverLetterModule()
+        return self.generator
 
     def generate_cover_letter(
         self,
@@ -79,8 +90,9 @@ class CoverLetterService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
         try:
+            generator = self._get_generator()
             future = self._executor.submit(
-                self.generator,
+                generator,
                 job_title=job.title,
                 company=job.company,
                 job_description=job.clean_description,
@@ -89,6 +101,8 @@ class CoverLetterService:
                 response_language=language_instruction(selected_language),
             )
             result = future.result(timeout=self.timeout_seconds)
+        except HTTPException:
+            raise
         except FuturesTimeoutError as exc:
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,

@@ -56,12 +56,23 @@ class JobAnalyzerModule(dspy.Module):
 
 class JobAnalyzerService:
     def __init__(self) -> None:
-        configure_dspy()
         settings = get_settings()
-        self.analyzer = JobAnalyzerModule()
+        self.analyzer: JobAnalyzerModule | None = None
         self.timeout_seconds = settings.dspy_timeout_seconds
         self._executor = ThreadPoolExecutor(max_workers=4)
         self._cache: dict[str, JobAnalysisPayload] = {}
+
+    def _get_analyzer(self) -> JobAnalyzerModule:
+        if self.analyzer is None:
+            try:
+                configure_dspy()
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI analysis is not configured.",
+                ) from exc
+            self.analyzer = JobAnalyzerModule()
+        return self.analyzer
 
     def analyze(
         self,
@@ -111,14 +122,17 @@ class JobAnalyzerService:
             )
 
         try:
+            analyzer = self._get_analyzer()
             future = self._executor.submit(
-                self.analyzer,
+                analyzer,
                 title=payload.title,
                 company=payload.company,
                 description=cleaned_description,
                 response_language=language_instruction(selected_language),
             )
             result = future.result(timeout=self.timeout_seconds)
+        except HTTPException:
+            raise
         except FuturesTimeoutError as exc:
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,

@@ -31,11 +31,17 @@ def register(
             detail="A user with that email already exists.",
         )
 
-    user = create_user(
-        session,
-        email=payload.email,
-        hashed_password=hash_password(payload.password),
-    )
+    try:
+        user = create_user(
+            session,
+            email=payload.email,
+            hashed_password=hash_password(payload.password),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
     return UserRead.model_validate(user)
 
 

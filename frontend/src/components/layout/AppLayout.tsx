@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Briefcase,
   FileText,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -52,6 +53,7 @@ export function AppLayout() {
     { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
     { to: '/jobs', icon: Briefcase, label: t('nav.jobAnalysis') },
     { to: '/library', icon: FileText, label: t('nav.cvLibrary') },
+    { to: '/tracker', icon: ClipboardList, label: t('nav.tracker') },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
@@ -155,8 +157,8 @@ export function AppLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-6xl mx-auto h-full animate-in fade-in duration-300">
+        <div className="flex-1 overflow-y-auto p-3 lg:p-5">
+          <div className="w-full h-full animate-in fade-in duration-300">
             <Outlet />
           </div>
         </div>

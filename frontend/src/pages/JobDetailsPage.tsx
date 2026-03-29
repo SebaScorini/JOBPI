@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse, StoredCV, CVJobMatch, CVComparisonResult, JobApplicationStatus } from '../types';
 import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+
+type DetailsTab = 'overview' | 'match' | 'improvements' | 'cover' | 'tracker';
 
 const statusBadgeMap: Record<JobApplicationStatus, string> = {
   saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -34,14 +36,18 @@ export function JobDetailsPage() {
   const [coverLetter, setCoverLetter] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<DetailsTab>('overview');
+
   const matchLevelTextClasses = {
     strong: 'text-brand-cta',
     medium: 'text-amber-500',
     weak: 'text-rose-500',
   } as const;
+
   const matchSuggestions = matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? [];
   const matchMissingKeywords = matchResult?.missing_keywords ?? [];
   const matchReorderSuggestions = matchResult?.reorder_suggestions ?? [];
+
   const statusOptions: Array<{ value: JobApplicationStatus; label: string }> = [
     { value: 'saved', label: t('statuses.saved') },
     { value: 'applied', label: t('statuses.applied') },
@@ -51,37 +57,75 @@ export function JobDetailsPage() {
   ];
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadData() {
       if (!jobId) return;
+
+      setIsJobLoading(true);
+      setError(null);
+
       try {
         const [jobData, cvsData] = await Promise.all([
           apiService.getJob(parseInt(jobId)),
           apiService.listCVs(),
         ]);
+
+        if (cancelled) {
+          return;
+        }
+
         setJob(jobData);
         setNotesDraft(jobData.notes ?? '');
         setCvs(cvsData);
-        if (cvsData.length > 0) {
-          setSelectedCvId(cvsData[0].id);
-          setCompareCvIdA(cvsData[0].id);
-        }
-        if (cvsData.length > 1) {
-          setCompareCvIdB(cvsData[1].id);
-        }
+        setSelectedCvId((current) =>
+          current && cvsData.some((cv) => cv.id === current) ? current : (cvsData[0]?.id ?? ''),
+        );
+        setCompareCvIdA((current) =>
+          current && cvsData.some((cv) => cv.id === current) ? current : (cvsData[0]?.id ?? ''),
+        );
+        setCompareCvIdB((current) => {
+          if (current && cvsData.some((cv) => cv.id === current)) {
+            return current;
+          }
+
+          if (cvsData.length > 1) {
+            return cvsData[1].id;
+          }
+
+          return '';
+        });
       } catch (err) {
+        if (cancelled) {
+          return;
+        }
         console.error('Failed to load data', err);
         setError(t('jobDetails.failedLoad'));
       } finally {
-        setIsJobLoading(false);
+        if (!cancelled) {
+          setIsJobLoading(false);
+        }
       }
     }
+
     loadData();
-  }, [jobId, t]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
 
   useEffect(() => {
     setCoverLetter('');
     setIsCopied(false);
+    setMatchResult(null);
+    setError(null);
   }, [selectedCvId, jobId]);
+
+  useEffect(() => {
+    setComparisonResult(null);
+    setError(null);
+  }, [compareCvIdA, compareCvIdB, jobId]);
 
   const handleMatch = async () => {
     if (!jobId || !selectedCvId) return;
@@ -93,6 +137,7 @@ export function JobDetailsPage() {
     try {
       const result = await apiService.matchCVToJob(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setMatchResult(result);
+      setActiveTab('improvements');
     } catch (err: any) {
       setError(err.message || t('jobDetails.failedMatch'));
     } finally {
@@ -102,6 +147,10 @@ export function JobDetailsPage() {
 
   const handleCompare = async () => {
     if (!jobId || !compareCvIdA || !compareCvIdB) return;
+    if (compareCvIdA === compareCvIdB) {
+      setError(t('jobDetails.compareDifferentCvs'));
+      return;
+    }
 
     setIsCompareLoading(true);
     setComparisonResult(null);
@@ -158,6 +207,7 @@ export function JobDetailsPage() {
     try {
       const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setCoverLetter(result.generated_cover_letter);
+      setActiveTab('cover');
     } catch (err: any) {
       setError(err.message || t('jobDetails.failedCoverLetter'));
     } finally {
@@ -179,6 +229,19 @@ export function JobDetailsPage() {
 
   const cvA = cvs.find((cv) => cv.id === Number(compareCvIdA)) ?? null;
   const cvB = cvs.find((cv) => cv.id === Number(compareCvIdB)) ?? null;
+  const selectedCv = cvs.find((cv) => cv.id === Number(selectedCvId)) ?? null;
+  const bestCvLabel = comparisonResult?.better_cv?.label ?? selectedCv?.name ?? t('jobDetails.noCvSelected');
+
+  const tabs: Array<{ id: DetailsTab; label: string }> = useMemo(
+    () => [
+      { id: 'overview', label: t('jobDetails.executiveSummary') },
+      { id: 'match', label: t('jobDetails.matchTitle') },
+      { id: 'improvements', label: t('jobDetails.improveCv') },
+      { id: 'cover', label: t('jobDetails.coverLetterTitle') },
+      { id: 'tracker', label: t('jobDetails.trackerTitle') },
+    ],
+    [t],
+  );
 
   if (isJobLoading) {
     return (
@@ -198,26 +261,29 @@ export function JobDetailsPage() {
   }
 
   return (
-    <div className="animate-in fade-in duration-300 pb-20">
-      <Link to="/jobs" className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-brand-primary mb-6 transition-colors">
+    <div className="animate-in fade-in duration-300 space-y-4 pb-8">
+      <Link to="/jobs" className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-brand-primary transition-colors">
         <ArrowLeft size={16} className="mr-2" /> {t('jobDetails.backToAnalysis')}
       </Link>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        <div className="flex-1 space-y-8">
-          <div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-14 h-14 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                <Briefcase size={28} />
-              </div>
-              <div>
-                <h1 className="text-3xl font-heading font-extrabold text-brand-text dark:text-white leading-tight">
-                  {job.title || job.role_type || t('common.untitledRole')}
-                </h1>
-                <p className="text-lg text-slate-500 font-medium">
-                  {job.company || job.seniority || t('common.unknownCompany')}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
+        <section className="min-w-0 space-y-4">
+          <div className="glass-card p-4 lg:p-5 rounded-3xl">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary shrink-0">
+                    <Briefcase size={22} />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-2xl lg:text-3xl font-heading font-extrabold text-brand-text dark:text-white break-words">
+                      {job.title || job.role_type || t('common.untitledRole')}
+                    </h1>
+                    <p className="text-slate-500 font-medium break-words">{job.company || job.seniority || t('common.unknownCompany')}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status]}`}>
                     {t(`statuses.${job.status}`)}
                   </span>
@@ -228,383 +294,297 @@ export function JobDetailsPage() {
                   )}
                 </div>
               </div>
-            </div>
 
-            <div className="glass-card-solid p-6 rounded-2xl">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.executiveSummary')}</h2>
-              <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-[15px]">{job.summary}</p>
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div className="glass-card-solid p-6 rounded-2xl border-l-[4px] border-l-brand-primary">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">{t('jobDetails.requiredSkills')}</h3>
-              <ul className="space-y-3">
-                {job.required_skills?.map((skill: string, i: number) => (
-                  <li key={i} className="flex items-start text-[15px] text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                    <CheckCircle2 size={18} className="text-brand-primary mr-3 flex-shrink-0 mt-0.5" />
-                    <span>{skill}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="glass-card-solid p-6 rounded-2xl border-l-[4px] border-l-brand-secondary/50">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                 {t('jobDetails.niceToHave')}
-              </h3>
-              <ul className="space-y-3">
-                {job.nice_to_have_skills?.map((skill: string, i: number) => (
-                  <li key={i} className="flex items-start text-[15px] text-slate-600 dark:text-slate-400 font-medium leading-tight">
-                    <ChevronRight size={18} className="text-slate-400 mr-2 flex-shrink-0" />
-                    <span>{skill}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <div className="glass-card-solid p-6 rounded-2xl">
-            <h3 className="font-bold text-lg mb-4">{t('jobDetails.responsibilities')}</h3>
-            <ul className="space-y-3 list-disc pl-5">
-              {job.responsibilities?.map((res: string, i: number) => (
-                <li key={i} className="text-slate-700 dark:text-slate-300 leading-relaxed">{res}</li>
+          <div className="glass-card p-3 rounded-2xl">
+            <div className="flex gap-2 overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-xl px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-brand-primary text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
               ))}
-            </ul>
-          </div>
-        </div>
-
-        <div className="w-full lg:w-[400px] shrink-0 space-y-6 lg:sticky lg:top-[100px] lg:self-start">
-          <div className="glass-card p-6 rounded-[2rem]">
-            <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-4">
-              {t('jobDetails.trackerTitle')}
-            </h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.status')}</label>
-                <select
-                  value={job.status}
-                  onChange={(e) => handleStatusChange(e.target.value as JobApplicationStatus)}
-                  disabled={isUpdatingStatus}
-                  className="input-field"
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.notes')}</label>
-                <textarea
-                  value={notesDraft}
-                  onChange={(e) => setNotesDraft(e.target.value)}
-                  rows={4}
-                  placeholder={t('jobDetails.notesPlaceholder')}
-                  className="input-field resize-y"
-                />
-              </div>
-
-              <button
-                onClick={handleSaveNotes}
-                disabled={isSavingNotes}
-                className="btn-secondary w-full flex items-center justify-center gap-2"
-              >
-                {isSavingNotes ? (
-                  <><Loader2 size={16} className="animate-spin" /> {t('jobDetails.savingNotes')}</>
-                ) : (
-                  t('jobDetails.saveNotes')
-                )}
-              </button>
             </div>
           </div>
 
-          <div className="glass-card p-6 rounded-[2rem]">
-            <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
-              {t('jobDetails.matchTitle')}
-            </h2>
-            <p className="text-sm text-slate-500 mb-6">{t('jobDetails.matchSubtitle')}</p>
+          {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">{error}</div>}
 
-            {cvs.length === 0 ? (
-              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
-                {t('jobDetails.uploadCvFirst')}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.targetCv')}</label>
-                  <select
-                    value={selectedCvId}
-                    onChange={e => setSelectedCvId(Number(e.target.value))}
-                    className="input-field"
-                  >
-                    <option value="" disabled>{t('common.selectCv')}</option>
-                    {cvs.map(cv => (
-                      <option key={cv.id} value={cv.id}>{cv.name}</option>
-                    ))}
-                  </select>
+          <div className="glass-card p-4 lg:p-5 rounded-3xl min-h-[460px]">
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.executiveSummary')}</h2>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{job.summary}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">
+                    <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.requiredSkills')}</h3>
+                    <ul className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {job.required_skills?.map((skill, i) => (
+                        <li key={i} className="flex items-start text-sm text-slate-700 dark:text-slate-300">
+                          <CheckCircle2 size={15} className="text-brand-primary mr-2 mt-0.5 shrink-0" />
+                          <span>{skill}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                <button
-                  onClick={handleMatch}
-                  disabled={isMatchLoading || !selectedCvId}
-                  className="btn-primary flex items-center justify-center gap-2 text-[15px]"
-                >
-                  {isMatchLoading ? (
-                    <><Loader2 size={18} className="animate-spin" /> {t('jobDetails.evaluating')}</>
-                  ) : (
-                    <><Zap size={18} /> {t('jobDetails.runAlgorithm')}</>
-                  )}
-                </button>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">
+                    <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.niceToHave')}</h3>
+                    <ul className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {job.nice_to_have_skills?.map((skill, i) => (
+                        <li key={i} className="flex items-start text-sm text-slate-600 dark:text-slate-400">
+                          <ChevronRight size={15} className="text-slate-400 mr-2 mt-0.5 shrink-0" />
+                          <span>{skill}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">
+                    <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.responsibilities')}</h3>
+                    <ul className="space-y-2 max-h-52 overflow-y-auto pl-4 pr-1 list-disc">
+                      {job.responsibilities?.map((res, i) => (
+                        <li key={i} className="text-sm text-slate-700 dark:text-slate-300">{res}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
 
-            {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
-          </div>
+            {activeTab === 'match' && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.matchTitle')}</h3>
+                    {cvs.length === 0 ? (
+                      <p className="text-sm text-slate-500">{t('jobDetails.uploadCvFirst')}</p>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedCvId}
+                          onChange={(e) => setSelectedCvId(Number(e.target.value))}
+                          className="input-field !py-2.5 text-sm"
+                        >
+                          <option value="" disabled>{t('common.selectCv')}</option>
+                          {cvs.map((cv) => (
+                            <option key={cv.id} value={cv.id}>{cv.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleMatch}
+                          disabled={isMatchLoading || !selectedCvId}
+                          className="btn-primary mt-3 !py-2.5 text-sm flex items-center justify-center gap-2"
+                        >
+                          {isMatchLoading ? <><Loader2 size={16} className="animate-spin" /> {t('jobDetails.evaluating')}</> : <><Zap size={16} /> {t('jobDetails.runAlgorithm')}</>}
+                        </button>
+                      </>
+                    )}
+                  </div>
 
-          <div className="glass-card p-6 rounded-[2rem]">
-            <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
-              {t('jobDetails.compareTitle')}
-            </h2>
-            <p className="text-sm text-slate-500 mb-6">{t('jobDetails.compareSubtitle')}</p>
-
-            {cvs.length < 2 ? (
-              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
-                {t('jobDetails.uploadTwoCvs')}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.cvA')}</label>
-                  <select
-                    value={compareCvIdA}
-                    onChange={e => setCompareCvIdA(Number(e.target.value))}
-                    className="input-field"
-                  >
-                    <option value="" disabled>{t('common.selectCv')}</option>
-                    {cvs.map(cv => (
-                      <option key={`compare-a-${cv.id}`} value={cv.id}>{cv.name}</option>
-                    ))}
-                  </select>
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.compareTitle')}</h3>
+                    {cvs.length < 2 ? (
+                      <p className="text-sm text-slate-500">{t('jobDetails.uploadTwoCvs')}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <select value={compareCvIdA} onChange={(e) => setCompareCvIdA(Number(e.target.value))} className="input-field !py-2.5 text-sm">
+                          <option value="" disabled>{t('common.selectCv')}</option>
+                          {cvs.map((cv) => <option key={`a-${cv.id}`} value={cv.id}>{cv.name}</option>)}
+                        </select>
+                        <select value={compareCvIdB} onChange={(e) => setCompareCvIdB(Number(e.target.value))} className="input-field !py-2.5 text-sm">
+                          <option value="" disabled>{t('common.selectCv')}</option>
+                          {cvs.map((cv) => (
+                            <option key={`b-${cv.id}`} value={cv.id} disabled={cv.id === Number(compareCvIdA)}>
+                              {cv.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleCompare}
+                          disabled={isCompareLoading || !compareCvIdA || !compareCvIdB || compareCvIdA === compareCvIdB}
+                          className="btn-secondary !py-2.5 text-sm"
+                        >
+                          {isCompareLoading ? t('jobDetails.comparing') : t('jobDetails.compareCvs')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.cvB')}</label>
-                  <select
-                    value={compareCvIdB}
-                    onChange={e => setCompareCvIdB(Number(e.target.value))}
-                    className="input-field"
-                  >
-                    <option value="" disabled>{t('common.selectCv')}</option>
-                    {cvs.map(cv => (
-                      <option key={`compare-b-${cv.id}`} value={cv.id}>{cv.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  onClick={handleCompare}
-                  disabled={isCompareLoading || !compareCvIdA || !compareCvIdB}
-                  className="btn-secondary w-full flex items-center justify-center gap-2 text-[15px]"
-                >
-                  {isCompareLoading ? (
-                    <><Loader2 size={18} className="animate-spin" /> {t('jobDetails.comparing')}</>
-                  ) : (
-                    t('jobDetails.compareCvs')
+                <div className="space-y-4">
+                  {comparisonResult && cvA && cvB && (
+                    <div className="rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 p-4 bg-emerald-50/70 dark:bg-emerald-950/20">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.recommendedCv')}</p>
+                      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{comparisonResult.better_cv.label}</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">{comparisonResult.explanation}</p>
+                    </div>
                   )}
-                </button>
+
+                  {matchResult && (
+                    <div className="rounded-2xl border border-brand-primary/20 p-4 bg-brand-primary/5">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.matchResults')}</h3>
+                        <span className={`text-sm font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>{matchResult.match_level}</span>
+                      </div>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{matchResult.why_this_cv}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
 
-          <div className="glass-card p-6 rounded-[2rem]">
-            <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white mb-2">
-              {t('jobDetails.coverLetterTitle')}
-            </h2>
-            <p className="text-sm text-slate-500 mb-6">{t('jobDetails.coverLetterSubtitle')}</p>
-
-            {cvs.length === 0 ? (
-              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl text-center text-sm text-slate-500">
-                {t('jobDetails.uploadCvFirst')}
-              </div>
-            ) : (
+            {activeTab === 'improvements' && (
               <div className="space-y-4">
-                <button
-                  onClick={handleGenerateCoverLetter}
-                  disabled={isCoverLetterLoading || !selectedCvId}
-                  className="btn-primary w-full flex items-center justify-center gap-2 text-[15px]"
-                >
-                  {isCoverLetterLoading ? (
-                    <><Loader2 size={18} className="animate-spin" /> {t('jobDetails.generating')}</>
-                  ) : (
-                    t('jobDetails.generateCoverLetter')
-                  )}
-                </button>
-
-                {coverLetter && (
+                {!matchResult ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center">
+                    <p className="text-sm text-slate-500 mb-3">{t('jobDetails.noCvSelected')}</p>
+                    <button onClick={() => setActiveTab('match')} className="btn-secondary w-auto px-5 !py-2">{t('jobDetails.matchTitle')}</button>
+                  </div>
+                ) : (
                   <>
-                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-4">
-                      <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300 font-sans">
-                        {coverLetter}
-                      </pre>
+                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.strengths')}</h3>
+                      <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        {matchResult.strengths?.map((item, i) => <li key={i}>&bull; {item}</li>)}
+                      </ul>
                     </div>
 
-                    <button
-                      onClick={handleCopyCoverLetter}
-                      className="btn-secondary w-full flex items-center justify-center gap-2"
-                    >
-                      {isCopied ? (
-                        <><Check size={16} /> {t('common.copied')}</>
-                      ) : (
-                        <><Copy size={16} /> {t('common.copyToClipboard')}</>
+                    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.improveCv')}</h3>
+                      {matchSuggestions.length > 0 && (
+                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300 mb-3">
+                          {matchSuggestions.map((item, i) => <li key={i}>&bull; {item}</li>)}
+                        </ul>
                       )}
-                    </button>
+
+                      {matchMissingKeywords.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {matchMissingKeywords.map((keyword) => (
+                            <span key={keyword} className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200">
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {matchReorderSuggestions.length > 0 && (
+                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                          {matchReorderSuggestions.map((item, i) => <li key={i}>&bull; {item}</li>)}
+                        </ul>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
             )}
-          </div>
 
-          {comparisonResult && cvA && cvB && (
-            <div className="glass-card border-sky-200/60 bg-sky-50/60 dark:border-sky-900/40 dark:bg-sky-950/20 p-6 rounded-[2rem] animate-in slide-in-from-bottom-4 duration-500">
-              <h3 className="font-heading font-bold text-xl mb-4 text-brand-text dark:text-white">
-                {t('jobDetails.comparisonResult')}
-              </h3>
-
-              <div className="rounded-2xl border border-emerald-200/70 bg-white/80 dark:border-emerald-900/60 dark:bg-slate-950/30 p-4 mb-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.recommendedCv')}</div>
-                <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{comparisonResult.better_cv.label}</div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">{comparisonResult.explanation}</p>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  { cv: cvA, strengths: comparisonResult.strengths_a },
-                  { cv: cvB, strengths: comparisonResult.strengths_b },
-                ].map(({ cv, strengths }) => {
-                  const isRecommended = comparisonResult.better_cv.cv_id === cv.id;
-                  return (
-                    <div
-                      key={cv.id}
-                      className={`rounded-2xl border p-4 ${
-                        isRecommended
-                          ? 'border-emerald-300 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/20'
-                          : 'border-slate-200/70 bg-white/70 dark:border-slate-800 dark:bg-slate-950/20'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="font-semibold text-slate-900 dark:text-white">{cv.name}</div>
-                        {isRecommended && (
-                          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            {t('common.recommended')}
-                          </span>
-                        )}
-                      </div>
-
-                      {strengths.length > 0 ? (
-                        <ul className="text-sm space-y-1.5">
-                          {strengths.map((strength) => (
-                            <li key={`${cv.id}-${strength}`} className="text-slate-600 dark:text-slate-400">
-                              &bull; {strength}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-slate-500">{t('jobDetails.noStrengthsForCv')}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {matchResult && matchResult.result && (
-            <div className="glass-card border-brand-primary/20 bg-brand-primary/5 p-6 rounded-[2rem] animate-in slide-in-from-bottom-4 duration-500">
-              <h3 className="font-heading font-bold text-xl mb-4 text-brand-text dark:text-white">
-                {t('jobDetails.matchResults')}
-              </h3>
-              <div className="mb-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.matchLevel')}</span>
-                <div className={`mt-1 text-lg font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>
-                  {matchResult.match_level}
-                </div>
-              </div>
-
+            {activeTab === 'cover' && (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/30 p-4">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{t('jobDetails.whyThisCv')}</h4>
-                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    {matchResult.why_this_cv}
-                  </p>
+                <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 p-4 bg-white/70 dark:bg-slate-950/20 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.targetCv')}</label>
+                    <select
+                      value={selectedCvId}
+                      onChange={(e) => setSelectedCvId(Number(e.target.value))}
+                      className="input-field !py-2.5 text-sm"
+                      disabled={cvs.length === 0}
+                    >
+                      <option value="" disabled>{t('common.selectCv')}</option>
+                      {cvs.map((cv) => (
+                        <option key={cv.id} value={cv.id}>{cv.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleGenerateCoverLetter}
+                    disabled={isCoverLetterLoading || !selectedCvId}
+                    className="btn-primary w-full sm:w-auto px-6 !py-2.5 text-sm"
+                  >
+                    {isCoverLetterLoading ? t('jobDetails.generating') : t('jobDetails.generateCoverLetter')}
+                  </button>
+                </div>
+
+                {coverLetter && (
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-950/40 p-4">
+                    <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300 font-sans max-h-[min(65vh,48rem)] overflow-y-auto pr-1">
+                      {coverLetter}
+                    </pre>
+                    <button onClick={handleCopyCoverLetter} className="btn-secondary mt-3 w-full sm:w-auto px-6 !py-2.5 text-sm flex items-center justify-center gap-2">
+                      {isCopied ? <><Check size={14} /> {t('common.copied')}</> : <><Copy size={14} /> {t('common.copyToClipboard')}</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'tracker' && (
+              <div className="space-y-4 max-w-2xl">
+                <div>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.status')}</label>
+                  <select
+                    value={job.status}
+                    onChange={(e) => handleStatusChange(e.target.value as JobApplicationStatus)}
+                    disabled={isUpdatingStatus}
+                    className="input-field"
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-cta"></span> {t('jobDetails.strengths')}
-                  </h4>
-                  <ul className="text-sm space-y-1.5">
-                    {matchResult.strengths?.map((s: string, i: number) => (
-                      <li key={i} className="text-slate-600 dark:text-slate-400" title={s}>&bull; {s}</li>
-                    ))}
-                  </ul>
+                  <label className="block text-xs font-semibold mb-2 text-slate-500 uppercase">{t('jobDetails.notes')}</label>
+                  <textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    rows={7}
+                    placeholder={t('jobDetails.notesPlaceholder')}
+                    className="input-field resize-y"
+                  />
                 </div>
 
-                {matchResult.missing_skills?.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> {t('jobDetails.missingSkills')}
-                    </h4>
-                    <ul className="text-sm space-y-1.5 items-start">
-                      {matchResult.missing_skills?.map((s: string, i: number) => (
-                        <li key={i} className="text-slate-600 dark:text-slate-400 text-left" title={s}>&bull; {s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <button onClick={handleSaveNotes} disabled={isSavingNotes} className="btn-secondary w-full sm:w-auto px-6">
+                  {isSavingNotes ? t('jobDetails.savingNotes') : t('jobDetails.saveNotes')}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
 
-                {(matchSuggestions.length > 0 || matchMissingKeywords.length > 0 || matchReorderSuggestions.length > 0) && (
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> {t('jobDetails.improveCv')}
-                    </h4>
-
-                    {matchSuggestions.length > 0 && (
-                      <ul className="text-sm space-y-1.5 items-start mb-3">
-                        {matchSuggestions.map((s: string, i: number) => (
-                          <li key={i} className="text-slate-600 dark:text-slate-400 text-left" title={s}>&bull; {s}</li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {matchMissingKeywords.length > 0 && (
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {matchMissingKeywords.map((keyword) => (
-                          <span
-                            key={keyword}
-                            className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200"
-                          >
-                            {keyword}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {matchReorderSuggestions.length > 0 && (
-                      <ul className="text-sm space-y-1.5 items-start">
-                        {matchReorderSuggestions.map((s: string, i: number) => (
-                          <li key={i} className="text-slate-600 dark:text-slate-400 text-left" title={s}>&bull; {s}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+        <aside className="hidden xl:flex xl:flex-col gap-4 sticky top-[84px] h-fit">
+          <div className="glass-card p-4 rounded-2xl">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Insights</h3>
+            <div className="space-y-3 text-sm">
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2">
+                <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.recommendedCv')}</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-200">{bestCvLabel}</p>
+              </div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2">
+                <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.matchLevel')}</p>
+                <p className={`font-semibold ${matchResult ? matchLevelTextClasses[matchResult.match_level] : 'text-slate-500'}`}>
+                  {matchResult ? matchResult.match_level : '--'}
+                </p>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+
+        </aside>
       </div>
     </div>
   );

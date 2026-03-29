@@ -62,6 +62,7 @@ export interface StoredCV {
   id: number;
   name: string;
   summary: string;
+  library_summary: string;
   tags: string[];
   created_at: string;
 }

@@ -63,10 +63,10 @@ export function MatchesPage() {
                   {t('matches.matchBadge', { level: match.match_level })}
                 </div>
               </div>
-              <h3 className="text-lg font-heading font-bold text-brand-text dark:text-white mb-2 line-clamp-2">
+              <h3 className="text-lg font-heading font-bold text-brand-text dark:text-white mb-2 break-words">
                 {t('matches.jobAndCv', { jobId: match.job_id, cvId: match.cv_id })}
               </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-1">
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 leading-relaxed flex-1 max-h-32 overflow-y-auto pr-1">
                  {match.why_this_cv || match.result?.fit_summary || t('jobDetails.noSummary')}
               </p>
               {match.strengths?.length > 0 && (

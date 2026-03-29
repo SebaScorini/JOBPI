@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CvAnalysisResponse(BaseModel):
@@ -20,6 +20,7 @@ class CVRead(BaseModel):
     filename: str
     display_name: str
     summary: str
+    library_summary: str
     tags: list[str]
     created_at: datetime
 
@@ -40,7 +41,7 @@ class CVUploadResult(BaseModel):
 class CVBatchUploadResponse(BaseModel):
     """Response for batch CV upload."""
     results: list[CVUploadResult]
-    summary: dict[str, int] = {}  # {"succeeded": 2, "failed": 1}
+    summary: dict[str, int] = Field(default_factory=dict)
 
 
 class CVTagsUpdate(BaseModel):

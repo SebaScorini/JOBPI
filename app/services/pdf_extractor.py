@@ -20,6 +20,7 @@ _CONTACT_RE = re.compile(
     re.IGNORECASE,
 )
 _SHORT_LINE_RE = re.compile(r"^\s*(\S+\s*){1,2}\s*$")
+_TEXT_SIGNAL_RE = re.compile(r"[A-Za-z]")
 _CV_SECTION_PATTERNS = {
     "skills": re.compile(r"\b(skills?|tech stack|technologies|tools)\b", re.IGNORECASE),
     "experience": re.compile(r"\b(experience|employment|work history|professional experience)\b", re.IGNORECASE),
@@ -39,9 +40,9 @@ def extract_raw_pdf_text(file_bytes: bytes) -> str:
 
     extraction_start = time.perf_counter()
     try:
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        pages = [page.get_text() for page in doc]
-        raw = "\n".join(pages)
+        with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+            pages = [page.get_text() for page in doc]
+            raw = "\n".join(pages)
     except Exception as exc:
         raise ValueError("Failed to read PDF content.") from exc
     finally:
@@ -50,7 +51,8 @@ def extract_raw_pdf_text(file_bytes: bytes) -> str:
             (time.perf_counter() - extraction_start) * 1000,
         )
 
-    if len(raw.strip()) < 100:
+    stripped = raw.strip()
+    if len(stripped) < 30 or not _TEXT_SIGNAL_RE.search(stripped):
         raise ValueError(
             "Could not extract text from PDF. "
             "Please ensure the file is a text-based PDF, not a scanned image."
