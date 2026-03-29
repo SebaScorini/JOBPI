@@ -1,90 +1,125 @@
-# JOBPI
+# JOBPI - AI Job Application Assistant
 
-## Description
-JOBPI is an AI-powered job analysis and resume matching platform. It evaluates job descriptions against a user's CV library to identify the best match, providing structured explanations and career insights using DSPy-optimized evaluation pipelines.
+JOBPI is a full-stack application that helps job seekers evaluate opportunities, choose the right CV, and manage applications with AI-assisted insights.
+
+## Overview
+
+JOBPI was built to make job applications more strategic and less manual. It analyzes job descriptions, compares them against a user's CV library, recommends the best CV for each role, suggests concrete improvements, generates tailored cover letters, and tracks application progress in one workflow.
 
 ## Features
-- Authentication (JWT)
+
+- Authentication with JWT
 - Multi CV upload
-- CV library per user
+- CV Library per user
 - Job analysis
 - Best CV recommendation
 - Match explanation
+- CV improvement suggestions
+- Cover letter generator
+- CV comparison
+- Job application tracker
+- CV tags
 - Saved jobs history
 - Dashboard
 - Dark mode UI
 
 ## Tech Stack
+
+### Backend
+
 - FastAPI
 - SQLModel
 - SQLite
 - DSPy
+
+### Frontend
+
 - React
 - TypeScript
-- Tailwind
-- JWT Auth
+- Tailwind CSS
+- Vite
 
-## Architecture Overview
-The application follows a decoupled client-server architecture:
-- Backend: FastAPI service handling authentication, database operations with SQLModel, and AI-driven analysis using DSPy.
-- Frontend: React-based single-page application built with Vite, styled with Tailwind CSS, and using JWT for session management.
-- Database: SQLite for persistence of users, CVs, and analysis history.
+## Architecture
 
-## Setup Instructions
+The system follows a client-server architecture with a React frontend communicating with a FastAPI backend through a REST API. Business logic and AI-driven analysis run in the backend, while SQLite stores users, CVs, jobs, and match results. DSPy powers the analysis and content generation layer for recommendations and cover letters.
 
-### Backend Setup
-1. Create a Python virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/Scripts/activate  # On Windows: venv\Scripts\activate
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Configure environment variables in a `.env` file in the root directory:
-   ```env
-   OPENROUTER_API_KEY=your_api_key
-   JWT_SECRET_KEY=your_secret_key
-   ALGORITHM=HS256
-   ACCESS_TOKEN_EXPIRE_MINUTES=30
-   ```
+## Installation
 
-### Frontend Setup
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Create a `.env` file in the `frontend` directory:
-   ```env
-   VITE_API_URL=http://localhost:8000
-   ```
+### Backend
 
-## How to Run Locally
-
-### Automated (Windows)
-Run the provided batch file to start both services:
-```cmd
-iniciar.bat
+```bash
+python -m venv .venv
 ```
 
-### Manual
-1. Start the backend:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-2. Start the frontend:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the FastAPI server:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## Environment Variables
-The following variables are required:
-- `OPENROUTER_API_KEY`: API key for DSPy model inference.
-- `JWT_SECRET_KEY`: Secret key for signing authentication tokens.
-- `VITE_API_URL`: Backend API endpoint for the frontend application.
+
+Create a `.env` file in the project root for backend settings:
+
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key
+JWT_SECRET_KEY=your_jwt_secret
+```
+
+Notes:
+
+- `OPENROUTER_API_KEY` is required for AI-powered analysis and cover letter generation.
+- `VITE_API_URL` configures the frontend API target.
+
+Create a `.env` file in `frontend/`:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+## Running Locally
+
+1. Open terminal 1 at the project root.
+2. Activate the Python virtual environment.
+3. Start backend:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+4. Open terminal 2.
+5. Start frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+6. Open the Vite URL shown in terminal (typically `http://localhost:5173`).
+

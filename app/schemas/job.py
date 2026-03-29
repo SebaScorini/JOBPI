@@ -41,6 +41,14 @@ class JobNotesUpdateRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
 
 
+class CoverLetterGenerateRequest(BaseModel):
+    selected_cv_id: int = Field(..., gt=0)
+
+
+class CoverLetterGenerateResponse(BaseModel):
+    generated_cover_letter: str
+
+
 class JobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

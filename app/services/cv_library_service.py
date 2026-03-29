@@ -6,7 +6,13 @@ from sqlmodel import Session
 from app.db import crud
 from app.models import User
 from app.schemas.cv import CVDetailRead, CVRead, CvAnalysisResponse
-from app.schemas.match import CVJobMatchDetailRead, CVJobMatchRead, MatchLevel
+from app.schemas.match import (
+    CVComparisonBetterCV,
+    CVComparisonResponse,
+    CVJobMatchDetailRead,
+    CVJobMatchRead,
+    MatchLevel,
+)
 from app.services.cv_analyzer import get_cv_analyzer_service
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 
@@ -38,6 +44,7 @@ class CvLibraryService:
             raw_text=raw_text,
             clean_text=cleaned_text,
             summary=summary,
+            tags=[],
         )
         return CVRead.model_validate(created)
 
@@ -56,6 +63,15 @@ class CvLibraryService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
         crud.delete_cv(session, cv)
 
+    def update_cv_tags(self, session: Session, user: User, cv_id: int, tags: list[str]) -> CVRead:
+        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        if cv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
+
+        normalized_tags = self._normalize_tags(tags)
+        updated = crud.update_cv_tags(session, cv, normalized_tags)
+        return CVRead.model_validate(updated)
+
     def match_job_to_cv(
         self,
         session: Session,
@@ -71,31 +87,54 @@ class CvLibraryService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        # Real-time AI analysis of the CV against the specific job context
-        result = self.cv_analyzer.analyze(
-            job_title=job.title,
-            job_description=job.clean_description,
-            cv_text=cv.clean_text,
-        )
-        # Quick Jaccard-like similarity for a baseline technical score
-        heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
+        return self._analyze_job_cv_pair(session, user, job, cv)
 
-        # Check for existing match to avoid duplicate records if user re-triggers analysis
-        existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
-        if existing_match is None:
-            existing_match = crud.create_match(
-                session,
-                user_id=user.id,
-                cv_id=cv.id,
-                job_id=job.id,
-                fit_level=result.likely_fit_level,
-                fit_summary=result.fit_summary,
-                strengths=result.strengths,
-                missing_skills=result.missing_skills,
-                recommended=False,
+    def compare_cvs_for_job(
+        self,
+        session: Session,
+        user: User,
+        job_id: int,
+        cv_id_a: int,
+        cv_id_b: int,
+    ) -> CVComparisonResponse:
+        if cv_id_a == cv_id_b:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select two different CVs to compare.",
             )
 
-        return self._serialize_match_detail(existing_match, result, heuristic_score)
+        job = crud.get_job_for_user(session, user.id, job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
+
+        cv_a = crud.get_cv_for_user(session, user.id, cv_id_a)
+        cv_b = crud.get_cv_for_user(session, user.id, cv_id_b)
+        if cv_a is None or cv_b is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
+
+        match_a = self._analyze_job_cv_pair(session, user, job, cv_a)
+        match_b = self._analyze_job_cv_pair(session, user, job, cv_b)
+
+        winner, loser, winner_label, loser_label = self._select_better_match(
+            cv_a=cv_a,
+            match_a=match_a,
+            cv_b=cv_b,
+            match_b=match_b,
+        )
+
+        explanation = self._build_comparison_explanation(
+            winner_label=winner_label,
+            loser_label=loser_label,
+            winner=winner,
+            loser=loser,
+        )
+
+        return CVComparisonResponse(
+            better_cv=CVComparisonBetterCV(cv_id=winner.cv_id, label=winner_label),
+            explanation=explanation,
+            strengths_a=match_a.strengths,
+            strengths_b=match_b.strengths,
+        )
 
     def match_job_to_all_cvs(self, session: Session, user: User, job_id: int) -> list[CVJobMatchRead]:
         job = crud.get_job_for_user(session, user.id, job_id)
@@ -158,6 +197,74 @@ class CvLibraryService:
         if match is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
         return self._serialize_match(match)
+
+    def _analyze_job_cv_pair(
+        self,
+        session: Session,
+        user: User,
+        job: object,
+        cv: object,
+    ) -> CVJobMatchDetailRead:
+        # Real-time AI analysis of the CV against the specific job context
+        result = self.cv_analyzer.analyze(
+            job_title=job.title,
+            job_description=job.clean_description,
+            cv_text=cv.clean_text,
+        )
+        # Quick Jaccard-like similarity for a baseline technical score
+        heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
+
+        # Check for existing match to avoid duplicate records if user re-triggers analysis
+        existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
+        if existing_match is None:
+            existing_match = crud.create_match(
+                session,
+                user_id=user.id,
+                cv_id=cv.id,
+                job_id=job.id,
+                fit_level=result.likely_fit_level,
+                fit_summary=result.fit_summary,
+                strengths=result.strengths,
+                missing_skills=result.missing_skills,
+                recommended=False,
+            )
+
+        return self._serialize_match_detail(existing_match, result, heuristic_score)
+
+    def _select_better_match(
+        self,
+        cv_a: object,
+        match_a: CVJobMatchDetailRead,
+        cv_b: object,
+        match_b: CVJobMatchDetailRead,
+    ) -> tuple[CVJobMatchDetailRead, CVJobMatchDetailRead, str, str]:
+        score_a = self._comparison_score(match_a)
+        score_b = self._comparison_score(match_b)
+
+        if score_a >= score_b:
+            return match_a, match_b, cv_a.display_name, cv_b.display_name
+        return match_b, match_a, cv_b.display_name, cv_a.display_name
+
+    def _comparison_score(self, match: CVJobMatchDetailRead) -> float:
+        level_weight = {"strong": 3.0, "medium": 2.0, "weak": 1.0}.get(match.match_level, 1.0)
+        strengths_bonus = min(len(match.strengths), 4) * 0.08
+        missing_penalty = min(len(match.missing_skills), 4) * 0.05
+        return round(level_weight + match.heuristic_score + strengths_bonus - missing_penalty, 4)
+
+    def _build_comparison_explanation(
+        self,
+        winner_label: str,
+        loser_label: str,
+        winner: CVJobMatchDetailRead,
+        loser: CVJobMatchDetailRead,
+    ) -> str:
+        winner_strength = winner.strengths[0] if winner.strengths else "better coverage of the role"
+        loser_gap = loser.missing_skills[0] if loser.missing_skills else "fewer role-specific signals"
+        return _normalize_sentence(
+            f"{winner_label} is the stronger fit because it shows {winner_strength.lower()} "
+            f"and scores better against the job requirements than {loser_label}, which shows more gaps around {loser_gap.lower()}.",
+            fallback=f"{winner_label} is the stronger fit for this role.",
+        )
 
     def _serialize_match(self, match: object) -> CVJobMatchRead:
         explanation = _build_match_explanation(
@@ -239,6 +346,18 @@ class CvLibraryService:
         if len(summary) > 220:
             summary = summary[:217].rstrip(" ,;:.") + "..."
         return summary or "CV uploaded and processed."
+
+    def _normalize_tags(self, tags: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for tag in tags:
+            if not isinstance(tag, str):
+                continue
+            clean_tag = " ".join(tag.split()).strip()
+            if not clean_tag:
+                continue
+            if clean_tag not in normalized:
+                normalized.append(clean_tag)
+        return normalized[:20]
 
 
 def compute_heuristic_score(cv_text: str, job_text: str) -> float:

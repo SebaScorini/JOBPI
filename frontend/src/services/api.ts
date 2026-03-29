@@ -1,4 +1,6 @@
 import {
+  CoverLetterResponse,
+  CVComparisonResult,
   CVJobMatch,
   CvAnalysisResponse,
   JobApplicationStatus,
@@ -59,6 +61,7 @@ interface BackendCVRead {
   filename: string;
   display_name: string;
   summary: string;
+  tags: string[];
   created_at: string;
 }
 
@@ -81,6 +84,16 @@ interface BackendMatchRead {
   result?: Partial<CvAnalysisResponse>;
   recommended?: boolean;
   created_at: string;
+}
+
+interface BackendCVComparisonResponse {
+  better_cv: {
+    cv_id: number;
+    label: string;
+  };
+  explanation: string;
+  strengths_a: string[];
+  strengths_b: string[];
 }
 
 class ApiError extends Error {
@@ -186,6 +199,7 @@ function mapCV(cv: BackendCVRead): StoredCV {
     id: cv.id,
     name: cv.display_name,
     summary: cv.summary,
+    tags: cv.tags ?? [],
     created_at: cv.created_at,
   };
 }
@@ -378,6 +392,17 @@ export const apiService = {
     return mapCV(cv);
   },
 
+  async updateCVTags(cvId: number, tags: string[]): Promise<StoredCV> {
+    const cv = await request<BackendCVRead>(`/cvs/${cvId}/tags`, {
+      method: 'PATCH',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    });
+
+    return mapCV(cv);
+  },
+
   async deleteCV(cvId: number): Promise<void> {
     await request<{ ok: boolean }>(`/cvs/${cvId}`, {
       method: 'DELETE',
@@ -394,6 +419,24 @@ export const apiService = {
     });
 
     return mapMatch(match);
+  },
+
+  async compareCVsForJob(jobId: number, cvIdA: number, cvIdB: number): Promise<CVComparisonResult> {
+    return request<BackendCVComparisonResponse>(`/jobs/${jobId}/compare-cvs`, {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cv_id_a: cvIdA, cv_id_b: cvIdB }),
+    });
+  },
+
+  async generateCoverLetter(jobId: number, selectedCvId: number): Promise<CoverLetterResponse> {
+    return request<CoverLetterResponse>(`/jobs/${jobId}/cover-letter`, {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected_cv_id: selectedCvId }),
+    });
   },
 
   async listMatches(): Promise<CVJobMatch[]> {

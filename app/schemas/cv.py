@@ -20,6 +20,7 @@ class CVRead(BaseModel):
     filename: str
     display_name: str
     summary: str
+    tags: list[str]
     created_at: datetime
 
 
@@ -40,3 +41,7 @@ class CVBatchUploadResponse(BaseModel):
     """Response for batch CV upload."""
     results: list[CVUploadResult]
     summary: dict[str, int] = {}  # {"succeeded": 2, "failed": 1}
+
+
+class CVTagsUpdate(BaseModel):
+    tags: list[str]

@@ -4,8 +4,16 @@ from sqlmodel import Session
 from app.db.database import get_session
 from app.dependencies.auth import get_current_user
 from app.models import User
-from app.schemas.job import JobAnalysisRequest, JobNotesUpdateRequest, JobRead, JobStatusUpdateRequest
-from app.schemas.match import CVJobMatchDetailRead, CVMatchRequest
+from app.schemas.job import (
+    CoverLetterGenerateRequest,
+    CoverLetterGenerateResponse,
+    JobAnalysisRequest,
+    JobNotesUpdateRequest,
+    JobRead,
+    JobStatusUpdateRequest,
+)
+from app.schemas.match import CVComparisonResponse, CVCompareRequest, CVJobMatchDetailRead, CVMatchRequest
+from app.services.cover_letter_service import get_cover_letter_service
 from app.services.cv_library_service import get_cv_library_service
 from app.services.job_analyzer import get_job_analyzer_service
 
@@ -73,3 +81,35 @@ def match_job_to_cvs(
     current_user: User = Depends(get_current_user),
 ) -> CVJobMatchDetailRead:
     return get_cv_library_service().match_job_to_cv(session, current_user, job_id, payload.cv_id)
+
+
+@router.post("/{job_id}/compare-cvs", response_model=CVComparisonResponse)
+def compare_cvs_for_job(
+    job_id: int,
+    payload: CVCompareRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CVComparisonResponse:
+    return get_cv_library_service().compare_cvs_for_job(
+        session,
+        current_user,
+        job_id,
+        payload.cv_id_a,
+        payload.cv_id_b,
+    )
+
+
+@router.post("/{job_id}/cover-letter", response_model=CoverLetterGenerateResponse)
+def generate_cover_letter(
+    job_id: int,
+    payload: CoverLetterGenerateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CoverLetterGenerateResponse:
+    generated_cover_letter = get_cover_letter_service().generate_cover_letter(
+        session=session,
+        user=current_user,
+        job_id=job_id,
+        selected_cv_id=payload.selected_cv_id,
+    )
+    return CoverLetterGenerateResponse(generated_cover_letter=generated_cover_letter)
