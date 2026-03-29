@@ -1,15 +1,18 @@
-# JOBPI - AI Job Application Assistant
+# JOBPI
 
-JOBPI is a full-stack application that helps job seekers evaluate opportunities, choose the right CV, and manage applications with AI-assisted insights.
+AI-powered job application assistant for CV optimization, role matching, and application tracking.
 
-## Overview
+## 1. Overview
 
-JOBPI was built to make job applications more strategic and less manual. It analyzes job descriptions, compares them against a user's CV library, recommends the best CV for each role, suggests concrete improvements, generates tailored cover letters, and tracks application progress in one workflow.
+JOBPI helps users run a structured job application workflow in one place. It analyzes job descriptions, compares them with a personal CV library, recommends the best CV for each role, explains the match, suggests CV improvements, generates cover letters, and tracks application progress over time.
 
-## Features
+The goal is to reduce manual effort and make application decisions more consistent and data-driven.
 
-- Authentication with JWT
+## 2. Features
+
+- Authentication (JWT)
 - Multi CV upload
+- AI-generated CV summaries
 - CV Library per user
 - Job analysis
 - Best CV recommendation
@@ -18,12 +21,11 @@ JOBPI was built to make job applications more strategic and less manual. It anal
 - Cover letter generator
 - CV comparison
 - Job application tracker
-- CV tags
-- Saved jobs history
 - Dashboard
+- Language selection (EN/ES)
 - Dark mode UI
 
-## Tech Stack
+## 3. Tech Stack
 
 ### Backend
 
@@ -31,6 +33,7 @@ JOBPI was built to make job applications more strategic and less manual. It anal
 - SQLModel
 - SQLite
 - DSPy
+- OpenRouter (Minimax)
 
 ### Frontend
 
@@ -39,11 +42,11 @@ JOBPI was built to make job applications more strategic and less manual. It anal
 - Tailwind CSS
 - Vite
 
-## Architecture
+## 4. Architecture
 
-The system follows a client-server architecture with a React frontend communicating with a FastAPI backend through a REST API. Business logic and AI-driven analysis run in the backend, while SQLite stores users, CVs, jobs, and match results. DSPy powers the analysis and content generation layer for recommendations and cover letters.
+JOBPI uses a React frontend and a FastAPI backend connected through a REST API. The backend handles business logic, authentication, persistence, and AI-powered analysis. Data is stored in SQLite, and AI tasks (analysis, summaries, suggestions, generation) are routed through DSPy with OpenRouter-backed models.
 
-## Installation
+## 5. Installation
 
 ### Backend
 
@@ -57,19 +60,13 @@ Windows PowerShell:
 .\.venv\Scripts\Activate.ps1
 ```
 
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
 Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run the FastAPI server:
+Run API server:
 
 ```bash
 uvicorn app.main:app --reload
@@ -83,43 +80,42 @@ npm install
 npm run dev
 ```
 
-## Environment Variables
+## 6. Environment Variables
 
-Create a `.env` file in the project root for backend settings:
+### Backend (.env in project root)
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key
-JWT_SECRET_KEY=your_jwt_secret
 ```
 
-Notes:
-
-- `OPENROUTER_API_KEY` is required for AI-powered analysis and cover letter generation.
-- `VITE_API_URL` configures the frontend API target.
-
-Create a `.env` file in `frontend/`:
+### Frontend (.env in frontend/)
 
 ```env
 VITE_API_URL=http://localhost:8000
 ```
 
-## Running Locally
+## 7. Running Locally
 
-1. Open terminal 1 at the project root.
-2. Activate the Python virtual environment.
-3. Start backend:
+1. Open a terminal at the project root.
+2. Create and activate the backend virtual environment.
+3. Install backend dependencies.
+4. Start the backend server.
 
 ```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-4. Open terminal 2.
-5. Start frontend:
+5. Open a second terminal.
+6. Start the frontend dev server.
 
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-6. Open the Vite URL shown in terminal (typically `http://localhost:5173`).
+7. Open the frontend URL shown by Vite (typically http://localhost:5173).
 
