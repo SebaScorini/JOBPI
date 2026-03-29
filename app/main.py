@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="AI Job Analyzer API",
+    title="JOBPI",
     version="0.2.0",
     description="Authenticated AI job analysis backend with user-scoped CVs, jobs, and matches.",
     lifespan=lifespan,

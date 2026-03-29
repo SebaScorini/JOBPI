@@ -73,7 +73,7 @@ export const translations: TranslationDictionary = {
         'Powerful tools designed to simplify your application process and highlight your true potential.',
       howItWorks: 'How it works',
       howItWorksSubtitle: 'Three simple steps to your next interview.',
-      whyTitle: 'Why use AI Job Analyzer?',
+      whyTitle: 'Why use JOBPI?',
       whySubtitle:
         'The modern job market requires tailoring your application to each company. We automate the heavy lifting so you can focus on the interview.',
       readyTitle: 'Ready to find your match?',
@@ -299,7 +299,7 @@ export const translations: TranslationDictionary = {
         'Herramientas potentes para simplificar tu proceso de postulacion y destacar tu verdadero potencial.',
       howItWorks: 'Como funciona',
       howItWorksSubtitle: 'Tres pasos simples hacia tu proxima entrevista.',
-      whyTitle: 'Por que usar AI Job Analyzer?',
+      whyTitle: 'Por que usar JOBPI?',
       whySubtitle:
         'El mercado laboral actual exige adaptar tu postulacion a cada empresa. Nosotros automatizamos el trabajo pesado para que te enfoques en la entrevista.',
       readyTitle: 'Listo para encontrar tu mejor match?',

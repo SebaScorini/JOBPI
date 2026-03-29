@@ -61,7 +61,7 @@ export function LandingPage() {
           <div className="bg-brand-primary p-2 rounded-xl text-white">
             <BrainCircuit size={24} />
           </div>
-          <span className="text-xl font-heading font-bold text-slate-900 dark:text-white">AI Job Analyzer</span>
+          <span className="text-xl font-heading font-bold text-slate-900 dark:text-white">JOBPI</span>
         </div>
         <div className="flex items-center gap-4">
           <LanguageSelector className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-brand-primary focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" />
@@ -202,10 +202,10 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
             <BrainCircuit className="text-brand-primary dark:text-brand-secondary" size={24} />
-            <span className="font-heading font-bold text-slate-900 dark:text-white">AI Job Analyzer</span>
+            <span className="font-heading font-bold text-slate-900 dark:text-white">JOBPI</span>
           </div>
           <p className="text-slate-500 dark:text-slate-500 text-sm">
-            © {new Date().getFullYear()} AI Job Analyzer. {t('landing.footerRights')}
+            © {new Date().getFullYear()} JOBPI. {t('landing.footerRights')}
           </p>
           <div className="flex gap-6">
             <Link to="/login" className="text-sm font-medium text-slate-500 hover:text-brand-primary transition-colors">
