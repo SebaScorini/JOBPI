@@ -11,13 +11,19 @@ env/
 .env.*
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .coverage
+htmlcov/
+.cache/
+*.tmp
+*.temp
 
 # Node / React
 node_modules/
 dist/
 build/
 .vite/
+.npm/
 .eslintcache
 *.log
 
@@ -31,12 +37,15 @@ Thumbs.db
 
 # Database
 *.db
+*.db-*
 *.sqlite
 *.sqlite3
+*.sqlite-*
 
 # Uploads
 uploads/
 temp/
+tmp/
 storage/
 
 # AI Tools / Codex
@@ -44,4 +53,3 @@ storage/
 .agents/
 .codex/
 skills-lock.json
-

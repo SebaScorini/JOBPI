@@ -8,7 +8,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 connect_args = (
-    {"check_same_thread": False, "timeout": 30}
+    {"check_same_thread": False, "timeout": settings.sqlite_timeout_seconds}
     if settings.database_url.startswith("sqlite")
     else {}
 )
