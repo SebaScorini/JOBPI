@@ -115,8 +115,11 @@ class Settings(BaseModel):
         default_factory=lambda: _get_env_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     )
     database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", "sqlite:///./jobpi.db"))
-    jwt_secret_key: str = Field(
-        default_factory=lambda: _get_env_str("JWT_SECRET_KEY", "dev-only-jwt-secret-change-me")
+    secret_key: str = Field(
+        default_factory=lambda: _get_env_str(
+            "SECRET_KEY",
+            _get_env_str("JWT_SECRET_KEY", "dev-only-secret-key-change-me"),
+        )
     )
     access_token_expire_minutes: int = Field(
         default_factory=lambda: _get_env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
@@ -200,18 +203,29 @@ class Settings(BaseModel):
             _get_env_int("DSPY_TIMEOUT_SECONDS", int(_env_default("ai_timeout_seconds"))),
         )
     )
+    sqlite_timeout_seconds: int = Field(
+        default_factory=lambda: _get_env_int("SQLITE_TIMEOUT_SECONDS", 30)
+    )
     cors_origins: list[str] = Field(
         default_factory=lambda: _parse_csv_setting(
             _get_env_str(
                 "CORS_ORIGINS",
-                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000",
+                (
+                    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+                    if _get_app_env() == "development"
+                    else ""
+                ),
             )
         )
+    )
+    cors_max_age_seconds: int = Field(
+        default_factory=lambda: _get_env_int("CORS_MAX_AGE_SECONDS", 600)
     )
 
     def model_post_init(self, __context) -> None:
         self.trusted_user_email = self.trusted_user_email.lower()
         self.dspy_temperature = min(max(self.dspy_temperature, 0.2), 0.4)
+        self.sqlite_timeout_seconds = max(1, self.sqlite_timeout_seconds)
         self.auth_window_seconds = max(60, self.auth_window_seconds)
         self.auth_register_limit = max(1, self.auth_register_limit)
         self.auth_login_limit = max(1, self.auth_login_limit)
@@ -229,6 +243,10 @@ class Settings(BaseModel):
         self.max_cv_text_chars = max(500, self.max_cv_text_chars)
         self.max_output_tokens = min(900, max(50, self.max_output_tokens))
         self.ai_timeout_seconds = max(5, self.ai_timeout_seconds)
+        self.cors_max_age_seconds = max(0, self.cors_max_age_seconds)
+
+        if self.app_env == "production" and self.secret_key == "dev-only-secret-key-change-me":
+            raise ValueError("SECRET_KEY must be set in production")
 
     @property
     def max_pdf_size_bytes(self) -> int:

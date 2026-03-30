@@ -39,12 +39,12 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
         "exp": int(expire_at.timestamp()),
         "iat": int(now.timestamp()),
     }
-    return _encode_jwt(payload, settings.jwt_secret_key)
+    return _encode_jwt(payload, settings.secret_key)
 
 
 def decode_access_token(token: str) -> dict:
     settings = get_settings()
-    payload = _decode_jwt(token, settings.jwt_secret_key)
+    payload = _decode_jwt(token, settings.secret_key)
     exp = payload.get("exp")
     if not isinstance(exp, int) or exp < int(datetime.now(timezone.utc).timestamp()):
         raise _credentials_error()

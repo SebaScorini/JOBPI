@@ -32,7 +32,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    max_age=600,
+    max_age=settings.cors_max_age_seconds,
 )
 
 app.include_router(auth_router)

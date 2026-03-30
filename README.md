@@ -86,15 +86,22 @@ npm run dev
 
 ```env
 APP_ENV=development
+DATABASE_URL=sqlite:///./jobpi.db
+SECRET_KEY=replace-with-a-long-random-secret
 OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 RATE_LIMIT_ENABLED=false
 TRUSTED_USER_EMAIL=
 MAX_PDF_SIZE_MB=5
 MAX_CVS_PER_UPLOAD=10
 MAX_JOB_DESCRIPTION_CHARS=12000
 MAX_CV_TEXT_CHARS=8000
-MAX_OUTPUT_TOKENS=800
+MAX_OUTPUT_TOKENS=400
 AI_TIMEOUT_SECONDS=45
+SQLITE_TIMEOUT_SECONDS=30
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
+CORS_MAX_AGE_SECONDS=600
 ```
 
 `APP_ENV` controls the default behavior:
@@ -107,7 +114,7 @@ You can override any individual limit explicitly through environment variables.
 ### Frontend (.env in frontend/)
 
 ```env
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=https://api.example.com
 ```
 
 ## 7. Running Locally

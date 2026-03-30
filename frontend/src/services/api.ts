@@ -13,7 +13,13 @@ import {
   User,
 } from '../types';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+const rawApiBaseUrl = import.meta.env.VITE_API_URL;
+
+if (!rawApiBaseUrl) {
+  throw new Error('VITE_API_URL is not configured.');
+}
+
+const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/, '');
 const TOKEN_STORAGE_KEY = 'jobpi_token';
 
 type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
