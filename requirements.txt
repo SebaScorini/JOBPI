@@ -2,6 +2,7 @@ fastapi
 uvicorn
 pydantic
 sqlmodel
+psycopg[binary]
 dspy
 python-dotenv
 PyMuPDF

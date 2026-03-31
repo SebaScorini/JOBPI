@@ -108,13 +108,17 @@ def _parse_csv_setting(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _default_sqlite_database_url() -> str:
+    return f"sqlite:///{(BASE_DIR / 'jobpi.db').as_posix()}"
+
+
 class Settings(BaseModel):
     app_env: AppEnv = Field(default_factory=_get_app_env)
     openrouter_api_key: str = Field(default_factory=lambda: _get_env_str("OPENROUTER_API_KEY"))
     openrouter_base_url: str = Field(
         default_factory=lambda: _get_env_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     )
-    database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", "sqlite:///./jobpi.db"))
+    database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", _default_sqlite_database_url()))
     secret_key: str = Field(
         default_factory=lambda: _get_env_str(
             "SECRET_KEY",
@@ -223,6 +227,7 @@ class Settings(BaseModel):
     )
 
     def model_post_init(self, __context) -> None:
+        self.database_url = self.database_url.strip() or _default_sqlite_database_url()
         self.trusted_user_email = self.trusted_user_email.lower()
         self.dspy_temperature = min(max(self.dspy_temperature, 0.2), 0.4)
         self.sqlite_timeout_seconds = max(1, self.sqlite_timeout_seconds)
@@ -247,6 +252,8 @@ class Settings(BaseModel):
 
         if self.app_env == "production" and self.secret_key == "dev-only-secret-key-change-me":
             raise ValueError("SECRET_KEY must be set in production")
+        if self.app_env == "production" and self.database_url.startswith("sqlite"):
+            raise ValueError("DATABASE_URL must point to PostgreSQL in production")
 
     @property
     def max_pdf_size_bytes(self) -> int:
@@ -259,6 +266,14 @@ class Settings(BaseModel):
     @property
     def dspy_timeout_seconds(self) -> int:
         return self.ai_timeout_seconds
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+    @property
+    def is_postgres(self) -> bool:
+        return self.database_url.startswith(("postgresql://", "postgresql+"))
 
     def is_trusted_user(self, email: str | None) -> bool:
         if not self.trusted_user_email or not email:

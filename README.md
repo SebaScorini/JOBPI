@@ -31,7 +31,8 @@ The goal is to reduce manual effort and make application decisions more consiste
 
 - FastAPI
 - SQLModel
-- SQLite
+- PostgreSQL (Supabase)
+- SQLite fallback for local development
 - DSPy
 - OpenRouter (Minimax)
 
@@ -44,7 +45,7 @@ The goal is to reduce manual effort and make application decisions more consiste
 
 ## 4. Architecture
 
-JOBPI uses a React frontend and a FastAPI backend connected through a REST API. The backend handles business logic, authentication, persistence, and AI-powered analysis. Data is stored in SQLite, and AI tasks (analysis, summaries, suggestions, generation) are routed through DSPy with OpenRouter-backed models.
+JOBPI uses a React frontend and a FastAPI backend connected through a REST API. The backend handles business logic, authentication, persistence, and AI-powered analysis. Production data is stored in PostgreSQL via Supabase, while local development can still use SQLite. AI tasks (analysis, summaries, suggestions, generation) are routed through DSPy with OpenRouter-backed models.
 
 ## 5. Installation
 
@@ -86,7 +87,10 @@ npm run dev
 
 ```env
 APP_ENV=development
+# Local development fallback
 DATABASE_URL=sqlite:///./jobpi.db
+# Supabase / production example
+# DATABASE_URL=postgresql+psycopg://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres?sslmode=require
 SECRET_KEY=replace-with-a-long-random-secret
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
@@ -107,9 +111,16 @@ CORS_MAX_AGE_SECONDS=600
 `APP_ENV` controls the default behavior:
 
 - `development`: relaxed defaults for local work
-- `production`: conservative defaults for free-tier protection
+- `production`: conservative defaults for free-tier protection and requires a PostgreSQL `DATABASE_URL`
 
 You can override any individual limit explicitly through environment variables.
+
+### Database Notes
+
+- Use `DATABASE_URL` for every environment.
+- SQLite remains the default local fallback if `DATABASE_URL` is omitted in development.
+- Supabase should use a PostgreSQL URL with `sslmode=require`.
+- To initialize tables without starting the API, run `python -m app.db.init_db`.
 
 ### Frontend (.env in frontend/)
 
