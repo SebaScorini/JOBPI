@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -73,6 +75,18 @@ def get_cv_for_user_by_clean_text(session: Session, user_id: int, clean_text: st
 
 
 def delete_cv(session: Session, cv: CV) -> None:
+    cover_letter_jobs = session.exec(
+        select(JobAnalysis).where(
+            JobAnalysis.user_id == cv.user_id,
+            JobAnalysis.cover_letter_cv_id == cv.id,
+        )
+    ).all()
+    for job in cover_letter_jobs:
+        job.cover_letter_cv_id = None
+        job.cover_letter_language = None
+        job.generated_cover_letter = None
+        session.add(job)
+
     statement = select(CVJobMatch).where(CVJobMatch.cv_id == cv.id, CVJobMatch.user_id == cv.user_id)
     matches = session.exec(statement).all()
     for match in matches:
@@ -159,6 +173,10 @@ def update_job_status(
 ) -> JobAnalysis:
     job.status = status
     if applied_date is not None:
+        if applied_date.tzinfo is None:
+            applied_date = applied_date.replace(tzinfo=timezone.utc)
+        else:
+            applied_date = applied_date.astimezone(timezone.utc)
         job.applied_date = applied_date
     session.add(job)
     session.commit()
