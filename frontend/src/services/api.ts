@@ -14,12 +14,15 @@ import {
 } from '../types';
 
 const rawApiBaseUrl = import.meta.env.VITE_API_URL;
+const fallbackApiBaseUrl = import.meta.env.DEV ? 'http://localhost:8000' : '';
 
-if (!rawApiBaseUrl) {
+if (!rawApiBaseUrl && !fallbackApiBaseUrl) {
   throw new Error('VITE_API_URL is not configured.');
 }
 
-const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/, '');
+const resolvedApiBaseUrl = rawApiBaseUrl || fallbackApiBaseUrl;
+
+const API_BASE_URL = resolvedApiBaseUrl.replace(/\/+$/, '');
 const TOKEN_STORAGE_KEY = 'jobpi_token';
 
 type ApiRequestOptions = Omit<RequestInit, 'headers'> & {

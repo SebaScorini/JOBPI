@@ -31,7 +31,10 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cvs_per_upload": 10,
         "max_job_description_chars": 12000,
         "max_cv_text_chars": 8000,
-        "max_output_tokens": 400,
+        "max_output_tokens": 540,
+        "job_analysis_max_tokens": 945,
+        "job_analysis_retry_max_tokens": 608,
+        "job_preprocess_target_chars": 5000,
         "ai_timeout_seconds": 45,
     },
     "production": {
@@ -51,7 +54,10 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cvs_per_upload": 3,
         "max_job_description_chars": 2500,
         "max_cv_text_chars": 4000,
-        "max_output_tokens": 400,
+        "max_output_tokens": 540,
+        "job_analysis_max_tokens": 878,
+        "job_analysis_retry_max_tokens": 540,
+        "job_preprocess_target_chars": 3500,
         "ai_timeout_seconds": 20,
     },
 }
@@ -112,13 +118,20 @@ def _default_sqlite_database_url() -> str:
     return f"sqlite:///{(BASE_DIR / 'jobpi.db').as_posix()}"
 
 
+def _default_database_url() -> str:
+    # Keep a zero-config local path for development only.
+    if _get_app_env() == "development":
+        return _default_sqlite_database_url()
+    return ""
+
+
 class Settings(BaseModel):
     app_env: AppEnv = Field(default_factory=_get_app_env)
     openrouter_api_key: str = Field(default_factory=lambda: _get_env_str("OPENROUTER_API_KEY"))
     openrouter_base_url: str = Field(
         default_factory=lambda: _get_env_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     )
-    database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", _default_sqlite_database_url()))
+    database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", _default_database_url()))
     secret_key: str = Field(
         default_factory=lambda: _get_env_str(
             "SECRET_KEY",
@@ -201,6 +214,24 @@ class Settings(BaseModel):
             _get_env_int("DSPY_MAX_TOKENS", int(_env_default("max_output_tokens"))),
         )
     )
+    job_analysis_max_tokens: int = Field(
+        default_factory=lambda: _get_env_int(
+            "JOB_ANALYSIS_MAX_TOKENS",
+            int(_env_default("job_analysis_max_tokens")),
+        )
+    )
+    job_analysis_retry_max_tokens: int = Field(
+        default_factory=lambda: _get_env_int(
+            "JOB_ANALYSIS_RETRY_MAX_TOKENS",
+            int(_env_default("job_analysis_retry_max_tokens")),
+        )
+    )
+    job_preprocess_target_chars: int = Field(
+        default_factory=lambda: _get_env_int(
+            "JOB_PREPROCESS_TARGET_CHARS",
+            int(_env_default("job_preprocess_target_chars")),
+        )
+    )
     ai_timeout_seconds: int = Field(
         default_factory=lambda: _get_env_int(
             "AI_TIMEOUT_SECONDS",
@@ -227,7 +258,9 @@ class Settings(BaseModel):
     )
 
     def model_post_init(self, __context) -> None:
-        self.database_url = self.database_url.strip() or _default_sqlite_database_url()
+        self.database_url = self.database_url.strip()
+        if not self.database_url and self.app_env == "development":
+            self.database_url = _default_sqlite_database_url()
         self.trusted_user_email = self.trusted_user_email.lower()
         self.dspy_temperature = min(max(self.dspy_temperature, 0.2), 0.4)
         self.sqlite_timeout_seconds = max(1, self.sqlite_timeout_seconds)
@@ -246,12 +279,23 @@ class Settings(BaseModel):
         self.max_cvs_per_upload = max(1, self.max_cvs_per_upload)
         self.max_job_description_chars = max(50, self.max_job_description_chars)
         self.max_cv_text_chars = max(500, self.max_cv_text_chars)
-        self.max_output_tokens = min(900, max(50, self.max_output_tokens))
+        self.max_output_tokens = min(1400, max(50, self.max_output_tokens))
+        self.job_analysis_max_tokens = min(1400, max(100, self.job_analysis_max_tokens))
+        self.job_analysis_retry_max_tokens = min(
+            self.job_analysis_max_tokens,
+            max(100, self.job_analysis_retry_max_tokens),
+        )
+        self.job_preprocess_target_chars = min(
+            self.max_job_description_chars,
+            max(500, self.job_preprocess_target_chars),
+        )
         self.ai_timeout_seconds = max(5, self.ai_timeout_seconds)
         self.cors_max_age_seconds = max(0, self.cors_max_age_seconds)
 
         if self.app_env == "production" and self.secret_key == "dev-only-secret-key-change-me":
             raise ValueError("SECRET_KEY must be set in production")
+        if not self.database_url:
+            raise ValueError("DATABASE_URL must be set")
         if self.app_env == "production" and self.database_url.startswith("sqlite"):
             raise ValueError("DATABASE_URL must point to PostgreSQL in production")
 
@@ -298,7 +342,7 @@ def configure_dspy() -> dspy.LM:
         api_key=settings.openrouter_api_key,
         api_base=settings.openrouter_base_url,
         temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
-        max_tokens=max(50, min(400, settings.max_output_tokens, 900)),
+        max_tokens=max(50, min(settings.max_output_tokens, 1400)),
         extra_body={"reasoning": {"enabled": False}},
     )
     dspy.settings.configure(lm=lm)

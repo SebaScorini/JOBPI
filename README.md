@@ -87,10 +87,10 @@ npm run dev
 
 ```env
 APP_ENV=development
-# Local development fallback
-DATABASE_URL=sqlite:///./jobpi.db
-# Supabase / production example
+# Supabase / production target
 # DATABASE_URL=postgresql+psycopg://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres?sslmode=require
+# Optional local development fallback (only when DATABASE_URL is omitted)
+# DATABASE_URL=sqlite:///./jobpi.db
 SECRET_KEY=replace-with-a-long-random-secret
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
@@ -118,7 +118,7 @@ You can override any individual limit explicitly through environment variables.
 ### Database Notes
 
 - Use `DATABASE_URL` for every environment.
-- SQLite remains the default local fallback if `DATABASE_URL` is omitted in development.
+- SQLite is an optional development fallback if `DATABASE_URL` is omitted and `APP_ENV=development`.
 - Supabase should use a PostgreSQL URL with `sslmode=require`.
 - To initialize tables without starting the API, run `python -m app.db.init_db`.
 

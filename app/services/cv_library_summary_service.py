@@ -12,7 +12,7 @@ from app.services.job_analyzer import _normalize_text
 
 MAX_LIBRARY_SUMMARY_CHARS = 180
 MAX_LIBRARY_CONTEXT_CHARS = 650
-SUMMARY_MAX_TOKENS = 275
+SUMMARY_MAX_TOKENS = 372
 logger = logging.getLogger(__name__)
 ROLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Backend-focused profile", re.compile(r"\b(backend|python|fastapi|django|flask|api|microservices?)\b", re.IGNORECASE)),
@@ -78,17 +78,22 @@ class CvLibrarySummaryModule(dspy.Module):
         self.predict = dspy.Predict(CvLibrarySummarySignature)
 
     def forward(self, cv: str, max_tokens: int | None = None):
+        predict_kwargs = {
+            "cv": cv,
+            # Keep library summaries isolated per CV upload. Reusing cached LM
+            # responses here can surface stale summaries across batch uploads.
+            "config": {"cache": False},
+        }
         if max_tokens is None:
-            return self.predict(cv=cv)
+            return self.predict(**predict_kwargs)
 
         with dspy_lm_override(max_tokens=max_tokens):
-            return self.predict(cv=cv)
+            return self.predict(**predict_kwargs)
 
 
 class CvLibrarySummaryService:
     def __init__(self) -> None:
         settings = get_settings()
-        self.generator: CvLibrarySummaryModule | None = None
         self.timeout_seconds = max(10, min(settings.ai_timeout_seconds, 30))
         self._executor = ThreadPoolExecutor(max_workers=2)
 
@@ -99,7 +104,7 @@ class CvLibrarySummaryService:
             return _heuristic_library_summary(clean_text)
 
         try:
-            generator = self._get_generator()
+            generator = self._create_generator()
             logger.info("ai_call operation=cv_library_summary")
             result = run_ai_call_with_timeout(
                 executor=self._executor,
@@ -123,17 +128,15 @@ class CvLibrarySummaryService:
         logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_fallback")
         return _heuristic_library_summary(clean_text)
 
-    def _get_generator(self) -> CvLibrarySummaryModule:
-        if self.generator is None:
-            try:
-                configure_dspy()
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="AI analysis is not configured.",
-                ) from exc
-            self.generator = CvLibrarySummaryModule()
-        return self.generator
+    def _create_generator(self) -> CvLibrarySummaryModule:
+        try:
+            configure_dspy()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI analysis is not configured.",
+            ) from exc
+        return CvLibrarySummaryModule()
 
 
 def _prepare_cv_context(clean_text: str) -> str:

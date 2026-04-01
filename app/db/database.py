@@ -7,25 +7,31 @@ from app.core.config import get_settings
 
 
 settings = get_settings()
-connect_args = (
-    {"check_same_thread": False, "timeout": settings.sqlite_timeout_seconds}
-    if settings.is_sqlite
-    else {}
-)
+
+
+def _build_connect_args() -> dict:
+    if settings.is_sqlite:
+        return {"check_same_thread": False, "timeout": settings.sqlite_timeout_seconds}
+    return {}
+
+
 engine = create_engine(
     settings.database_url,
-    connect_args=connect_args,
-    pool_pre_ping=not settings.is_sqlite,
+    connect_args=_build_connect_args(),
+    pool_pre_ping=True,
 )
 
 
 def create_db_and_tables() -> None:
     import app.models  # noqa: F401
 
+    # SQLModel metadata remains the source of truth for table definitions.
+    # SQLite-only compatibility helpers are kept for local legacy dev databases.
     if settings.is_sqlite:
         _reset_legacy_dev_tables()
     SQLModel.metadata.create_all(engine)
-    _ensure_schema_compatibility()
+    if settings.is_sqlite:
+        _ensure_schema_compatibility()
 
 
 def get_session() -> Generator[Session, None, None]:

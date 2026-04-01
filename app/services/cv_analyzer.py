@@ -16,7 +16,7 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_LIST_ITEMS = 4
 MAX_ITEM_CHARS = 60
 MAX_SUMMARY_CHARS = 280
-MATCH_EXPLANATION_MAX_TOKENS = 625
+MATCH_EXPLANATION_MAX_TOKENS = 844
 logger = logging.getLogger(__name__)
 
 
