@@ -58,14 +58,28 @@ def clean_description(text: str) -> str:
     lines = [line for line in lines if not _is_noise(line)]
 
     focused = _extract_useful_sections(lines)
-    compact = "\n".join(focused or lines)
+    compact = "\n".join(_dedupe_lines(focused or lines))
     compact = re.sub(r"\n{2,}", "\n", compact).strip()
 
     hard_limit = settings.max_job_description_chars
-    fallback_limit = max(500, min(hard_limit, int(hard_limit * 0.8)))
-    long_desc_threshold = max(hard_limit, 5000)
-    limit = fallback_limit if len(text or "") > long_desc_threshold else hard_limit
+    target_limit = min(hard_limit, settings.job_preprocess_target_chars)
+    long_desc_threshold = max(target_limit, 5000)
+    limit = target_limit if len(text or "") > long_desc_threshold else hard_limit
     return _truncate_text(compact, limit)
+
+
+def _dedupe_lines(lines: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+
+    for line in lines:
+        key = " ".join(line.lower().split())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(line)
+
+    return unique
 
 
 def _is_noise(line: str) -> bool:

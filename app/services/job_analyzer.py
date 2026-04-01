@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -19,7 +20,21 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_LIST_ITEMS = 5
 MAX_ITEM_CHARS = 80
 MAX_SUMMARY_CHARS = 240
-JOB_ANALYSIS_MAX_TOKENS = 750
+JOB_ANALYSIS_RETRY_DESCRIPTION_CHARS = 5000
+SKILL_HINTS = [
+    "python",
+    "fastapi",
+    "sql",
+    "postgresql",
+    "aws",
+    "docker",
+    "kubernetes",
+    "typescript",
+    "react",
+    "node",
+    "api",
+    "backend",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -101,6 +116,9 @@ class JobAnalyzerService:
         settings = get_settings()
         self.analyzer: JobAnalyzerModule | None = None
         self.timeout_seconds = settings.ai_timeout_seconds
+        self.max_tokens = settings.job_analysis_max_tokens
+        self.retry_max_tokens = settings.job_analysis_retry_max_tokens
+        self.retry_description_chars = settings.job_preprocess_target_chars
         self._executor = ThreadPoolExecutor(max_workers=4)
         self._cache: dict[str, JobAnalysisPayload] = {}
 
@@ -165,6 +183,7 @@ class JobAnalyzerService:
                 created_at=None,
             )
 
+        response: JobAnalysisPayload | None = None
         try:
             analyzer = self._get_analyzer()
             logger.info(
@@ -179,37 +198,75 @@ class JobAnalyzerService:
                 operation="job_analysis",
                 logger=logger,
                 callable_=analyzer,
-                lm_max_tokens=JOB_ANALYSIS_MAX_TOKENS,
+                lm_max_tokens=self.max_tokens,
                 title=payload.title,
                 company=payload.company,
                 description=cleaned_description,
                 response_language=language_instruction(selected_language),
-                max_tokens=JOB_ANALYSIS_MAX_TOKENS,
+                max_tokens=self.max_tokens,
             )
-        except HTTPException:
-            raise
+            response = self._build_payload_from_result(result)
+        except HTTPException as exc:
+            if exc.status_code != status.HTTP_504_GATEWAY_TIMEOUT:
+                logger.warning(
+                    "ai_fallback operation=job_analysis reason=http_%s",
+                    exc.status_code,
+                )
+                response = self._build_fallback_analysis_payload(
+                    title=payload.title,
+                    company=payload.company,
+                    cleaned_description=cleaned_description,
+                    language=selected_language,
+                )
+            else:
+                retry_description = cleaned_description[:self.retry_description_chars]
+                logger.warning(
+                    "ai_retry operation=job_analysis reason=timeout retry_max_tokens=%s retry_desc_chars=%s",
+                    self.retry_max_tokens,
+                    len(retry_description),
+                )
+                try:
+                    result = run_ai_call_with_timeout(
+                        executor=self._executor,
+                        timeout_seconds=max(self.timeout_seconds, 30),
+                        operation="job_analysis_retry",
+                        logger=logger,
+                        callable_=analyzer,
+                        lm_max_tokens=self.retry_max_tokens,
+                        title=payload.title,
+                        company=payload.company,
+                        description=retry_description,
+                        response_language=language_instruction(selected_language),
+                        max_tokens=self.retry_max_tokens,
+                    )
+                    response = self._build_payload_from_result(result)
+                except Exception as retry_exc:
+                    logger.warning(
+                        "ai_fallback operation=job_analysis reason=retry_failed error=%s",
+                        type(retry_exc).__name__,
+                    )
+                    response = self._build_fallback_analysis_payload(
+                        title=payload.title,
+                        company=payload.company,
+                        cleaned_description=retry_description,
+                        language=selected_language,
+                    )
         except Exception as exc:
+            logger.warning("ai_fallback operation=job_analysis reason=exception", exc_info=exc)
+            response = self._build_fallback_analysis_payload(
+                title=payload.title,
+                company=payload.company,
+                cleaned_description=cleaned_description,
+                language=selected_language,
+            )
+
+        if response is None:
             raise build_ai_failure_http_exception(
-                exc=exc,
+                exc=RuntimeError("job_analysis_response_not_generated"),
                 logger=logger,
                 operation="job_analysis",
                 default_detail="Failed to analyze job description. Please try again.",
-            ) from exc
-
-        response = JobAnalysisPayload(
-            summary=_normalize_text(result.summary, MAX_SUMMARY_CHARS),
-            seniority=_normalize_text(result.seniority, 40),
-            role_type=_normalize_text(result.role_type, 40),
-            required_skills=_normalize_list(result.req_skills),
-            nice_to_have_skills=_normalize_list(result.nice_skills),
-            responsibilities=_normalize_list(result.responsibilities),
-            how_to_prepare=_normalize_list(result.prep),
-            learning_path=_normalize_list(result.learn),
-            missing_skills=_normalize_list(result.gaps),
-            resume_tips=_normalize_list(result.resume),
-            interview_tips=_normalize_list(result.interview),
-            portfolio_project_ideas=_normalize_list(result.projects),
-        )
+            )
         if session is not None and user is not None:
             if payload.regenerate:
                 stored = crud.get_matching_job_analysis(
@@ -299,6 +356,83 @@ class JobAnalyzerService:
             applied_date=job.applied_date,
             notes=job.notes,
             created_at=job.created_at,
+        )
+
+    def _build_payload_from_result(self, result: object) -> JobAnalysisPayload:
+        return JobAnalysisPayload(
+            summary=_normalize_text(getattr(result, "summary", ""), MAX_SUMMARY_CHARS),
+            seniority=_normalize_text(getattr(result, "seniority", ""), 40),
+            role_type=_normalize_text(getattr(result, "role_type", ""), 40),
+            required_skills=_normalize_list(getattr(result, "req_skills", [])),
+            nice_to_have_skills=_normalize_list(getattr(result, "nice_skills", [])),
+            responsibilities=_normalize_list(getattr(result, "responsibilities", [])),
+            how_to_prepare=_normalize_list(getattr(result, "prep", [])),
+            learning_path=_normalize_list(getattr(result, "learn", [])),
+            missing_skills=_normalize_list(getattr(result, "gaps", [])),
+            resume_tips=_normalize_list(getattr(result, "resume", [])),
+            interview_tips=_normalize_list(getattr(result, "interview", [])),
+            portfolio_project_ideas=_normalize_list(getattr(result, "projects", [])),
+        )
+
+    def _build_fallback_analysis_payload(
+        self,
+        *,
+        title: str,
+        company: str,
+        cleaned_description: str,
+        language: AIResponseLanguage,
+    ) -> JobAnalysisPayload:
+        text = cleaned_description.lower()
+        extracted_skills = [skill for skill in SKILL_HINTS if re.search(rf"\\b{re.escape(skill)}\\b", text)]
+
+        sentence_candidates = [
+            line.strip(" -")
+            for line in re.split(r"[\\n\\.]+", cleaned_description)
+            if line.strip()
+        ]
+        actionable = [s for s in sentence_candidates if any(k in s.lower() for k in ("build", "develop", "design", "manage", "api", "service"))]
+
+        summary = (
+            f"Fallback analysis for {title} at {company}: extracted key role requirements from the description."
+            if language == "english"
+            else f"Analisis alternativo para {title} en {company}: se extrajeron requisitos clave del puesto."
+        )
+
+        responsibilities = _normalize_list(actionable[:MAX_LIST_ITEMS])
+        if not responsibilities:
+            responsibilities = _normalize_list(sentence_candidates[:MAX_LIST_ITEMS])
+
+        required_skills = _normalize_list(extracted_skills[:MAX_LIST_ITEMS])
+        if not required_skills:
+            required_skills = ["Communication", "Problem solving"] if language == "english" else ["Comunicacion", "Resolucion de problemas"]
+
+        prep = (
+            [
+                "Map your experience to each required skill.",
+                "Prepare two measurable impact examples.",
+                "Review architecture and API design decisions.",
+            ]
+            if language == "english"
+            else [
+                "Relaciona tu experiencia con cada habilidad requerida.",
+                "Prepara dos ejemplos con impacto medible.",
+                "Repasa decisiones de arquitectura y diseno de APIs.",
+            ]
+        )
+
+        return JobAnalysisPayload(
+            summary=summary,
+            seniority="mid",
+            role_type="generalist",
+            required_skills=required_skills,
+            nice_to_have_skills=[],
+            responsibilities=responsibilities,
+            how_to_prepare=_normalize_list(prep),
+            learning_path=[],
+            missing_skills=[],
+            resume_tips=_normalize_list(prep[:2]),
+            interview_tips=_normalize_list(prep[1:]),
+            portfolio_project_ideas=[],
         )
 
 
