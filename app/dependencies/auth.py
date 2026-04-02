@@ -1,7 +1,8 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session
 
+from app.core.logging import bind_user_context
 from app.core.security import decode_access_token
 from app.db.database import get_session
 from app.db.crud import get_user_by_email, get_user_by_id
@@ -12,6 +13,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
@@ -29,6 +31,10 @@ def get_current_user(
 
     if user is None or not user.is_active:
         raise _unauthorized()
+
+    request.state.user_id = str(user.id)
+    request.state.user_email = user.email
+    bind_user_context(user.id)
     return user
 
 

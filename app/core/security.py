@@ -8,6 +8,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
+import jwt
 
 from app.core.config import get_settings
 
@@ -39,7 +40,7 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
         "exp": int(expire_at.timestamp()),
         "iat": int(now.timestamp()),
     }
-    return _encode_jwt(payload, settings.secret_key)
+    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
 
 
 def decode_access_token(token: str) -> dict:
@@ -52,6 +53,10 @@ def decode_access_token(token: str) -> dict:
 
 
 def _encode_jwt(payload: dict, secret: str) -> str:
+    return _legacy_encode_jwt(payload, secret)
+
+
+def _legacy_encode_jwt(payload: dict, secret: str) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
     encoded_header = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
     encoded_payload = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
@@ -61,6 +66,22 @@ def _encode_jwt(payload: dict, secret: str) -> str:
 
 
 def _decode_jwt(token: str, secret: str) -> dict:
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=["HS256"],
+            options={"verify_exp": False},
+        )
+        if isinstance(payload, dict):
+            return payload
+    except jwt.PyJWTError:
+        pass
+
+    return _legacy_decode_jwt(token, secret)
+
+
+def _legacy_decode_jwt(token: str, secret: str) -> dict:
     try:
         encoded_header, encoded_payload, encoded_signature = token.split(".")
     except ValueError as exc:

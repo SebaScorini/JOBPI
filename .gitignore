@@ -11,6 +11,7 @@ env/
 .env
 .env.*
 .pytest_cache/
+pytest-cache-files-*/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -47,6 +48,7 @@ Thumbs.db
 uploads/
 temp/
 tmp/
+.tmp-tests/
 storage/
 
 # AI Tools / Codex

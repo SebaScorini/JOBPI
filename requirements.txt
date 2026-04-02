@@ -8,3 +8,7 @@ dspy
 python-dotenv
 pypdf
 python-multipart
+python-json-logger
+sentry-sdk
+PyJWT
+redis

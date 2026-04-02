@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
-from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_timeout
+from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_circuit_breaker
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
@@ -200,7 +200,7 @@ class JobAnalyzerService:
                 payload.company,
                 payload.regenerate,
             )
-            result = run_ai_call_with_timeout(
+            result = run_ai_call_with_circuit_breaker(
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="job_analysis",
@@ -215,50 +215,17 @@ class JobAnalyzerService:
             )
             response = self._build_payload_from_result(result)
         except HTTPException as exc:
-            if exc.status_code != status.HTTP_504_GATEWAY_TIMEOUT:
-                logger.warning(
-                    "ai_fallback operation=job_analysis reason=http_%s",
-                    exc.status_code,
-                )
-                response = self._build_fallback_analysis_payload(
-                    title=payload.title,
-                    company=payload.company,
-                    cleaned_description=cleaned_description,
-                    language=selected_language,
-                )
-            else:
-                retry_description = cleaned_description[:self.retry_description_chars]
-                logger.warning(
-                    "ai_retry operation=job_analysis reason=timeout retry_max_tokens=%s retry_desc_chars=%s",
-                    self.retry_max_tokens,
-                    len(retry_description),
-                )
-                try:
-                    result = run_ai_call_with_timeout(
-                        executor=self._executor,
-                        timeout_seconds=max(self.timeout_seconds, 30),
-                        operation="job_analysis_retry",
-                        logger=logger,
-                        callable_=analyzer,
-                        lm_max_tokens=self.retry_max_tokens,
-                        title=payload.title,
-                        company=payload.company,
-                        description=retry_description,
-                        response_language=language_instruction(selected_language),
-                        max_tokens=self.retry_max_tokens,
-                    )
-                    response = self._build_payload_from_result(result)
-                except Exception as retry_exc:
-                    logger.warning(
-                        "ai_fallback operation=job_analysis reason=retry_failed error=%s",
-                        type(retry_exc).__name__,
-                    )
-                    response = self._build_fallback_analysis_payload(
-                        title=payload.title,
-                        company=payload.company,
-                        cleaned_description=retry_description,
-                        language=selected_language,
-                    )
+            retry_description = cleaned_description[:self.retry_description_chars]
+            logger.warning(
+                "ai_fallback operation=job_analysis reason=http_%s",
+                exc.status_code,
+            )
+            response = self._build_fallback_analysis_payload(
+                title=payload.title,
+                company=payload.company,
+                cleaned_description=retry_description,
+                language=selected_language,
+            )
         except Exception as exc:
             logger.warning("ai_fallback operation=job_analysis reason=exception", exc_info=exc)
             response = self._build_fallback_analysis_payload(

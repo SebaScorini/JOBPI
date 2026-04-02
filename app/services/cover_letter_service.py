@@ -6,7 +6,7 @@ import dspy
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
-from app.core.ai import dspy_lm_override, run_ai_call_with_timeout
+from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
@@ -138,7 +138,7 @@ class CoverLetterService:
                 selected_cv_id,
                 regenerate,
             )
-            result = run_ai_call_with_timeout(
+            result = run_ai_call_with_circuit_breaker(
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="cover_letter_generation",

@@ -78,6 +78,11 @@ Use the hosted version at https://jobpi-app.vercel.app/
 
 The backend is deployed on Vercel through the Python entrypoint in `api/index.py`. Production should use Supabase PostgreSQL via `DATABASE_URL`, `APP_ENV=production`, a strong `SECRET_KEY`, and a valid `OPENROUTER_API_KEY`.
 
+For production observability and scaling, also set:
+
+- `SENTRY_DSN` for runtime error tracking
+- `REDIS_URL` for shared rate limiting across instances
+
 The frontend should be built with `VITE_API_URL` pointing to the deployed backend. `VITE_SITE_URL` is recommended for production canonical URLs.
 
 If you use the hosted version, open https://jobpi-app.vercel.app/ and sign in normally. If you install locally, you can point the app to your own backend and configure your own AI provider values in `.env`.
@@ -133,9 +138,9 @@ python tests/test_improvements.py
 
 ### Run with pytest
 ```bash
-pytest                          # Run all tests
-pytest tests/test_improvements.py -v  # Specific test
-pytest --cov=app tests/         # With coverage
+python -m pytest                          # Run all tests
+python -m pytest tests/test_improvements.py -v  # Specific test
+python -m pytest --cov=app tests/         # With coverage
 ```
 
 See [tests/README.md](tests/README.md) for detailed test documentation.
@@ -154,6 +159,8 @@ See [tests/README.md](tests/README.md) for detailed test documentation.
 ### Configuration & Deployment
 - [ENVIRONMENT.md](docs/ENVIRONMENT.md) - All environment variables
 - [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Production deployment
+- [RATE_LIMITING.md](docs/RATE_LIMITING.md) - Runtime limiter behavior and Redis fallback
+- [HEALTH_CHECK.md](docs/HEALTH_CHECK.md) - Post-deploy validation checklist
 - [DOCKER.md](docs/DOCKER.md) - Complete Docker guide with 40+ commands
 
 ## Notes

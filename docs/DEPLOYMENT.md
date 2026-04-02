@@ -42,8 +42,10 @@ See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for the full variable list.
 2. Set `APP_ENV=production` in Vercel.
 3. Set `DATABASE_URL` to the Supabase PostgreSQL connection string.
 4. Set `SECRET_KEY` and `OPENROUTER_API_KEY` in the backend project.
-5. Set `FRONTEND_URL` or `CORS_ORIGINS` for the deployed frontend domain.
-6. Set `VITE_API_URL` in the frontend project to the backend URL.
+5. Set `SENTRY_DSN` if you want runtime exceptions captured in Sentry.
+6. Set `REDIS_URL` to enable shared rate limiting across multiple instances.
+7. Set `FRONTEND_URL` or `CORS_ORIGINS` for the deployed frontend domain.
+8. Set `VITE_API_URL` in the frontend project to the backend URL.
 
 The repo includes `vercel.json` rewrites so requests are routed to the Python app.
 
@@ -58,6 +60,9 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 ## Operational Notes
 
 - Production rate limits are stricter than local defaults.
+- If `REDIS_URL` is missing, the backend falls back to the in-memory limiter.
+- JWTs are issued with PyJWT and old custom-signed tokens still decode during the rollout window.
 - Request body limits are enforced in the backend for uploads and long job descriptions.
+- If `SENTRY_DSN` is configured, unexpected runtime exceptions are sent to Sentry with request metadata.
 - If you use preview deployments, configure `CORS_ORIGIN_REGEX` to allow the preview domain pattern.
 - The hosted app uses the production backend and production AI settings; local installs can override both.
