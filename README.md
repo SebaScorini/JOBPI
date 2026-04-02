@@ -25,6 +25,11 @@ Frontend: React, TypeScript, Vite, Tailwind CSS, React Router.
 
 ## Quick Start
 
+There are two ways to use JOBPI:
+
+1. Local installation, if you want to use your own `OPENROUTER_API_KEY` and `DSPY_MODEL`.
+2. The deployed app at https://jobpi-app.vercel.app/.
+
 Backend:
 
 ```powershell
@@ -47,6 +52,8 @@ npm run dev
 The backend is deployed on Vercel through the Python entrypoint in `api/index.py`. Production should use Supabase PostgreSQL via `DATABASE_URL`, `APP_ENV=production`, a strong `SECRET_KEY`, and a valid `OPENROUTER_API_KEY`.
 
 The frontend should be built with `VITE_API_URL` pointing to the deployed backend. `VITE_SITE_URL` is recommended for production canonical URLs.
+
+If you use the hosted version, open https://jobpi-app.vercel.app/ and sign in normally. If you install locally, you can point the app to your own backend and configure your own AI provider values in `.env`.
 
 See the detailed guides in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), and [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 

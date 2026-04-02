@@ -1,5 +1,12 @@
 # DEPLOYMENT
 
+## Usage Modes
+
+JOBPI supports two documented ways to use the app:
+
+- Local installation, where you run the backend and frontend yourself and provide your own `OPENROUTER_API_KEY` and `DSPY_MODEL`.
+- Hosted usage at https://jobpi-app.vercel.app/.
+
 ## Local Run
 
 Backend:
@@ -25,6 +32,7 @@ npm run dev
 - Set `DATABASE_URL` for production; SQLite is only a local fallback.
 - Set `OPENROUTER_API_KEY` before using AI features.
 - Set `VITE_API_URL` for the frontend so it points at the deployed backend.
+- For local installation, you can also change `DSPY_MODEL` to your preferred model.
 
 See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for the full variable list.
 
@@ -52,3 +60,4 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 - Production rate limits are stricter than local defaults.
 - Request body limits are enforced in the backend for uploads and long job descriptions.
 - If you use preview deployments, configure `CORS_ORIGIN_REGEX` to allow the preview domain pattern.
+- The hosted app uses the production backend and production AI settings; local installs can override both.
