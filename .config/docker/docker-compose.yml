@@ -1,0 +1,89 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: jobpi_postgres
+    environment:
+      POSTGRES_USER: jobpi_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-jobpi_dev_password}
+      POSTGRES_DB: jobpi_db
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobpi_user -d jobpi_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jobpi_network
+    restart: unless-stopped
+
+  # Backend - FastAPI
+  backend:
+    build:
+      context: ../..
+      dockerfile: .config/docker/Dockerfile
+    container_name: jobpi_backend
+    environment:
+      # Database - PostgreSQL with psycopg3
+      DATABASE_URL: postgresql+psycopg://jobpi_user:${DB_PASSWORD:-jobpi_dev_password}@postgres:5432/jobpi_db
+      # App settings
+      APP_ENV: ${APP_ENV:-development}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      # OpenRouter
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      DSPY_MODEL: ${DSPY_MODEL:-openrouter/meta-llama/llama-3-8b-instruct}
+      # Settings
+      TRUSTED_USER_EMAIL: ${TRUSTED_USER_EMAIL:-}
+      SQLITE_TIMEOUT_SECONDS: 10
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../../app:/app/app
+      - ../../api:/app/api
+    networks:
+      - jobpi_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend - React/Vite
+  frontend:
+    build:
+      context: ../..
+      dockerfile: .config/docker/Dockerfile.frontend
+    container_name: jobpi_frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_SITE_URL: ${VITE_SITE_URL:-http://localhost:3000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - jobpi_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  jobpi_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

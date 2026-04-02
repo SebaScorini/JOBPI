@@ -93,8 +93,14 @@ class CvLibraryService:
         )
         return CVRead.model_validate(created)
 
-    def list_cvs(self, session: Session, user: User) -> list[CVRead]:
-        return [self._serialize_cv(session, cv) for cv in crud.get_cvs_for_user(session, user.id)]
+    def list_cvs(self, session: Session, user: User, limit: int = 20, offset: int = 0) -> tuple[list[CVRead], int]:
+        """Get paginated list of user's CVs.
+        
+        Returns:
+            Tuple of (list of CVRead objects, total count)
+        """
+        cvs, total = crud.get_cvs_for_user(session, user.id, limit=limit, offset=offset)
+        return [self._serialize_cv(session, cv) for cv in cvs], total
 
     def get_cv(self, session: Session, user: User, cv_id: int) -> CVDetailRead:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
