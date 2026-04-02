@@ -11,7 +11,7 @@ from app.core.config import get_settings
 
 AI_TIMEOUT_DETAIL = "AI request timed out. Please try again."
 AI_PROVIDER_UNAVAILABLE_DETAIL = "AI provider is temporarily unavailable. Please try again in a moment."
-MAX_LM_TOKENS = 900
+MAX_LM_TOKENS = 4000
 DEFAULT_SHARED_LM_MAX_TOKENS = 400
 
 

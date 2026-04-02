@@ -165,6 +165,24 @@ def get_job_for_user(session: Session, user_id: int, job_id: int) -> JobAnalysis
     return session.exec(statement).first()
 
 
+def get_job_by_id(session: Session, job_id: int) -> JobAnalysis | None:
+    return session.get(JobAnalysis, job_id)
+
+
+def delete_job(session: Session, job: JobAnalysis) -> None:
+    # Remove dependent matches first so the job delete stays valid across DB backends.
+    statement = select(CVJobMatch).where(CVJobMatch.job_id == job.id, CVJobMatch.user_id == job.user_id)
+    matches = session.exec(statement).all()
+    try:
+        for match in matches:
+            session.delete(match)
+        session.delete(job)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
+
+
 def update_job_status(
     session: Session,
     job: JobAnalysis,

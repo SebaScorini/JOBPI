@@ -292,8 +292,8 @@ class Settings(BaseModel):
         self.max_cvs_per_upload = max(1, self.max_cvs_per_upload)
         self.max_job_description_chars = max(50, self.max_job_description_chars)
         self.max_cv_text_chars = max(500, self.max_cv_text_chars)
-        self.max_output_tokens = min(1400, max(50, self.max_output_tokens))
-        self.job_analysis_max_tokens = min(1400, max(100, self.job_analysis_max_tokens))
+        self.max_output_tokens = min(4000, max(50, self.max_output_tokens))
+        self.job_analysis_max_tokens = min(4000, max(100, self.job_analysis_max_tokens))
         self.job_analysis_retry_max_tokens = min(
             self.job_analysis_max_tokens,
             max(100, self.job_analysis_retry_max_tokens),
@@ -363,7 +363,7 @@ def configure_dspy() -> dspy.LM:
         api_key=settings.openrouter_api_key,
         api_base=settings.openrouter_base_url,
         temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
-        max_tokens=max(50, min(settings.max_output_tokens, 1400)),
+        max_tokens=max(50, min(settings.max_output_tokens, 4000)),
         extra_body={"reasoning": {"enabled": False}},
     )
     dspy.settings.configure(lm=lm)

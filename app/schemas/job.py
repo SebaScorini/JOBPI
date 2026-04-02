@@ -56,6 +56,10 @@ class CoverLetterGenerateResponse(BaseModel):
     generated_cover_letter: str
 
 
+class JobDeleteResponse(BaseModel):
+    success: bool = True
+
+
 class JobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
