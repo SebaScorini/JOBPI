@@ -128,6 +128,11 @@ export const translations: TranslationDictionary = {
       title: 'Job Analysis',
       subtitle: 'Manage and review your saved job targets.',
       newTarget: 'New Target',
+      openJob: 'Open job',
+      deleteAction: 'Delete job',
+      confirmDelete: 'Are you sure you want to delete this job?',
+      failedLoad: 'Failed to load jobs.',
+      failedDelete: 'Failed to delete the job.',
       emptyTitle: 'No targeted jobs',
       emptySubtitle:
         'Start by analyzing a job description to extract required skills and requirements.',
@@ -357,6 +362,11 @@ export const translations: TranslationDictionary = {
       title: 'Analisis de empleo',
       subtitle: 'Gestiona y revisa tus objetivos laborales guardados.',
       newTarget: 'Nuevo objetivo',
+      openJob: 'Abrir empleo',
+      deleteAction: 'Eliminar empleo',
+      confirmDelete: 'Estas seguro de que quieres eliminar este empleo?',
+      failedLoad: 'No se pudieron cargar los empleos.',
+      failedDelete: 'No se pudo eliminar el empleo.',
       emptyTitle: 'No hay empleos objetivo',
       emptySubtitle:
         'Empieza analizando una descripcion de empleo para extraer habilidades y requisitos.',

@@ -8,7 +8,7 @@ from sqlmodel import SQLModel, Session, create_engine
 
 from app.db import crud
 from app.services.cv_library_service import CvLibraryService
-from app.services.cv_library_summary_service import CvLibrarySummaryService
+from app.services.cv_library_summary_service import CvLibrarySummaryService, _normalize_library_summary
 
 
 class _LeakySummaryModule:
@@ -121,6 +121,18 @@ class CvLibraryPersistenceTests(unittest.TestCase):
         self.assertNotEqual(
             stored_by_id[first_cv.id].library_summary,
             stored_by_id[second_cv.id].library_summary,
+        )
+
+
+class CvLibrarySummaryNormalizationTests(unittest.TestCase):
+    def test_normalize_library_summary_strips_model_completion_artifacts(self):
+        normalized = _normalize_library_summary(
+            "Backend developer with Python and FastAPI experience. [[ ## completed ]]"
+        )
+
+        self.assertEqual(
+            normalized,
+            "Backend developer with Python and FastAPI experience.",
         )
 
 

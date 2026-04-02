@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse, StoredCV, CVJobMatch, CVComparisonResult, JobApplicationStatus } from '../types';
-import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check, Trash2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 type DetailsTab = 'overview' | 'match' | 'improvements' | 'cover' | 'tracker';
@@ -35,8 +35,29 @@ function splitReadableText(text?: string | null): string[] {
   return sentenceBlocks.length > 1 ? sentenceBlocks : blocks;
 }
 
+function normalizeComparableText(value: string): string {
+  return value.trim().replace(/[.]+$/g, '').toLowerCase();
+}
+
+function dedupeItems(items: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const item of items) {
+    const key = normalizeComparableText(item);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(item);
+  }
+
+  return unique;
+}
+
 export function JobDetailsPage() {
   const { aiLanguage, language, t } = useLanguage();
+  const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<JobAnalysisResponse | null>(null);
   const [cvs, setCvs] = useState<StoredCV[]>([]);
@@ -50,6 +71,7 @@ export function JobDetailsPage() {
   const [isCoverLetterLoading, setIsCoverLetterLoading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isDeletingJob, setIsDeletingJob] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
   const [matchResult, setMatchResult] = useState<CVJobMatch | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CVComparisonResult | null>(null);
@@ -64,9 +86,18 @@ export function JobDetailsPage() {
     weak: 'text-rose-500',
   } as const;
 
-  const matchSuggestions = matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? [];
-  const matchMissingKeywords = matchResult?.missing_keywords ?? [];
+  const matchSuggestions = dedupeItems(matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? []);
+  const matchMissingKeywords = dedupeItems(matchResult?.missing_keywords ?? []);
   const matchReorderSuggestions = matchResult?.reorder_suggestions ?? [];
+  const displayMissingSkills = dedupeItems(
+    matchResult?.missing_skills?.length ? matchResult.missing_skills : matchMissingKeywords,
+  );
+  const additionalMissingKeywords = matchMissingKeywords.filter(
+    (keyword) =>
+      !matchResult?.missing_skills?.some(
+        (skill) => normalizeComparableText(skill) === normalizeComparableText(keyword),
+      ),
+  );
   const comparisonExplanationBlocks = splitReadableText(comparisonResult?.overall_reason);
   const matchWhyBlocks = splitReadableText(matchResult?.why_this_cv);
 
@@ -159,7 +190,7 @@ export function JobDetailsPage() {
     try {
       const result = await apiService.matchCVToJob(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setMatchResult(result);
-      setActiveTab('improvements');
+      setActiveTab('match');
     } catch (err: any) {
       setError(err.message || t('jobDetails.failedMatch'));
     } finally {
@@ -234,6 +265,26 @@ export function JobDetailsPage() {
       setError(err.message || t('jobDetails.failedCoverLetter'));
     } finally {
       setIsCoverLetterLoading(false);
+    }
+  };
+
+  const handleDeleteJob = async () => {
+    if (!jobId) return;
+
+    const confirmed = window.confirm(t('jobs.confirmDelete'));
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingJob(true);
+    setError(null);
+    try {
+      await apiService.deleteJob(Number(jobId));
+      navigate('/jobs');
+    } catch (err: any) {
+      setError(err.message || t('jobs.failedDelete'));
+    } finally {
+      setIsDeletingJob(false);
     }
   };
 
@@ -316,7 +367,15 @@ export function JobDetailsPage() {
                   )}
                 </div>
               </div>
-
+              <button
+                type="button"
+                onClick={handleDeleteJob}
+                disabled={isDeletingJob}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+              >
+                {isDeletingJob ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                {t('jobs.deleteAction')}
+              </button>
             </div>
           </div>
 
@@ -548,9 +607,9 @@ export function JobDetailsPage() {
 
                         <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30 px-4 py-3 min-w-0">
                           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.missingSkills')}</p>
-                          {matchMissingKeywords.length > 0 ? (
+                          {displayMissingSkills.length > 0 ? (
                             <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700 dark:text-slate-300 leading-7">
-                              {matchMissingKeywords.map((item, i) => (
+                              {displayMissingSkills.map((item, i) => (
                                 <li key={`${item}-${i}`} className="break-words">{item}</li>
                               ))}
                             </ul>
@@ -613,11 +672,11 @@ export function JobDetailsPage() {
                         </div>
                       )}
 
-                      {matchMissingKeywords.length > 0 && (
+                      {additionalMissingKeywords.length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.missingSkills')}</p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Keywords to add</p>
                           <div className="flex flex-wrap gap-2">
-                            {matchMissingKeywords.map((keyword) => (
+                            {additionalMissingKeywords.map((keyword) => (
                               <span key={keyword} className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200 break-words">
                                 {keyword}
                               </span>
@@ -635,7 +694,7 @@ export function JobDetailsPage() {
                         </div>
                       )}
 
-                      {matchSuggestions.length === 0 && matchResult.missing_skills?.length === 0 && matchMissingKeywords.length === 0 && matchReorderSuggestions.length === 0 && (
+                      {matchSuggestions.length === 0 && matchResult.missing_skills?.length === 0 && additionalMissingKeywords.length === 0 && matchReorderSuggestions.length === 0 && (
                         <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
                       )}
                     </div>

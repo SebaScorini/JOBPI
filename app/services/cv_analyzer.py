@@ -1,11 +1,12 @@
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_timeout
+from app.core.ai import dspy_lm_override, run_ai_call_with_timeout
 from app.core.config import configure_dspy, get_settings
 from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
@@ -18,6 +19,23 @@ MAX_ITEM_CHARS = 60
 MAX_SUMMARY_CHARS = 280
 MATCH_EXPLANATION_MAX_TOKENS = 3000
 logger = logging.getLogger(__name__)
+WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
+MATCH_KEYWORDS: list[tuple[str, str]] = [
+    ("python", "Python"),
+    ("fastapi", "FastAPI"),
+    ("sql", "SQL"),
+    ("postgresql", "PostgreSQL"),
+    ("postgres", "PostgreSQL"),
+    ("docker", "Docker"),
+    ("testing", "Testing"),
+    ("test", "Testing"),
+    ("rest api", "REST APIs"),
+    ("apis", "APIs"),
+    ("backend", "Backend"),
+    ("react", "React"),
+    ("typescript", "TypeScript"),
+    ("analytics", "Analytics"),
+]
 
 
 class CvFitSignature(dspy.Signature):
@@ -113,15 +131,25 @@ class CvAnalyzerService:
                 response_language=language_instruction(selected_language),
                 max_tokens=MATCH_EXPLANATION_MAX_TOKENS,
             )
-        except HTTPException:
-            raise
+        except HTTPException as exc:
+            logger.warning(
+                "ai_fallback operation=cv_match_analysis reason=http_%s",
+                exc.status_code,
+            )
+            return self._build_fallback_analysis(
+                job_title=job_title,
+                job_description=job_description,
+                cv_text=cv_text,
+                language=selected_language,
+            )
         except Exception as exc:
-            raise build_ai_failure_http_exception(
-                exc=exc,
-                logger=logger,
-                operation="cv_match_analysis",
-                default_detail="Failed to analyze CV. Please try again.",
-            ) from exc
+            logger.warning("ai_fallback operation=cv_match_analysis reason=exception", exc_info=exc)
+            return self._build_fallback_analysis(
+                job_title=job_title,
+                job_description=job_description,
+                cv_text=cv_text,
+                language=selected_language,
+            )
         finally:
             logger.info(
                 "cv_fit dspy_call_ms=%.1f",
@@ -144,6 +172,70 @@ class CvAnalyzerService:
         )
         return response
 
+    def _build_fallback_analysis(
+        self,
+        *,
+        job_title: str,
+        job_description: str,
+        cv_text: str,
+        language: AIResponseLanguage,
+    ) -> CvAnalysisResponse:
+        matched, missing = _extract_match_signals(job_title=job_title, job_description=job_description, cv_text=cv_text)
+        match_ratio = len(matched) / max(1, len(matched) + len(missing))
+
+        if match_ratio >= 0.6 and len(matched) >= 2:
+            fit_level = "Strong"
+        elif matched:
+            fit_level = "Moderate"
+        else:
+            fit_level = "Weak"
+
+        if language == "spanish":
+            summary = (
+                f"El CV muestra alineacion con {', '.join(matched[:2])}."
+                if matched
+                else "El CV necesita mas evidencia concreta para demostrar encaje con este puesto."
+            )
+            strengths = [f"Experiencia demostrada en {item}" for item in matched[:MAX_LIST_ITEMS]]
+            gaps = [f"Falta evidencia clara de {item}" for item in missing[:MAX_LIST_ITEMS]]
+            resume_improvements = [f"Agrega logros o proyectos que demuestren {item}" for item in missing[:MAX_LIST_ITEMS]]
+            interview_focus = [f"Prepara ejemplos concretos sobre {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
+            next_steps = (
+                [f"Actualiza el CV para resaltar {item}" for item in missing[:2]]
+                or ["Destaca los logros mas relevantes al inicio del CV"]
+            )
+        else:
+            summary = (
+                f"The CV aligns best with {', '.join(matched[:2])}."
+                if matched
+                else "The CV needs clearer evidence to show fit for this role."
+            )
+            strengths = [f"Demonstrated experience with {item}" for item in matched[:MAX_LIST_ITEMS]]
+            gaps = [f"Clear evidence of {item} is missing" for item in missing[:MAX_LIST_ITEMS]]
+            resume_improvements = [f"Add measurable examples that show {item}" for item in missing[:MAX_LIST_ITEMS]]
+            interview_focus = [f"Prepare specific examples about {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
+            next_steps = (
+                [f"Update the CV to foreground {item}" for item in missing[:2]]
+                or ["Move the strongest role-relevant achievements closer to the top of the CV"]
+            )
+
+        if not strengths:
+            strengths = (
+                ["Relevant backend delivery experience", "Transferable product and execution experience"]
+                if language == "english"
+                else ["Experiencia transferible en entrega de producto", "Base tecnica aplicable al puesto"]
+            )
+
+        return CvAnalysisResponse(
+            fit_summary=self._normalize_summary(summary),
+            strengths=_normalize_list(strengths),
+            missing_skills=_normalize_list(gaps),
+            likely_fit_level=fit_level,
+            resume_improvements=_normalize_list(resume_improvements),
+            interview_focus=_normalize_list(interview_focus),
+            next_steps=_normalize_list(next_steps),
+        )
+
     @staticmethod
     def _normalize_summary(value: object) -> str:
         if not isinstance(value, str):
@@ -163,3 +255,28 @@ def get_cv_analyzer_service() -> CvAnalyzerService:
     if _cv_service is None:
         _cv_service = CvAnalyzerService()
     return _cv_service
+
+
+def _extract_match_signals(*, job_title: str, job_description: str, cv_text: str) -> tuple[list[str], list[str]]:
+    lowered_job = f"{job_title} {job_description}".lower()
+    cv_tokens = set(token.lower() for token in WORD_RE.findall(cv_text))
+    matched: list[str] = []
+    missing: list[str] = []
+
+    for needle, label in MATCH_KEYWORDS:
+        if needle not in lowered_job:
+            continue
+        is_present = all(part in cv_tokens for part in needle.split())
+        target = matched if is_present else missing
+        if label not in target:
+            target.append(label)
+
+    if not matched and cv_tokens:
+        job_tokens = [
+            token.title()
+            for token in WORD_RE.findall(job_title)
+            if len(token) > 3 and token.lower() in cv_tokens
+        ]
+        matched.extend(job_tokens[:2])
+
+    return matched[:MAX_LIST_ITEMS], missing[:MAX_LIST_ITEMS]

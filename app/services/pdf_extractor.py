@@ -3,8 +3,6 @@ import re
 import time
 from io import BytesIO
 
-from pypdf import PdfReader
-
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -41,9 +39,13 @@ def extract_raw_pdf_text(file_bytes: bytes) -> str:
 
     extraction_start = time.perf_counter()
     try:
+        from pypdf import PdfReader
+
         reader = PdfReader(BytesIO(file_bytes))
         pages = [(page.extract_text() or "") for page in reader.pages]
         raw = "\n".join(pages)
+    except ImportError as exc:
+        raise ValueError("PDF support is not installed on the server.") from exc
     except Exception as exc:
         raise ValueError("Failed to read PDF content.") from exc
     finally:

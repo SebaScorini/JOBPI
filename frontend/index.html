@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href="https://jobpi.app/" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
@@ -19,8 +18,8 @@
       content="Analyze CVs, compare job posts, and track applications in one place with JOBPI to make faster, smarter job decisions."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://jobpi.app/" />
-    <meta property="og:image" content="https://jobpi.app/favicon.svg" />
+    <meta property="og:url" content="" />
+    <meta property="og:image" content="" />
     <meta property="og:site_name" content="JOBPI" />
 
     <meta name="twitter:card" content="summary_large_image" />
@@ -29,21 +28,55 @@
       name="twitter:description"
       content="Analyze CVs, compare job posts, and track applications in one place with JOBPI to make faster, smarter job decisions."
     />
-    <meta name="twitter:image" content="https://jobpi.app/favicon.svg" />
+    <meta name="twitter:image" content="" />
 
     <title>Home | JOBPI</title>
 
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "JOBPI",
-        "applicationCategory": "BusinessApplication",
-        "operatingSystem": "Web",
-        "url": "https://jobpi.app/",
-        "description": "JOBPI helps you analyze CVs, evaluate job posts, track applications, and match your profile to roles so you can apply faster and make smarter career moves.",
-        "image": "https://jobpi.app/favicon.svg"
-      }
+    <script id="jobpi-schema" type="application/ld+json"></script>
+    <script>
+      (function () {
+        var origin = window.location.origin.replace(/\/$/, '');
+        var homeUrl = origin + '/';
+        var imageUrl = origin + '/favicon.svg';
+
+        function upsertMeta(attribute, key, value) {
+          var selector = 'meta[' + attribute + '="' + key + '"]';
+          var tag = document.querySelector(selector);
+          if (!tag) {
+            tag = document.createElement('meta');
+            tag.setAttribute(attribute, key);
+            document.head.appendChild(tag);
+          }
+          tag.setAttribute('content', value);
+        }
+
+        var canonical = document.querySelector('link[rel="canonical"]');
+        if (!canonical) {
+          canonical = document.createElement('link');
+          canonical.setAttribute('rel', 'canonical');
+          document.head.appendChild(canonical);
+        }
+        canonical.setAttribute('href', homeUrl);
+
+        upsertMeta('property', 'og:url', homeUrl);
+        upsertMeta('property', 'og:image', imageUrl);
+        upsertMeta('name', 'twitter:image', imageUrl);
+
+        var schema = document.getElementById('jobpi-schema');
+        if (schema) {
+          schema.textContent = JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: 'JOBPI',
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Web',
+            url: homeUrl,
+            description:
+              'JOBPI helps you analyze CVs, evaluate job posts, track applications, and match your profile to roles so you can apply faster and make smarter career moves.',
+            image: imageUrl,
+          });
+        }
+      })();
     </script>
   </head>
   <body>
