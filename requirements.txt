@@ -3,6 +3,7 @@ uvicorn
 pydantic
 sqlmodel
 psycopg[binary]
+psycopg2-binary
 dspy
 python-dotenv
 pypdf
