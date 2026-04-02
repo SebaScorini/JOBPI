@@ -1,4 +1,5 @@
 import os
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -12,6 +13,9 @@ AppEnv = Literal["development", "production"]
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env", override=False)
+
+_DSPY_CONFIG_LOCK = threading.Lock()
+_DSPY_LM: dspy.LM | None = None
 
 ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
     "development": {
@@ -355,16 +359,27 @@ def get_settings() -> Settings:
 
 
 def configure_dspy() -> dspy.LM:
+    global _DSPY_LM
+
+    if _DSPY_LM is not None:
+        return _DSPY_LM
+
     settings = get_settings()
     if not settings.openrouter_api_key:
         raise ValueError("OPENROUTER_API_KEY is not set")
-    lm = dspy.LM(
-        model=settings.dspy_model,
-        api_key=settings.openrouter_api_key,
-        api_base=settings.openrouter_base_url,
-        temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
-        max_tokens=max(50, min(settings.max_output_tokens, 4000)),
-        extra_body={"reasoning": {"enabled": False}},
-    )
-    dspy.settings.configure(lm=lm)
-    return lm
+
+    with _DSPY_CONFIG_LOCK:
+        if _DSPY_LM is not None:
+            return _DSPY_LM
+
+        lm = dspy.LM(
+            model=settings.dspy_model,
+            api_key=settings.openrouter_api_key,
+            api_base=settings.openrouter_base_url,
+            temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
+            max_tokens=max(50, min(settings.max_output_tokens, 4000)),
+            extra_body={"reasoning": {"enabled": False}},
+        )
+        dspy.settings.configure(lm=lm)
+        _DSPY_LM = lm
+        return lm

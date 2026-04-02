@@ -1,11 +1,12 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 import dspy
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
-from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_timeout
+from app.core.ai import dspy_lm_override, run_ai_call_with_timeout
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
@@ -19,6 +20,7 @@ MAX_COVER_LETTER_PARAGRAPHS = 3
 MAX_COVER_LETTER_PARAGRAPH_CHARS = 380
 COVER_LETTER_MAX_TOKENS = 1500
 logger = logging.getLogger(__name__)
+WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
 
 
 class CoverLetterSignature(dspy.Signature):
@@ -151,17 +153,16 @@ class CoverLetterService:
                 response_language=language_instruction(selected_language),
                 max_tokens=COVER_LETTER_MAX_TOKENS,
             )
-        except HTTPException:
-            raise
+            cover_letter = _normalize_cover_letter(result.cover_letter)
+        except HTTPException as exc:
+            logger.warning(
+                "ai_fallback operation=cover_letter_generation reason=http_%s",
+                exc.status_code,
+            )
+            cover_letter = self._build_fallback_cover_letter(job=job, cv=cv, language=selected_language)
         except Exception as exc:
-            raise build_ai_failure_http_exception(
-                exc=exc,
-                logger=logger,
-                operation="cover_letter_generation",
-                default_detail="Failed to generate cover letter. Please try again.",
-            ) from exc
-
-        cover_letter = _normalize_cover_letter(result.cover_letter)
+            logger.warning("ai_fallback operation=cover_letter_generation reason=exception", exc_info=exc)
+            cover_letter = self._build_fallback_cover_letter(job=job, cv=cv, language=selected_language)
         if not cover_letter:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -176,6 +177,32 @@ class CoverLetterService:
             cover_letter=cover_letter,
         )
         return cover_letter
+
+    def _build_fallback_cover_letter(self, *, job: object, cv: object, language: AIResponseLanguage) -> str:
+        role_keywords = _extract_role_keywords(job.clean_description)
+        matching_keywords = [keyword for keyword in role_keywords if keyword.lower() in cv.clean_text.lower()]
+        focus_keywords = matching_keywords[:2] or role_keywords[:2] or ["software delivery"]
+
+        if language == "spanish":
+            body = (
+                f"Estimado equipo de {job.company},\n\n"
+                f"Me interesa postularme al puesto de {job.title}. Mi experiencia en {', '.join(focus_keywords)} "
+                f"se alinea con el trabajo descrito y con el tipo de impacto que buscan para este rol.\n\n"
+                f"He desarrollado proyectos y entregas concretas relacionados con {', '.join(focus_keywords)}, "
+                f"y puedo aportar una forma de trabajo clara, colaborativa y orientada a resultados desde el primer dia.\n\n"
+                "Gracias por su tiempo y consideracion."
+            )
+        else:
+            body = (
+                f"Dear {job.company} team,\n\n"
+                f"I am excited to apply for the {job.title} role. My experience with {', '.join(focus_keywords)} "
+                f"aligns well with the kind of work described for this position.\n\n"
+                f"I have delivered practical work related to {', '.join(focus_keywords)}, and I would bring a clear, "
+                f"collaborative, and execution-focused approach from day one.\n\n"
+                "Thank you for your time and consideration."
+            )
+
+        return _normalize_cover_letter(body)
 
 
 def _normalize_cover_letter(value: object) -> str:
@@ -209,3 +236,24 @@ def get_cover_letter_service() -> CoverLetterService:
     if _service is None:
         _service = CoverLetterService()
     return _service
+
+
+def _extract_role_keywords(job_description: str) -> list[str]:
+    prioritized = ["Python", "FastAPI", "SQL", "PostgreSQL", "Docker", "Testing", "REST APIs", "Backend"]
+    lowered = job_description.lower()
+    found: list[str] = []
+
+    for keyword in prioritized:
+        lookup = keyword.lower().replace("rest apis", "rest api")
+        if lookup in lowered and keyword not in found:
+            found.append(keyword)
+
+    if found:
+        return found[:3]
+
+    generic = [token.title() for token in WORD_RE.findall(job_description) if len(token) > 4]
+    deduped: list[str] = []
+    for token in generic:
+        if token not in deduped:
+            deduped.append(token)
+    return deduped[:3]

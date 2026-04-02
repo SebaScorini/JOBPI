@@ -168,6 +168,7 @@ def _normalize_library_summary(value: object) -> str:
     if not text:
         return ""
 
+    text = re.sub(r"\[\[[^\]]*\]\]", "", text).strip()
     text = re.sub(r"\s*\.\.\.\s*$", "", text).strip()
     normalized = _normalize_text(text, MAX_LIBRARY_SUMMARY_CHARS).rstrip(" ,;:")
     if normalized and normalized[-1] not in ".!?":

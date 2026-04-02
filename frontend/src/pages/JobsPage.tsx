@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse } from '../types';
-import { Briefcase, ArrowRight, Loader2, Plus } from 'lucide-react';
+import { Briefcase, ArrowRight, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 const statusBadgeMap: Record<string, string> = {
@@ -17,20 +17,42 @@ export function JobsPage() {
   const { t, language } = useLanguage();
   const [jobs, setJobs] = useState<JobAnalysisResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchJobs() {
       try {
         const data = await apiService.listJobs();
         setJobs(data);
+        setError(null);
       } catch (err) {
         console.error('Failed to load jobs', err);
+        setError(t('jobs.failedLoad'));
       } finally {
         setIsLoading(false);
       }
     }
     fetchJobs();
-  }, []);
+  }, [t]);
+
+  const handleDeleteJob = async (jobId: number) => {
+    const confirmed = window.confirm(t('jobs.confirmDelete'));
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingJobId(jobId);
+    setError(null);
+    try {
+      await apiService.deleteJob(jobId);
+      setJobs((currentJobs) => currentJobs.filter((job) => job.job_id !== jobId));
+    } catch (err: any) {
+      setError(err.message || t('jobs.failedDelete'));
+    } finally {
+      setDeletingJobId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -46,6 +68,12 @@ export function JobsPage() {
           {t('jobs.newTarget')}
         </Link>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">
+          {error}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12">
@@ -63,9 +91,8 @@ export function JobsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {jobs.map((job) => (
-            <Link 
+            <article
               key={job.job_id} 
-              to={`/jobs/${job.job_id}`}
               className="interactive-card glass-card-solid p-6 rounded-2xl flex flex-col justify-between group h-full"
             >
               <div>
@@ -73,40 +100,60 @@ export function JobsPage() {
                   <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
                     <Briefcase size={20} />
                   </div>
-                  <ArrowRight size={20} className="text-slate-400 group-hover:text-brand-primary group-hover:translate-x-1 transition-all" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteJob(job.job_id)}
+                      disabled={deletingJobId === job.job_id}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                      aria-label={t('jobs.deleteAction')}
+                      title={t('jobs.deleteAction')}
+                    >
+                      {deletingJobId === job.job_id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                    </button>
+                    <Link
+                      to={`/jobs/${job.job_id}`}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-all hover:text-brand-primary hover:translate-x-1"
+                      aria-label={t('jobs.openJob')}
+                    >
+                      <ArrowRight size={20} />
+                    </Link>
+                  </div>
                 </div>
-                <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors break-words">
-                  {job.title || job.role_type || t('common.untitledRole')}
-                </h3>
-                <p className="text-slate-500 font-medium mb-4">
-                  {job.company || job.seniority || t('common.unknownCompany')}
-                </p>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
-                    {t(`statuses.${job.status}`)}
-                  </span>
-                  {job.applied_date && (
-                    <span className="text-xs text-slate-500">
-                      {t('jobs.appliedOn', {
-                        date: new Date(job.applied_date).toLocaleDateString(language),
-                      })}
+                <Link to={`/jobs/${job.job_id}`} className="block">
+                  <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors break-words">
+                    {job.title || job.role_type || t('common.untitledRole')}
+                  </h3>
+                  <p className="text-slate-500 font-medium mb-4">
+                    {job.company || job.seniority || t('common.unknownCompany')}
+                  </p>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
+                      {t(`statuses.${job.status}`)}
                     </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-auto">
-                  {job.required_skills?.slice(0, 3).map((skill, i) => (
-                    <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg">
-                      {skill}
-                    </span>
-                  ))}
-                  {(job.required_skills?.length || 0) > 3 && (
-                    <span className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg">
-                      +{job.required_skills.length - 3}
-                    </span>
-                  )}
-                </div>
+                    {job.applied_date && (
+                      <span className="text-xs text-slate-500">
+                        {t('jobs.appliedOn', {
+                          date: new Date(job.applied_date).toLocaleDateString(language),
+                        })}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-auto">
+                    {job.required_skills?.slice(0, 3).map((skill, i) => (
+                      <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg">
+                        {skill}
+                      </span>
+                    ))}
+                    {(job.required_skills?.length || 0) > 3 && (
+                      <span className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg">
+                        +{job.required_skills.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </Link>
               </div>
-            </Link>
+            </article>
           ))}
         </div>
       )}

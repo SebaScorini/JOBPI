@@ -14,13 +14,28 @@ import {
 } from '../types';
 
 function resolveApiBaseUrl(): string {
-  const apiBaseUrl = import.meta.env.VITE_API_URL;
+  const apiBaseUrl = import.meta.env.VITE_API_URL?.trim();
 
-  if (!apiBaseUrl || !apiBaseUrl.trim()) {
-    throw new Error('VITE_API_URL is not configured.');
+  if (apiBaseUrl) {
+    return apiBaseUrl.replace(/\/+$/, '');
   }
 
-  return apiBaseUrl.replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    const { hostname, origin } = window.location;
+    const normalizedHostname = hostname.toLowerCase();
+
+    if (normalizedHostname === 'localhost' || normalizedHostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+
+    if (normalizedHostname === 'jobpi-api.vercel.app') {
+      return origin.replace(/\/+$/, '');
+    }
+
+    return 'https://jobpi-api.vercel.app';
+  }
+
+  throw new Error('VITE_API_URL is not configured.');
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -100,6 +115,10 @@ interface BackendMatchRead {
 
 interface RegenerateOption {
   regenerate?: boolean;
+}
+
+interface DeleteSuccessResponse {
+  success: boolean;
 }
 
 interface BackendCVComparisonResponse {
@@ -360,6 +379,15 @@ export const apiService = {
     });
 
     return mapJob(job);
+  },
+
+  async deleteJob(jobId: number): Promise<boolean> {
+    const response = await request<DeleteSuccessResponse>(`/jobs/${jobId}`, {
+      method: 'DELETE',
+      auth: true,
+    });
+
+    return response.success;
   },
 
   async uploadCV(name: string, file: File): Promise<StoredCV> {
