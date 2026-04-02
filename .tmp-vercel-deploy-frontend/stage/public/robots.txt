@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Disallow: /dashboard
+Disallow: /jobs
+Disallow: /library
+Disallow: /matches
+Disallow: /tracker
+
+Sitemap: https://jobpi.app/sitemap.xml

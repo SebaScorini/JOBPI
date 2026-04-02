@@ -1,0 +1,14 @@
+.venv
+frontend/node_modules
+frontend/dist
+.agent
+.agents
+.codex
+.tmp-tests
+.tmp-vercel-deploy
+tests
+design-system
+.git
+*.db
+*.sqlite
+*.sqlite3
