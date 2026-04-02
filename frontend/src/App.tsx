@@ -14,7 +14,6 @@ import { LandingPage } from './pages/LandingPage';
 import { JSX, useEffect } from 'react';
 import { LanguageProvider } from './context/LanguageContext';
 import { TrackerPage } from './pages/TrackerPage';
-import { Analytics } from '@vercel/analytics/react';
 
 const DEFAULT_TITLE = 'JOBPI';
 const SITE_NAME = 'JOBPI';
@@ -138,7 +137,6 @@ function App() {
       <AuthProvider>
         <LanguageProvider>
           <AppRouter />
-          <Analytics />
         </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>

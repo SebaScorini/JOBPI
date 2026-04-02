@@ -2,7 +2,6 @@
 __pycache__
 frontend/node_modules
 frontend/dist
-frontend/src
 .agent
 .agents
 .codex

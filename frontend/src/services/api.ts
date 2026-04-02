@@ -92,6 +92,14 @@ interface BackendCVRead {
   created_at: string;
 }
 
+interface BackendCVListResponse {
+  items: BackendCVRead[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
 interface BackendMatchRead {
   id: number;
   user_id?: number;
@@ -239,6 +247,14 @@ function mapCV(cv: BackendCVRead): StoredCV {
     tags: cv.tags ?? [],
     created_at: cv.created_at,
   };
+}
+
+function normalizeCVListResponse(payload: BackendCVRead[] | BackendCVListResponse): BackendCVRead[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return Array.isArray(payload.items) ? payload.items : [];
 }
 
 function mapCvResult(match: BackendMatchRead): CvAnalysisResponse {
@@ -429,7 +445,8 @@ export const apiService = {
   },
 
   async listCVs(): Promise<StoredCV[]> {
-    const cvs = await request<BackendCVRead[]>('/cvs', { auth: true });
+    const response = await request<BackendCVRead[] | BackendCVListResponse>('/cvs', { auth: true });
+    const cvs = normalizeCVListResponse(response);
     return cvs.map(mapCV);
   },
 
