@@ -32,7 +32,7 @@ The goal is to reduce manual effort and make application decisions more consiste
 - FastAPI
 - SQLModel
 - PostgreSQL (Supabase)
-- SQLite fallback for local development
+- SQLite fallback for local development only
 - DSPy
 - OpenRouter (Minimax)
 
@@ -45,7 +45,7 @@ The goal is to reduce manual effort and make application decisions more consiste
 
 ## 4. Architecture
 
-JOBPI uses a React frontend and a FastAPI backend connected through a REST API. The backend handles business logic, authentication, persistence, and AI-powered analysis. Production data is stored in PostgreSQL via Supabase, while local development can still use SQLite. AI tasks (analysis, summaries, suggestions, generation) are routed through DSPy with OpenRouter-backed models.
+JOBPI uses a React frontend and a FastAPI backend connected through a REST API. The backend handles business logic, authentication, persistence, and AI-powered analysis. Production data is stored in PostgreSQL via Supabase through `DATABASE_URL`, while local development can still use SQLite if needed. AI tasks (analysis, summaries, suggestions, generation) are routed through DSPy with OpenRouter-backed models.
 
 ## 5. Installation
 
@@ -73,6 +73,12 @@ Run API server:
 uvicorn app.main:app --reload
 ```
 
+Vercel entrypoint:
+
+```bash
+app/server.py
+```
+
 ### Frontend
 
 ```bash
@@ -87,7 +93,7 @@ npm run dev
 
 ```env
 APP_ENV=development
-# Supabase / production target
+# Supabase / production target. Required on Vercel.
 # DATABASE_URL=postgresql+psycopg://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres?sslmode=require
 # Optional local development fallback (only when DATABASE_URL is omitted)
 # DATABASE_URL=sqlite:///./jobpi.db
@@ -104,7 +110,9 @@ MAX_CV_TEXT_CHARS=8000
 MAX_OUTPUT_TOKENS=400
 AI_TIMEOUT_SECONDS=45
 SQLITE_TIMEOUT_SECONDS=30
+FRONTEND_URL=http://localhost:5173
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
+CORS_ORIGIN_REGEX=
 CORS_MAX_AGE_SECONDS=600
 ```
 
@@ -122,11 +130,26 @@ You can override any individual limit explicitly through environment variables.
 - Supabase should use a PostgreSQL URL with `sslmode=require`.
 - To initialize tables without starting the API, run `python -m app.db.init_db`.
 
+### Vercel Backend Notes
+
+- Vercel uses `app/server.py`, which re-exports the FastAPI app.
+- Set `APP_ENV=production` in Vercel.
+- Set `DATABASE_URL` to the Supabase PostgreSQL connection string.
+- Set `SECRET_KEY` and `OPENROUTER_API_KEY` in Vercel project environment variables.
+- Set `FRONTEND_URL` to the production frontend URL or use `CORS_ORIGINS` / `CORS_ORIGIN_REGEX` for multiple domains and preview deployments.
+- The backend routes stay at `/auth`, `/jobs`, `/cvs`, `/matches`, and `/health`.
+
 ### Frontend (.env in frontend/)
 
 ```env
 VITE_API_URL=https://api.example.com
+VITE_SITE_URL=https://app.example.com
 ```
+
+Frontend notes for Vercel:
+
+- `VITE_API_URL` is required and should point to the deployed FastAPI backend.
+- `VITE_SITE_URL` is optional but recommended so canonical and Open Graph URLs use the production domain instead of the current browser origin.
 
 ## 7. Running Locally
 
