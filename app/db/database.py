@@ -1,6 +1,7 @@
 from collections.abc import Generator
 
 from sqlalchemy import inspect
+from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.config import get_settings
@@ -15,11 +16,14 @@ def _build_connect_args() -> dict:
     return {}
 
 
-engine = create_engine(
-    settings.database_url,
-    connect_args=_build_connect_args(),
-    pool_pre_ping=True,
-)
+engine_kwargs = {
+    "connect_args": _build_connect_args(),
+    "pool_pre_ping": not settings.is_sqlite,
+}
+if settings.is_postgres:
+    engine_kwargs["poolclass"] = NullPool
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 
 
 def create_db_and_tables() -> None:

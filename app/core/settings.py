@@ -114,6 +114,17 @@ def _parse_csv_setting(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
 def _default_sqlite_database_url() -> str:
     return f"sqlite:///{(BASE_DIR / 'jobpi.db').as_posix()}"
 
@@ -241,6 +252,7 @@ class Settings(BaseModel):
     sqlite_timeout_seconds: int = Field(
         default_factory=lambda: _get_env_int("SQLITE_TIMEOUT_SECONDS", 30)
     )
+    frontend_url: str = Field(default_factory=lambda: _get_env_str("FRONTEND_URL"))
     cors_origins: list[str] = Field(
         default_factory=lambda: _parse_csv_setting(
             _get_env_str(
@@ -253,6 +265,7 @@ class Settings(BaseModel):
             )
         )
     )
+    cors_origin_regex: str = Field(default_factory=lambda: _get_env_str("CORS_ORIGIN_REGEX"))
     cors_max_age_seconds: int = Field(
         default_factory=lambda: _get_env_int("CORS_MAX_AGE_SECONDS", 600)
     )
@@ -290,6 +303,10 @@ class Settings(BaseModel):
             max(500, self.job_preprocess_target_chars),
         )
         self.ai_timeout_seconds = max(5, self.ai_timeout_seconds)
+        self.frontend_url = self.frontend_url.rstrip("/")
+        self.cors_origins = _dedupe_preserve_order(
+            self.cors_origins + ([self.frontend_url] if self.frontend_url else [])
+        )
         self.cors_max_age_seconds = max(0, self.cors_max_age_seconds)
 
         if self.app_env == "production" and self.secret_key == "dev-only-secret-key-change-me":
@@ -298,6 +315,10 @@ class Settings(BaseModel):
             raise ValueError("DATABASE_URL must be set")
         if self.app_env == "production" and self.database_url.startswith("sqlite"):
             raise ValueError("DATABASE_URL must point to PostgreSQL in production")
+        if self.app_env == "production" and not self.is_postgres:
+            raise ValueError("DATABASE_URL must use a PostgreSQL driver in production")
+        if "*" in self.cors_origins:
+            raise ValueError("CORS_ORIGINS cannot contain '*' when credentials are enabled")
 
     @property
     def max_pdf_size_bytes(self) -> int:

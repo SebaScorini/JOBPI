@@ -17,30 +17,35 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(
-    title="JOBPI",
-    version="0.2.0",
-    description="Authenticated AI job analysis backend with user-scoped CVs, jobs, and matches.",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    settings = get_settings()
+    application = FastAPI(
+        title="JOBPI",
+        version="0.2.0",
+        description="Authenticated AI job analysis backend with user-scoped CVs, jobs, and matches.",
+        lifespan=lifespan,
+    )
 
-settings = get_settings()
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex or None,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        max_age=settings.cors_max_age_seconds,
+    )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    max_age=settings.cors_max_age_seconds,
-)
+    application.include_router(auth_router)
+    application.include_router(cvs_router)
+    application.include_router(jobs_router)
+    application.include_router(matches_router)
 
-app.include_router(auth_router)
-app.include_router(cvs_router)
-app.include_router(jobs_router)
-app.include_router(matches_router)
+    @application.get("/health")
+    def health_check() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return application
 
 
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+app = create_app()
