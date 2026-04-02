@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import defaultdict, deque
@@ -9,7 +10,11 @@ from typing import Deque
 from fastapi import HTTPException, Request, status
 
 from app.core.config import get_settings
+from app.core.rate_limit_redis import RedisRateLimiter
 from app.models import User
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -74,7 +79,29 @@ def _build_subject(request: Request, user: User | None) -> str:
     return "ip:unknown"
 
 
-_limiter = InMemoryRateLimiter()
+_limiter: InMemoryRateLimiter | RedisRateLimiter | None = None
+_limiter_signature: str | None = None
+
+
+def get_rate_limiter() -> InMemoryRateLimiter | RedisRateLimiter:
+    global _limiter, _limiter_signature
+
+    settings = get_settings()
+    signature = settings.redis_url or "in-memory"
+    if _limiter is not None and _limiter_signature == signature:
+        return _limiter
+
+    if settings.redis_url:
+        logger.info("rate_limiter_backend backend=redis")
+        _limiter = RedisRateLimiter(
+            redis_url=settings.redis_url,
+            fallback_limiter=InMemoryRateLimiter(),
+        )
+    else:
+        logger.info("rate_limiter_backend backend=in_memory")
+        _limiter = InMemoryRateLimiter()
+    _limiter_signature = signature
+    return _limiter
 
 
 def enforce_rate_limit(
@@ -83,4 +110,4 @@ def enforce_rate_limit(
     user: User | None = None,
     email: str | None = None,
 ) -> None:
-    _limiter.enforce(request=request, policy=policy, user=user, email=email)
+    get_rate_limiter().enforce(request=request, policy=policy, user=user, email=email)

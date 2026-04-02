@@ -12,6 +12,8 @@ This project reads environment variables from both backend and frontend code.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime | Defaults to 60 |
 | `OPENROUTER_API_KEY` | OpenRouter auth key | Required for AI features |
 | `OPENROUTER_BASE_URL` | OpenRouter API base URL | Defaults to `https://openrouter.ai/api/v1` |
+| `SENTRY_DSN` | Enables backend error reporting to Sentry | Optional; leave unset to disable Sentry |
+| `REDIS_URL` | Enables shared Redis-backed rate limiting | Optional; in-memory fallback remains available |
 | `DSPY_MODEL` | DSPy model identifier | Defaults to `openrouter/minimax/minimax-m2.5:free` |
 | `DSPY_TEMPERATURE` | Model temperature | Clamped to a narrow safe range |
 | `MAX_OUTPUT_TOKENS` | Shared output budget | `DSPY_MAX_TOKENS` is also accepted as a fallback source |
@@ -58,4 +60,6 @@ This project reads environment variables from both backend and frontend code.
 
 - Keep `DATABASE_URL` on PostgreSQL in production.
 - Keep `SECRET_KEY` and `OPENROUTER_API_KEY` out of source control.
+- Set `SENTRY_DSN` only in environments where Sentry ingestion is intended.
+- Set `REDIS_URL` in production to enable cross-instance rate limiting.
 - Use `CORS_ORIGIN_REGEX` for preview URLs instead of wildcard origins.

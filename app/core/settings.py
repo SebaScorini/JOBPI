@@ -27,8 +27,9 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "job_analyze_limit": 30,
         "match_cvs_window_seconds": 300,
         "match_cvs_limit": 30,
-        "cover_letter_window_seconds": 300,
-        "cover_letter_limit": 15,
+        # Development limits are intentionally looser than production for faster iteration.
+        "cover_letter_window_seconds": 600,
+        "cover_letter_limit": 6,
         "cv_upload_window_seconds": 300,
         "cv_upload_limit": 20,
         "max_pdf_size_mb": 5,
@@ -146,6 +147,8 @@ class Settings(BaseModel):
     openrouter_base_url: str = Field(
         default_factory=lambda: _get_env_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     )
+    sentry_dsn: str | None = Field(default_factory=lambda: _get_env_str("SENTRY_DSN") or None)
+    redis_url: str | None = Field(default_factory=lambda: _get_env_str("REDIS_URL") or None)
     database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", _default_database_url()))
     secret_key: str = Field(
         default_factory=lambda: _get_env_str(

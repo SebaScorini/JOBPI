@@ -5,9 +5,13 @@ from concurrent.futures import ThreadPoolExecutor
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, run_ai_call_with_timeout
+from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
 from app.core.config import configure_dspy, get_settings
 from app.services.job_analyzer import _normalize_text
+
+
+# Keep the old symbol name available for tests and local monkeypatching.
+run_ai_call_with_timeout = run_ai_call_with_circuit_breaker
 
 
 MAX_LIBRARY_SUMMARY_CHARS = 180

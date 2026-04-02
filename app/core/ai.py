@@ -6,6 +6,7 @@ from typing import Any, Callable
 import dspy
 from fastapi import HTTPException, status
 
+from app.core.circuit_breaker import AICircuitBreaker
 from app.core.config import get_settings
 
 
@@ -13,6 +14,7 @@ AI_TIMEOUT_DETAIL = "AI request timed out. Please try again."
 AI_PROVIDER_UNAVAILABLE_DETAIL = "AI provider is temporarily unavailable. Please try again in a moment."
 MAX_LM_TOKENS = 4000
 DEFAULT_SHARED_LM_MAX_TOKENS = 400
+_ai_circuit_breaker = AICircuitBreaker()
 
 
 def clamp_lm_max_tokens(value: int) -> int:
@@ -62,6 +64,33 @@ def run_ai_call_with_timeout(
         ) from exc
 
 
+def run_ai_call_with_circuit_breaker(
+    *,
+    executor: Executor,
+    timeout_seconds: int,
+    operation: str,
+    logger: logging.Logger,
+    callable_: Callable[..., Any],
+    lm_max_tokens: int | None = None,
+    **kwargs,
+) -> Any:
+    return _ai_circuit_breaker.call(
+        operation=operation,
+        logger=logger,
+        callable_=lambda: run_ai_call_with_timeout(
+            executor=executor,
+            timeout_seconds=timeout_seconds,
+            operation=operation,
+            logger=logger,
+            callable_=callable_,
+            lm_max_tokens=lm_max_tokens,
+            **kwargs,
+        ),
+        retryable=_is_retryable_ai_exception,
+        token_budget=clamp_lm_max_tokens(lm_max_tokens) if lm_max_tokens is not None else None,
+    )
+
+
 def build_ai_failure_http_exception(
     *,
     exc: Exception,
@@ -100,6 +129,16 @@ def _looks_like_provider_unavailable(exc: BaseException | None) -> bool:
             return True
         current = current.__cause__
     return False
+
+
+def _is_retryable_ai_exception(exc: Exception) -> bool:
+    if isinstance(exc, HTTPException):
+        return exc.status_code in {
+            status.HTTP_502_BAD_GATEWAY,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            status.HTTP_504_GATEWAY_TIMEOUT,
+        }
+    return _looks_like_provider_unavailable(exc)
 
 
 def _is_likely_truncated_result(value: object) -> bool:

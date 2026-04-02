@@ -6,7 +6,7 @@ import re
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, run_ai_call_with_timeout
+from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
 from app.core.config import configure_dspy, get_settings
 from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
@@ -118,7 +118,7 @@ class CvAnalyzerService:
         selected_language = normalize_language(language)
         dspy_start = time.perf_counter()
         try:
-            result = run_ai_call_with_timeout(
+            result = run_ai_call_with_circuit_breaker(
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="cv_match_analysis",
