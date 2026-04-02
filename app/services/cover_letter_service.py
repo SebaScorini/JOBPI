@@ -17,7 +17,7 @@ from app.services.response_language import language_instruction, normalize_langu
 MAX_COVER_LETTER_CHARS = 1200
 MAX_COVER_LETTER_PARAGRAPHS = 3
 MAX_COVER_LETTER_PARAGRAPH_CHARS = 380
-COVER_LETTER_MAX_TOKENS = 675
+COVER_LETTER_MAX_TOKENS = 1500
 logger = logging.getLogger(__name__)
 
 

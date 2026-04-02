@@ -6,13 +6,21 @@ from datetime import datetime, timezone
 
 import dspy
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_timeout
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
-from app.schemas.job import AIResponseLanguage, JobAnalysisPayload, JobAnalysisRequest, JobRead, JobStatus
+from app.schemas.job import (
+    AIResponseLanguage,
+    JobAnalysisPayload,
+    JobAnalysisRequest,
+    JobDeleteResponse,
+    JobRead,
+    JobStatus,
+)
 from app.services.job_preprocessing import clean_description
 from app.services.response_language import language_instruction, normalize_language
 
@@ -315,6 +323,28 @@ class JobAnalyzerService:
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
         return self._serialize_job(job)
+
+    def delete_job(self, session: Session, user: User, job_id: int) -> JobDeleteResponse:
+        # Fetch by primary key first so we can distinguish missing records from ownership violations.
+        job = crud.get_job_by_id(session, job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
+        if job.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to delete this job.",
+            )
+
+        try:
+            crud.delete_job(session, job)
+        except IntegrityError as exc:
+            logger.exception("job_delete_failed job_id=%s user_id=%s", job_id, user.id)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete job.",
+            ) from exc
+        logger.info("job_deleted job_id=%s user_id=%s", job_id, user.id)
+        return JobDeleteResponse(success=True)
 
     def update_job_status(
         self,

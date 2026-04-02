@@ -11,6 +11,7 @@ from app.schemas.job import (
     CoverLetterGenerateRequest,
     CoverLetterGenerateResponse,
     JobAnalysisRequest,
+    JobDeleteResponse,
     JobNotesUpdateRequest,
     JobRead,
     JobStatusUpdateRequest,
@@ -76,6 +77,24 @@ def get_job(
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
     return get_job_analyzer_service().get_job(session, current_user, job_id)
+
+
+@router.delete(
+    "/{job_id}",
+    response_model=JobDeleteResponse,
+    summary="Delete a job",
+    description="Deletes a job owned by the authenticated user.",
+    responses={
+        403: {"description": "The job belongs to a different user."},
+        404: {"description": "The requested job was not found."},
+    },
+)
+def delete_job(
+    job_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> JobDeleteResponse:
+    return get_job_analyzer_service().delete_job(session, current_user, job_id)
 
 
 @router.patch("/{job_id}/status", response_model=JobRead)
