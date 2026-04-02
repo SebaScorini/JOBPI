@@ -180,12 +180,33 @@ async def batch_upload_cvs(
     )
 
 
-@router.get("", response_model=list[CVRead])
+@router.get("", response_model=dict)
 def list_cvs(
+    limit: int = 20,
+    offset: int = 0,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> list[CVRead]:
-    return get_cv_library_service().list_cvs(session, current_user)
+) -> dict:
+    """List user's CVs with pagination. Default returns 20 most recent CVs.
+    
+    Query params:
+        - limit: Number of items (1-200, default 20)
+        - offset: Pagination offset (default 0)
+    """
+    from app.schemas.cv import CVListResponse
+    
+    # Clamp and validate
+    limit = max(1, min(int(limit), 200))
+    offset = max(0, int(offset))
+    
+    cvs, total = get_cv_library_service().list_cvs(session, current_user, limit=limit, offset=offset)
+    return CVListResponse(
+        items=cvs,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
+    ).model_dump()
 
 
 @router.get("/{cv_id}", response_model=CVDetailRead)

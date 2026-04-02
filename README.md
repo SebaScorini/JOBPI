@@ -25,12 +25,35 @@ Frontend: React, TypeScript, Vite, Tailwind CSS, React Router.
 
 ## Quick Start
 
-There are two ways to use JOBPI:
+### Option 1: Docker (Recommended)
 
-1. Local installation, if you want to use your own `OPENROUTER_API_KEY` and `DSPY_MODEL`.
-2. The deployed app at https://jobpi-app.vercel.app/.
+The easiest way to run the full stack with PostgreSQL:
 
-Backend:
+```bash
+# Copy environment template
+cp .config/.env.docker .env
+
+# Customize environment variables in .env as needed
+
+# Start all services (backend, frontend, database)
+make up
+
+# View logs
+make logs
+
+# Access the app
+# Frontend: http://localhost:3000
+# Backend: http://localhost:8000
+# Docs: http://localhost:8000/docs
+```
+
+See [DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md) for detailed Docker setup.
+
+### Option 2: Local Installation
+
+If you want to use your own `OPENROUTER_API_KEY` and `DSPY_MODEL`:
+
+**Backend:**
 
 ```powershell
 python -m venv .venv
@@ -39,13 +62,17 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Frontend:
+**Frontend:**
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+### Option 3: Deployed Version
+
+Use the hosted version at https://jobpi-app.vercel.app/
 
 ## Deployment
 
@@ -59,23 +86,75 @@ See the detailed guides in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md),
 
 ## Project Structure
 
-- `app/`: FastAPI backend
+JOBPI is organized for clarity and maintainability:
+
+```
+├── .config/              # Configuration and Docker resources
+│   └── docker/          # Docker compose, images, nginx config
+├── .scripts/            # Helper scripts
+├── app/                 # Backend FastAPI application
+├── frontend/            # Frontend React application
+├── docs/                # Documentation
+└── tests/               # Test suite
+```
+
+For a complete directory guide, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+
+### Backend Architecture
+
 - `app/api/routes/`: auth, CV, job, and match endpoints
 - `app/core/`: settings, AI, security, validation, rate limiting
-- `app/db/`: engine, sessions, schema bootstrap, CRUD helpers
-- `app/models/`: SQLModel entities
-- `app/schemas/`: API request/response models
+- `app/db/`: database engine, sessions, schema, CRUD operations
+- `app/models/`: SQLModel ORM entities
+- `app/schemas/`: Pydantic request/response validation
 - `app/services/`: PDF extraction, job analysis, CV matching, cover letters
-- `frontend/`: React application
-- `docs/`: project documentation
+
+### Frontend Structure
+
+- `frontend/src/pages/`: page-level components
+- `frontend/src/components/`: reusable components
+- `frontend/src/services/`: API client
+- `frontend/src/context/`: React context state
+- `frontend/src/i18n/`: internationalization files
+
+## Testing
+
+Tests are organized in the `tests/` directory and cover validation, pagination, and API health.
+
+### Run tests with Docker
+```bash
+make test
+```
+
+### Run tests locally
+```bash
+python tests/test_improvements.py
+```
+
+### Run with pytest
+```bash
+pytest                          # Run all tests
+pytest tests/test_improvements.py -v  # Specific test
+pytest --cov=app tests/         # With coverage
+```
+
+See [tests/README.md](tests/README.md) for detailed test documentation.
 
 ## Documentation
 
-- [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)
+### Getting Started
+- [DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md) - 5-minute Docker setup
+- [PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) - Full directory guide
+
+### Reference & Architecture
+- [PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) - Project overview
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
+- [API_REFERENCE.md](docs/API_REFERENCE.md) - REST API endpoints
+
+### Configuration & Deployment
+- [ENVIRONMENT.md](docs/ENVIRONMENT.md) - All environment variables
+- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Production deployment
+- [DOCKER.md](docs/DOCKER.md) - Complete Docker guide with 40+ commands
 
 ## Notes
 

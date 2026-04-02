@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CvAnalysisResponse(BaseModel):
@@ -46,3 +46,28 @@ class CVBatchUploadResponse(BaseModel):
 
 class CVTagsUpdate(BaseModel):
     tags: list[str]
+
+
+class PaginationParams(BaseModel):
+    """Query parameters for list endpoints with pagination."""
+    limit: int = Field(default=20, ge=1, le=200)
+    offset: int = Field(default=0)  # No ge=0 constraint; validator will clamp
+    
+    @field_validator('offset', mode='before')
+    @classmethod
+    def validate_offset(cls, v) -> int:
+        """Clamp negative offsets to 0."""
+        try:
+            offset = int(v)
+            return max(0, offset)
+        except (ValueError, TypeError):
+            return 0
+
+
+class CVListResponse(BaseModel):
+    """Paginated CV list response."""
+    items: list[CVRead]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool = Field(default=False)

@@ -43,7 +43,7 @@ class CV(SQLModel, table=True):
     library_summary: str = Field(sa_column=Column(Text, nullable=False, default=""))
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
     created_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now),
+        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
     )
 
@@ -74,7 +74,7 @@ class JobAnalysis(SQLModel, table=True):
         sa_column=Column(String(20), nullable=True),
     )
     created_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now),
+        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
     )
 
@@ -96,7 +96,7 @@ class CVJobMatch(SQLModel, table=True):
     missing_skills: list[str] = Field(sa_column=Column(JSON_FIELD, nullable=False))
     recommended: bool = Field(sa_column=Column(Boolean, nullable=False, default=False), default=False)
     created_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now),
+        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
     )
 

@@ -58,10 +58,30 @@ def create_cv(
     return cv
 
 
-def get_cvs_for_user(session: Session, user_id: int) -> list[CV]:
-    # Enforce user ownership during retrieval
-    statement = select(CV).where(CV.user_id == user_id).order_by(CV.created_at.desc())
-    return list(session.exec(statement).all())
+def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: int = 0) -> tuple[list[CV], int]:
+    """Get paginated CVs for user.
+    
+    Args:
+        session: Database session
+        user_id: User ID
+        limit: Max items to return (1-200)
+        offset: Pagination offset
+        
+    Returns:
+        Tuple of (list of CVs, total count)
+    """
+    # Clamp limit to reasonable values
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    
+    # Get total count
+    count_statement = select(CV).where(CV.user_id == user_id)
+    total = len(session.exec(count_statement).all())
+    
+    # Get paginated results
+    statement = select(CV).where(CV.user_id == user_id).order_by(CV.created_at.desc()).offset(offset).limit(limit)
+    cvs = list(session.exec(statement).all())
+    return cvs, total
 
 
 def get_cv_for_user(session: Session, user_id: int, cv_id: int) -> CV | None:
