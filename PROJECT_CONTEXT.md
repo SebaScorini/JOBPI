@@ -1,243 +1,59 @@
 # PROJECT CONTEXT
 
-## 1. Project Overview
-- JOBPI is an AI-assisted job application workspace that helps a user analyze job descriptions, maintain a personal CV library, compare CVs against roles, generate cover letters, and track application progress.
-- Main goal: reduce manual effort in tailoring applications and make CV selection more consistent through AI-generated job analysis plus CV-role matching.
-- Target users: individual job seekers managing multiple resumes and multiple active applications.
-- Core functionality:
-- User registration/login with JWT auth
-- Upload one or many CV PDFs per user
-- Extract CV text and generate compact CV library summaries
-- Analyze a pasted job description into structured requirements and preparation guidance
-- Match a selected CV to a job, compare two CVs for the same job, and generate improvement suggestions
-- Generate a tailored cover letter from a job + selected CV
-- Track application status and notes for each analyzed job
+## What the Project Does
 
-## 2. Tech Stack
-### Backend
-- FastAPI
-- SQLModel on top of SQLAlchemy
-- Pydantic
-- Uvicorn
-- PyMuPDF for PDF text extraction
+JOBPI is an AI-assisted job application workspace. It helps a user upload CVs, analyze job descriptions, compare CVs against a role, generate cover letters, and track the status of applications over time.
 
-### Frontend
-- React 18
-- TypeScript
-- React Router
-- Tailwind CSS
-- Vite
-- Lucide React icons
+The product is designed to reduce manual tailoring work and make role matching more consistent through structured analysis and reusable CV data.
 
-### Database
-- PostgreSQL preferred for production, intended for Supabase
-- SQLite fallback for local development
+## Architecture Overview
 
-### AI / LLM (if exists)
-- DSPy
-- OpenRouter API
-- Default model target: `openrouter/minimax/minimax-m2.5:free`
+- Frontend: React SPA for job analysis, CV management, matching, and tracking.
+- Backend: FastAPI service that handles auth, persistence, request validation, and AI orchestration.
+- Database: SQLModel over SQLite locally and PostgreSQL in production, typically via Supabase.
+- AI: DSPy calling OpenRouter-backed models for job analysis, CV fit analysis, CV summaries, and cover letters.
 
-### DevOps / Deployment
-- Local `.env`-driven configuration
-- CORS-configured API
-- Windows batch starter script (`iniciar.bat`)
+## Backend Role
 
-### Other tools
-- `jwt-decode` on frontend
-- `python-dotenv`
-- `python-multipart`
+- Exposes authenticated REST endpoints under `/auth`, `/cvs`, `/jobs`, and `/matches`.
+- Enforces request size limits and in-memory rate limits.
+- Persists users, CVs, job analyses, and matches.
+- Runs PDF extraction, preprocessing, and AI generation services.
 
-## 3. Architecture Overview
-- Architecture style: modular monolith with a React SPA frontend and a single FastAPI backend.
-- Backend layering is mostly:
-- API routes for transport and validation
-- dependencies for auth resolution
-- services for business logic and AI orchestration
-- db/crud for persistence access
-- models/schemas for storage and API contracts
-- Request flow:
-1. Frontend page calls `frontend/src/services/api.ts`
-2. FastAPI route validates request and enforces auth/rate/size limits
-3. Service layer performs preprocessing, AI calls, caching, and CRUD operations
-4. SQLModel persists user-scoped entities in SQLite or PostgreSQL
-5. API returns normalized response DTOs consumed by the SPA
-- The backend is not split into repository classes; `app/db/crud.py` acts as the data-access layer.
-- AI-heavy features use service-level in-memory caches and DB reuse to avoid repeating expensive calls.
+## Frontend Role
 
-## 4. Folder Structure
-- `app/`: FastAPI backend
-- `app/api/routes/`: HTTP endpoints grouped by auth, CVs, jobs, matches
-- `app/core/`: settings, AI helpers, security, rate limiting, request-size validation
-- `app/db/`: engine/session setup, schema bootstrap, CRUD helpers
-- `app/models/`: SQLModel table entities
-- `app/schemas/`: request/response models exposed by the API
-- `app/services/`: job analysis, CV analysis, cover-letter generation, PDF extraction, language handling
-- `frontend/src/`: React SPA source
-- `frontend/src/pages/`: top-level screens such as dashboard, job details, CV library, tracker
-- `frontend/src/context/`: auth and language global state
-- `frontend/src/services/`: frontend API client and response mappers
-- `design-system/`: design reference material, not runtime code
-- `frontend/dist/`: built frontend artifact already present in repo
+- Serves the user-facing app shell, navigation, and routed screens.
+- Calls the backend through `frontend/src/services/api.ts`.
+- Stores the auth token in browser storage and attaches it to protected requests.
+- Uses `VITE_API_URL` for the backend base URL and `VITE_SITE_URL` for canonical page metadata.
 
-## 5. Backend System
-### Core modules
-- `app/main.py`: creates FastAPI app, initializes schema on startup, registers routers, configures CORS, exposes `/health`.
-- `app/core/settings.py`: single source of runtime configuration, env parsing, environment-specific limits, DSPy/OpenRouter setup.
-- `app/core/ai.py`: shared AI timeout handling, LM token override context, provider error normalization.
-- `app/core/security.py`: custom password hashing with PBKDF2-HMAC-SHA256 and custom HS256 JWT implementation.
-- `app/dependencies/auth.py`: bearer-token auth dependency resolving current user from JWT subject.
+## Database Role
 
-### Business logic
-- Job analysis:
-- Cleans noisy job descriptions before AI calls
-- Stores structured analysis in `job_analyses.analysis_result`
-- Reuses existing analysis by normalized title/company/cleaned description and requested language
-- Falls back to heuristic extraction when AI fails or times out
-- CV library:
-- Extracts text from PDF
-- Cleans and truncates CV text
-- Deduplicates by cleaned CV text per user
-- Generates short CV library summaries
-- Supports tags and deletion with cleanup of related matches/cover-letter links
-- Matching:
-- Evaluates a single CV against a job
-- Persists `cv_job_matches`
-- Computes an additional heuristic keyword-overlap score
-- Can compare two CVs for the same job and explain the winner
-- Cover letters:
-- Generates concise role-specific plain-text cover letters
-- Caches generated text on the related job record
-- Tracking:
-- Stores job status, optional applied date, and notes on each analyzed job
+- Stores user-scoped data in `users`, `cvs`, `job_analyses`, and `cv_job_matches`.
+- Keeps analysis payloads and CV-match data in JSON columns where appropriate.
+- Uses runtime schema bootstrap, with SQLite compatibility handling for legacy local databases.
 
-### Services
-- `job_analyzer.py`: DSPy signature/module for structured job analysis plus fallback heuristics
-- `cv_analyzer.py`: DSPy signature/module for CV-vs-job fit analysis
-- `cv_library_service.py`: CV upload, matching, comparison, tag updates, serialization
-- `cv_library_summary_service.py`: concise CV summary generation with heuristic fallback
-- `cover_letter_service.py`: DSPy-based cover-letter generation and caching
-- `pdf_extractor.py`: PDF validation, text extraction, cleanup, section focusing
+## Auth Flow
 
-### Utilities
-- `job_preprocessing.py`: removes low-signal sections from job descriptions
-- `response_language.py`: English/Spanish normalization and localized message helpers
-- `rate_limit.py`: in-memory per-user/per-IP limiter
-- `validation.py`: rejects oversized requests by `Content-Length`
+1. User registers or logs in through `/auth/register` or `/auth/login`.
+2. Login returns a bearer token signed with `SECRET_KEY`.
+3. The frontend stores the token and sends it as `Authorization: Bearer ...`.
+4. Protected routes resolve the current user through the JWT subject.
+5. All user-owned reads and writes are filtered by `user_id`.
 
-## 6. API Endpoints
-### Auth
-- `POST /auth/register`: create user account
-- `POST /auth/login`: authenticate and issue bearer token
-- `GET /auth/me`: return current authenticated user
+## External Services
 
-### CV
-- `POST /cvs/upload`: upload a single PDF CV with display name
-- `POST /cvs/batch-upload`: upload multiple PDF CVs in one request
-- `GET /cvs`: list current user CVs
-- `GET /cvs/{cv_id}`: get detailed CV data including raw/clean text
-- `PATCH /cvs/{cv_id}/tags`: update CV tags
-- `DELETE /cvs/{cv_id}`: delete CV and related match/cover-letter references
+- Supabase PostgreSQL for production data.
+- OpenRouter for AI model access through DSPy.
+- Vercel for deployment of both backend and frontend.
 
-### Jobs
-- `POST /jobs/analyze`: analyze a job description and persist a job-analysis record
-- `GET /jobs`: list current user job analyses
-- `GET /jobs/{job_id}`: get one analyzed job
-- `PATCH /jobs/{job_id}/status`: update job application status and optional applied date
-- `PATCH /jobs/{job_id}/notes`: update job notes
-- `POST /jobs/{job_id}/match-cvs`: analyze one CV against one job
-- `POST /jobs/{job_id}/compare-cvs`: compare two CVs for one job
-- `POST /jobs/{job_id}/cover-letter`: generate or reuse cached cover letter for one job/CV pair
+## Related Docs
 
-### Matches
-- `GET /matches`: list all saved matches for current user
-- `GET /matches/{match_id}`: get one saved match
-
-### System
-- `GET /health`: health check
-
-## 7. Database Design
-- ORM used: SQLModel with SQLAlchemy engine/session underneath.
-- Main entities:
-- `User`: email, hashed password, active flag, created timestamp
-- `CV`: belongs to user; stores filename, display name, raw text, clean text, summary, library summary, tags
-- `JobAnalysis`: belongs to user; stores job metadata, original and cleaned description, structured analysis JSON, status, notes, applied date, cached cover letter fields
-- `CVJobMatch`: belongs to user and links one CV to one job; stores fit level, summary, strengths, missing skills, recommendation flag
-- Relationships:
-- `User 1 -> many CV`
-- `User 1 -> many JobAnalysis`
-- `User 1 -> many CVJobMatch`
-- `CV 1 -> many CVJobMatch`
-- `JobAnalysis 1 -> many CVJobMatch`
-- `JobAnalysis.cover_letter_cv_id -> CV.id` is optional
-- JSON storage:
-- Uses generic JSON with PostgreSQL JSONB variant for arrays and analysis payloads
-- `analysis_result` is the main persisted AI payload for jobs
-- Migrations:
-- No Alembic migration flow exists in the project codebase
-- Schema is created at startup via `SQLModel.metadata.create_all`
-- Additional compatibility changes are applied manually in `app/db/database.py` through runtime `ALTER TABLE` helpers, mainly for SQLite/dev legacy upgrades
-
-## 8. Authentication & Security
-- Authentication style: stateless bearer JWT.
-- Login returns a custom HS256 JWT whose `sub` is currently user ID; auth dependency still supports legacy email-subject tokens.
-- Password storage uses salted PBKDF2-HMAC-SHA256.
-- Security middleware/dependencies:
-- OAuth2 bearer parsing via `OAuth2PasswordBearer`
-- `get_current_user` enforces valid token and active user
-- User isolation:
-- All CRUD reads/writes are filtered by `user_id`
-- CVs, jobs, and matches are never fetched without user scoping
-- Request protections:
-- Configurable in-memory rate limits for auth, upload, job analysis, match, and cover-letter routes
-- Request body size checks using `Content-Length`
-- Environment-based stricter production limits
-- CORS is configurable through `CORS_ORIGINS`
-- Important limitation: rate limiting is in-memory only, so it is per-process and not shared across replicas.
-
-## 9. AI / DSPy / LLM System (if exists)
-- Provider path: DSPy -> OpenRouter -> configured model.
-- Main DSPy signatures:
-- `LeanJobAnalysisSignature`: extracts summary, seniority, skills, responsibilities, prep, learning path, gaps, resume/interview tips, project ideas
-- `CvFitSignature`: returns fit summary, strengths, gaps, fit level, resume improvements, interview focus, next steps
-- `CvLibrarySummarySignature`: creates short CV card summaries
-- `CoverLetterSignature`: generates short plain-text tailored cover letters
-- Flows:
-- Job analysis first preprocesses noisy job text, then calls DSPy, then normalizes/truncates outputs
-- CV matching sends cleaned job text + cleaned CV text and persists a reduced match record
-- CV library summary uses AI when possible, otherwise heuristic role/tech detection
-- Cover-letter generation uses job + selected CV summary/text and caches the result in the job row
-- Providers/config:
-- OpenRouter API key and base URL are required for AI
-- Default model is configured by `DSPY_MODEL`
-- Temperature is clamped into a narrow deterministic range
-- Fallback behavior:
-- Job analysis has a notable heuristic fallback path when AI fails or times out
-- CV library summaries also have heuristic fallback
-- CV matching and cover letters surface HTTP errors rather than full heuristic regeneration, except cached match reuse can be returned if a prior match exists
-
-## 10. Environment Variables
-- `APP_ENV`: selects `development` or `production` defaults
-- `DATABASE_URL`: primary DB connection string; PostgreSQL required in production, SQLite fallback allowed only in development
-- `SECRET_KEY`: JWT signing secret; `JWT_SECRET_KEY` is also supported as fallback input
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT lifetime
-- `OPENROUTER_API_KEY`: required for AI features
-- `OPENROUTER_BASE_URL`: OpenRouter endpoint
-- `DSPY_MODEL`: target model identifier for DSPy/OpenRouter
-- `DSPY_TEMPERATURE`: model temperature, later clamped by settings
-- `MAX_OUTPUT_TOKENS`: shared output budget
-- `JOB_ANALYSIS_MAX_TOKENS`: primary job-analysis token budget
-- `JOB_ANALYSIS_RETRY_MAX_TOKENS`: smaller retry budget after timeout
-- `JOB_PREPROCESS_TARGET_CHARS`: target input size after job cleanup
-- `AI_TIMEOUT_SECONDS`: AI timeout
-- `RATE_LIMIT_ENABLED`: enables/disables in-memory limiter
-- `AUTH_RATE_LIMIT_WINDOW_SECONDS`: auth rate-limit window
-- `AUTH_REGISTER_RATE_LIMIT`: auth registration cap
-- `AUTH_LOGIN_RATE_LIMIT`: auth login cap
-- `JOB_ANALYZE_RATE_LIMIT_WINDOW_SECONDS`: job-analysis rate-limit window
-- `JOB_ANALYZE_RATE_LIMIT`: job-analysis cap
-- `MATCH_CVS_RATE_LIMIT_WINDOW_SECONDS`: match rate-limit window
-- `MATCH_CVS_RATE_LIMIT`: match cap
+- [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)
 - `COVER_LETTER_RATE_LIMIT_WINDOW_SECONDS`: cover-letter rate-limit window
 - `COVER_LETTER_RATE_LIMIT`: cover-letter cap
 - `CV_UPLOAD_RATE_LIMIT_WINDOW_SECONDS`: CV upload rate-limit window

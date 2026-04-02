@@ -2,171 +2,39 @@
 
 AI-powered job application assistant for CV optimization, role matching, and application tracking.
 
-## 1. Overview
+## Overview
 
-JOBPI helps users run a structured job application workflow in one place. It analyzes job descriptions, compares them with a personal CV library, recommends the best CV for each role, explains the match, suggests CV improvements, generates cover letters, and tracks application progress over time.
+JOBPI helps users analyze job descriptions, manage a personal CV library, compare CVs against a role, generate cover letters, and track applications in one workflow. The backend handles authentication, persistence, and AI-assisted analysis; the frontend provides the dashboard and job-management experience.
 
-The goal is to reduce manual effort and make application decisions more consistent and data-driven.
+## Tech Stack
 
-## 2. Features
+Backend: FastAPI, SQLModel, PostgreSQL on Supabase, SQLite fallback for local development, DSPy, OpenRouter.
 
-- Authentication (JWT)
-- Multi CV upload
-- AI-generated CV summaries
-- CV Library per user
-- Job analysis
-- Best CV recommendation
-- Match explanation
-- CV improvement suggestions
-- Cover letter generator
-- CV comparison
-- Job application tracker
-- Dashboard
-- Language selection (EN/ES)
-- Dark mode UI
+Frontend: React, TypeScript, Vite, Tailwind CSS, React Router.
 
-## 3. Tech Stack
+## Features
 
-### Backend
+- JWT authentication
+- Single and batch CV upload
+- CV summaries and tags
+- Job description analysis
+- CV-to-job matching and comparison
+- Tailored cover letter generation
+- Job tracking with status and notes
+- English/Spanish UI support
 
-- FastAPI
-- SQLModel
-- PostgreSQL (Supabase)
-- SQLite fallback for local development only
-- DSPy
-- OpenRouter (Minimax)
+## Quick Start
 
-### Frontend
-
-- React
-- TypeScript
-- Tailwind CSS
-- Vite
-
-## 4. Architecture
-
-JOBPI uses a React frontend and a FastAPI backend connected through a REST API. The backend handles business logic, authentication, persistence, and AI-powered analysis. Production data is stored in PostgreSQL via Supabase through `DATABASE_URL`, while local development can still use SQLite if needed. AI tasks (analysis, summaries, suggestions, generation) are routed through DSPy with OpenRouter-backed models.
-
-## 5. Installation
-
-### Backend
-
-```bash
-python -m venv .venv
-```
-
-Windows PowerShell:
+Backend:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run API server:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Vercel entrypoint:
-
-```bash
-app/server.py
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## 6. Environment Variables
-
-### Backend (.env in project root)
-
-```env
-APP_ENV=development
-# Supabase / production target. Required on Vercel.
-# DATABASE_URL=postgresql+psycopg://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres?sslmode=require
-# Optional local development fallback (only when DATABASE_URL is omitted)
-# DATABASE_URL=sqlite:///./jobpi.db
-SECRET_KEY=replace-with-a-long-random-secret
-OPENROUTER_API_KEY=your_openrouter_api_key
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-RATE_LIMIT_ENABLED=false
-TRUSTED_USER_EMAIL=
-MAX_PDF_SIZE_MB=5
-MAX_CVS_PER_UPLOAD=10
-MAX_JOB_DESCRIPTION_CHARS=12000
-MAX_CV_TEXT_CHARS=8000
-MAX_OUTPUT_TOKENS=400
-AI_TIMEOUT_SECONDS=45
-SQLITE_TIMEOUT_SECONDS=30
-FRONTEND_URL=http://localhost:5173
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
-CORS_ORIGIN_REGEX=
-CORS_MAX_AGE_SECONDS=600
-```
-
-`APP_ENV` controls the default behavior:
-
-- `development`: relaxed defaults for local work
-- `production`: conservative defaults for free-tier protection and requires a PostgreSQL `DATABASE_URL`
-
-You can override any individual limit explicitly through environment variables.
-
-### Database Notes
-
-- Use `DATABASE_URL` for every environment.
-- SQLite is an optional development fallback if `DATABASE_URL` is omitted and `APP_ENV=development`.
-- Supabase should use a PostgreSQL URL with `sslmode=require`.
-- To initialize tables without starting the API, run `python -m app.db.init_db`.
-
-### Vercel Backend Notes
-
-- Vercel uses `app/server.py`, which re-exports the FastAPI app.
-- Set `APP_ENV=production` in Vercel.
-- Set `DATABASE_URL` to the Supabase PostgreSQL connection string.
-- Set `SECRET_KEY` and `OPENROUTER_API_KEY` in Vercel project environment variables.
-- Set `FRONTEND_URL` to the production frontend URL or use `CORS_ORIGINS` / `CORS_ORIGIN_REGEX` for multiple domains and preview deployments.
-- The backend routes stay at `/auth`, `/jobs`, `/cvs`, `/matches`, and `/health`.
-
-### Frontend (.env in frontend/)
-
-```env
-VITE_API_URL=https://api.example.com
-VITE_SITE_URL=https://app.example.com
-```
-
-Frontend notes for Vercel:
-
-- `VITE_API_URL` is required and should point to the deployed FastAPI backend.
-- `VITE_SITE_URL` is optional but recommended so canonical and Open Graph URLs use the production domain instead of the current browser origin.
-
-## 7. Running Locally
-
-1. Open a terminal at the project root.
-2. Create and activate the backend virtual environment.
-3. Install backend dependencies.
-4. Start the backend server.
-
-```bash
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-5. Open a second terminal.
-6. Start the frontend dev server.
+Frontend:
 
 ```bash
 cd frontend
@@ -174,5 +42,35 @@ npm install
 npm run dev
 ```
 
-7. Open the frontend URL shown by Vite (typically http://localhost:5173).
+## Deployment
+
+The backend is deployed on Vercel through the Python entrypoint in `api/index.py`. Production should use Supabase PostgreSQL via `DATABASE_URL`, `APP_ENV=production`, a strong `SECRET_KEY`, and a valid `OPENROUTER_API_KEY`.
+
+The frontend should be built with `VITE_API_URL` pointing to the deployed backend. `VITE_SITE_URL` is recommended for production canonical URLs.
+
+See the detailed guides in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), and [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+
+## Project Structure
+
+- `app/`: FastAPI backend
+- `app/api/routes/`: auth, CV, job, and match endpoints
+- `app/core/`: settings, AI, security, validation, rate limiting
+- `app/db/`: engine, sessions, schema bootstrap, CRUD helpers
+- `app/models/`: SQLModel entities
+- `app/schemas/`: API request/response models
+- `app/services/`: PDF extraction, job analysis, CV matching, cover letters
+- `frontend/`: React application
+- `docs/`: project documentation
+
+## Documentation
+
+- [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)
+
+## Notes
+
+Local development can use SQLite if `DATABASE_URL` is omitted and `APP_ENV=development`. Production requires PostgreSQL.
 
