@@ -54,3 +54,6 @@ storage/
 .agents/
 .codex/
 skills-lock.json
+
+.vercel
+.env*.local
