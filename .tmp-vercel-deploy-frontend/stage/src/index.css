@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-background text-brand-text antialiased font-sans;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+  
+  .dark body {
+    @apply bg-[#0B0F19] text-slate-200;
+  }
+
+  /* Theme transition — only active during theme switch, not during normal interaction */
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after {
+    transition: background-color 400ms ease, border-color 400ms ease, color 400ms ease, fill 400ms ease, stroke 400ms ease !important;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    @apply dark:bg-[#151B2B]/80 dark:border-slate-800/60 dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)];
+  }
+  
+  .glass-card-solid {
+    @apply bg-slate-50/50 border border-slate-200/60 shadow-sm dark:bg-[#151B2B] dark:border-slate-800;
+  }
+
+  .interactive-card {
+    @apply hover:border-brand-primary hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer dark:hover:border-brand-secondary;
+  }
+  
+  .btn-primary {
+    @apply w-full rounded-xl bg-brand-cta px-6 py-3 text-sm font-semibold text-white shadow-[0_4px_6px_rgba(0,0,0,0.1)] transition-all hover:opacity-90 hover:-translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+  }
+
+  .btn-secondary {
+    @apply w-full rounded-xl bg-transparent border-2 border-brand-primary px-6 py-3 text-sm font-semibold text-brand-primary transition-all hover:bg-brand-primary/10 disabled:opacity-50 disabled:cursor-not-allowed dark:border-brand-secondary dark:text-brand-secondary dark:hover:bg-brand-secondary/10;
+  }
+  
+  .input-field {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm transition-all focus:border-brand-primary focus:outline-none focus:ring-[3px] focus:ring-brand-primary/20 dark:border-slate-700 dark:bg-[#0B0F19] dark:text-slate-200 dark:focus:border-brand-secondary dark:focus:ring-brand-secondary/20 placeholder:text-slate-400 dark:placeholder:text-slate-500;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Accessibility: respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after {
+    transition-duration: 0.01ms !important;
+  }
+
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
