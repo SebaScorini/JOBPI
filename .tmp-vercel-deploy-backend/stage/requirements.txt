@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-pydantic
-sqlmodel
-psycopg[binary]
-dspy
-python-dotenv
-pypdf
-python-multipart
