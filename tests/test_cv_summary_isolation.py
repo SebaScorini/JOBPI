@@ -110,10 +110,11 @@ class CvLibraryPersistenceTests(unittest.TestCase):
                 file_bytes=b"%PDF-1.4 frontend",
             )
 
-        stored_cvs = crud.get_cvs_for_user(self.session, self.user.id)
+        stored_cvs, total = crud.get_cvs_for_user(self.session, self.user.id)
         stored_by_id = {cv.id: cv for cv in stored_cvs}
 
         self.assertNotEqual(first_cv.id, second_cv.id)
+        self.assertEqual(total, 2)
         self.assertEqual(stored_by_id[first_cv.id].clean_text, "Python FastAPI experience")
         self.assertEqual(stored_by_id[second_cv.id].clean_text, "React TypeScript experience")
         self.assertEqual(stored_by_id[first_cv.id].library_summary, "Python backend summary.")

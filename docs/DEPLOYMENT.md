@@ -46,6 +46,7 @@ See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for the full variable list.
 6. Set `REDIS_URL` to enable shared rate limiting across multiple instances.
 7. Set `FRONTEND_URL` or `CORS_ORIGINS` for the deployed frontend domain.
 8. Set `VITE_API_URL` in the frontend project to the backend URL.
+9. Make sure the backend environment installs `alembic`; startup now upgrades the schema to `head`.
 
 The repo includes `vercel.json` rewrites so requests are routed to the Python app.
 
@@ -55,7 +56,7 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 2. Copy the PostgreSQL connection string.
 3. Use the PostgreSQL URL with `sslmode=require`.
 4. Set that value as `DATABASE_URL` in the backend deployment.
-5. Start the backend once so the schema is created automatically.
+5. Run `alembic upgrade head` or start the backend once so the migration bootstrap can apply the current schema.
 
 ## Operational Notes
 
@@ -66,3 +67,6 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 - If `SENTRY_DSN` is configured, unexpected runtime exceptions are sent to Sentry with request metadata.
 - If you use preview deployments, configure `CORS_ORIGIN_REGEX` to allow the preview domain pattern.
 - The hosted app uses the production backend and production AI settings; local installs can override both.
+- Schema changes are managed in Alembic revisions; see [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md).
+- Existing databases that predate Alembic are stamped to the baseline revision automatically before newer revisions run.
+- PostgreSQL keeps `NullPool` in production for serverless safety; local PostgreSQL uses a small `QueuePool` for faster repeat queries.
