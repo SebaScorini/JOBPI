@@ -1,7 +1,7 @@
 from datetime import timezone
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app.models import CV, CVJobMatch, JobAnalysis, User
 
@@ -75,8 +75,8 @@ def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: in
     offset = max(0, offset)
     
     # Get total count
-    count_statement = select(CV).where(CV.user_id == user_id)
-    total = len(session.exec(count_statement).all())
+    count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id)
+    total = int(session.exec(count_statement).one())
     
     # Get paginated results
     statement = select(CV).where(CV.user_id == user_id).order_by(CV.created_at.desc()).offset(offset).limit(limit)

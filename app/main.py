@@ -15,7 +15,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.matches import router as matches_router
 from app.core.config import get_settings
 from app.core.logging import bind_request_context, bind_user_context, reset_context, reset_user_context, setup_logging
-from app.db.database import create_db_and_tables
+from app.db.migration_runner import ensure_database_schema
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_db_and_tables()
+    ensure_database_schema()
     yield
 
 

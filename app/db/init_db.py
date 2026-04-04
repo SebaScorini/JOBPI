@@ -1,11 +1,11 @@
 from app.core.config import get_settings
-from app.db.database import create_db_and_tables
+from app.db.migration_runner import ensure_database_schema
 
 
 def main() -> None:
-    create_db_and_tables()
+    ensure_database_schema()
     backend = "PostgreSQL" if get_settings().is_postgres else "SQLite"
-    print(f"Initialized {backend} database schema.")
+    print(f"Initialized {backend} database schema via migrations.")
 
 
 if __name__ == "__main__":

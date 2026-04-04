@@ -3,6 +3,7 @@ uvicorn
 pydantic
 pydantic[email]
 sqlmodel
+alembic
 psycopg[binary]
 dspy
 python-dotenv
