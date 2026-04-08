@@ -8,7 +8,7 @@ from sqlalchemy import inspect
 from sqlalchemy.exc import NoInspectionAvailable
 
 
-revision = "0003_add_saved_and_favorite_flags"
+revision = "0003_saved_favorite_flags"
 down_revision = "0002_add_performance_indexes"
 branch_labels = None
 depends_on = None

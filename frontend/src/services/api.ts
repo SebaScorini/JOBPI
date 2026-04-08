@@ -208,15 +208,15 @@ export class ApiError extends Error {
 }
 
 function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_STORAGE_KEY);
+  return sessionStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 function storeToken(token: string): void {
-  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
 }
 
 function clearStoredToken(): void {
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  sessionStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 
 function buildHeaders(options: ApiRequestOptions): HeadersInit {

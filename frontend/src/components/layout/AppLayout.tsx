@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Briefcase,
@@ -21,12 +21,11 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { resolvedTheme, toggleDarkMode } = useAppTheme();
-  const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    window.location.assign('/');
   };
 
   const navItems = [
