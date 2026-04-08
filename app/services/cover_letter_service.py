@@ -2,6 +2,10 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 import re
 
+from app.core.runtime import configure_runtime_environment
+
+configure_runtime_environment()
+
 import dspy
 from fastapi import HTTPException, status
 from sqlmodel import Session

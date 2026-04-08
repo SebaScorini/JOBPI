@@ -3,6 +3,10 @@ from contextlib import contextmanager
 import logging
 from typing import Any, Callable
 
+from app.core.runtime import configure_runtime_environment
+
+configure_runtime_environment()
+
 import dspy
 from fastapi import HTTPException, status
 

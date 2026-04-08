@@ -18,6 +18,19 @@ MIGRATION_LOCK_ID = 90210017
 
 
 @contextmanager
+def _suppress_alembic_info_logs() -> None:
+    logger_names = ("alembic", "alembic.runtime.migration", "alembic.runtime.plugins")
+    previous_levels = {name: logging.getLogger(name).level for name in logger_names}
+    try:
+        for name in logger_names:
+            logging.getLogger(name).setLevel(logging.WARNING)
+        yield
+    finally:
+        for name, level in previous_levels.items():
+            logging.getLogger(name).setLevel(level)
+
+
+@contextmanager
 def _postgres_migration_lock() -> None:
     settings = get_settings()
     if not settings.is_postgres:
@@ -51,6 +64,7 @@ def ensure_database_schema() -> None:
     config = Config(str(ALEMBIC_INI_PATH))
     config.set_main_option("script_location", str((BASE_DIR / "app" / "db" / "migrations").resolve()))
     config.set_main_option("sqlalchemy.url", get_settings().database_url)
+    config.attributes["skip_logging_config"] = True
 
     with _postgres_migration_lock():
         inspector = inspect(engine)
@@ -61,4 +75,5 @@ def ensure_database_schema() -> None:
             command.stamp(config, BASELINE_REVISION)
 
         logger.info("db_migrations_upgrade revision=head")
-        command.upgrade(config, "head")
+        with _suppress_alembic_info_logs():
+            command.upgrade(config, "head")

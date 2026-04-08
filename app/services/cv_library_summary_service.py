@@ -2,6 +2,10 @@ import re
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+from app.core.runtime import configure_runtime_environment
+
+configure_runtime_environment()
+
 import dspy
 from fastapi import HTTPException, status
 
