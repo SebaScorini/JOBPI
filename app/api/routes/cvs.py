@@ -231,6 +231,15 @@ def update_cv_tags(
     return get_cv_library_service().update_cv_tags(session, current_user, cv_id, payload.tags)
 
 
+@router.patch("/{cv_id}/toggle-favorite", response_model=CVRead)
+def toggle_cv_favorite(
+    cv_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CVRead:
+    return get_cv_library_service().toggle_cv_favorite(session, current_user, cv_id)
+
+
 @router.post("/bulk-delete", response_model=BulkActionResponse)
 def bulk_delete_cvs(
     payload: CVBulkDeleteRequest,

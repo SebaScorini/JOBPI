@@ -225,3 +225,93 @@ def test_request_size_limit_returns_413():
         assert payload["error"]["code"] == "ERR_PAYLOAD_TOO_LARGE"
     finally:
         _teardown_client(client, session, app, engine, db_path)
+
+
+def test_jobs_support_saved_filter_and_toggle():
+    client, session, user, app, engine, db_path = _build_client()
+    try:
+        saved_job = crud.create_job_analysis(
+            session,
+            user_id=user.id,
+            title="Saved Job",
+            company="Acme",
+            description="Saved job description",
+            clean_description="saved job description",
+            analysis_result={
+                "summary": "summary",
+                "seniority": "mid",
+                "role_type": "backend",
+                "required_skills": ["python"],
+                "nice_to_have_skills": [],
+                "responsibilities": [],
+                "how_to_prepare": [],
+                "learning_path": [],
+                "missing_skills": [],
+                "resume_tips": [],
+                "interview_tips": [],
+                "portfolio_project_ideas": [],
+            },
+        )
+        unsaved_job = crud.create_job_analysis(
+            session,
+            user_id=user.id,
+            title="Unsaved Job",
+            company="Beta",
+            description="Unsaved job description",
+            clean_description="unsaved job description",
+            analysis_result={
+                "summary": "summary",
+                "seniority": "mid",
+                "role_type": "frontend",
+                "required_skills": ["react"],
+                "nice_to_have_skills": [],
+                "responsibilities": [],
+                "how_to_prepare": [],
+                "learning_path": [],
+                "missing_skills": [],
+                "resume_tips": [],
+                "interview_tips": [],
+                "portfolio_project_ideas": [],
+            },
+        )
+
+        toggle_response = client.patch(f"/jobs/{saved_job.id}/toggle-saved")
+        assert toggle_response.status_code == 200
+        assert toggle_response.json()["is_saved"] is True
+
+        saved_only = client.get("/jobs?saved=true")
+        unsaved_only = client.get("/jobs?saved=false")
+
+        assert saved_only.status_code == 200
+        assert unsaved_only.status_code == 200
+        assert [item["id"] for item in saved_only.json()["items"]] == [saved_job.id]
+        assert [item["id"] for item in unsaved_only.json()["items"]] == [unsaved_job.id]
+    finally:
+        _teardown_client(client, session, app, engine, db_path)
+
+
+def test_cvs_support_favorite_toggle():
+    client, session, user, app, engine, db_path = _build_client()
+    try:
+        cv = crud.create_cv(
+            session,
+            user_id=user.id,
+            filename="favorite.pdf",
+            display_name="Favorite Resume",
+            raw_text="favorite raw",
+            clean_text="favorite clean",
+            summary="Favorite summary",
+            library_summary="Favorite library summary",
+            tags=[],
+        )
+
+        response = client.patch(f"/cvs/{cv.id}/toggle-favorite")
+
+        assert response.status_code == 200
+        assert response.json()["is_favorite"] is True
+
+        refreshed = crud.get_cv_for_user(session, user.id, cv.id)
+        assert refreshed is not None
+        assert refreshed.is_favorite is True
+    finally:
+        _teardown_client(client, session, app, engine, db_path)

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse, PaginationMeta } from '../types';
-import { Briefcase, ArrowRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Briefcase, ArrowRight, Loader2, Plus, Trash2, Bookmark } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { SkeletonCard } from '../components/SkeletonLoader';
 import { useToast } from '../context/ToastContext';
@@ -23,7 +23,9 @@ export function JobsPage() {
   const [jobs, setJobs] = useState<JobAnalysisResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
+  const [savingJobId, setSavingJobId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savedFilter, setSavedFilter] = useState<'all' | 'saved' | 'unsaved'>('all');
   const [pagination, setPagination] = useState<PaginationMeta>({
     total: 0,
     limit: PAGE_SIZE,
@@ -37,6 +39,7 @@ export function JobsPage() {
         const data = await apiService.listJobsPage({
           limit: PAGE_SIZE,
           offset: pagination.offset,
+          saved: savedFilter === 'all' ? undefined : savedFilter === 'saved',
         });
         setJobs(data.items);
         setPagination(data.pagination);
@@ -50,7 +53,7 @@ export function JobsPage() {
       }
     }
     fetchJobs();
-  }, [pagination.offset, showToast, t]);
+  }, [pagination.offset, savedFilter, showToast, t]);
 
   const handleDeleteJob = async (jobId: number) => {
     const confirmed = window.confirm(t('jobs.confirmDelete'));
@@ -87,6 +90,47 @@ export function JobsPage() {
     }
   };
 
+  const handleToggleSaved = async (jobId: number) => {
+    setSavingJobId(jobId);
+    setError(null);
+    try {
+      const updated = await apiService.toggleSavedJob(jobId);
+      const shouldDisappear =
+        (savedFilter === 'saved' && !updated.is_saved) ||
+        (savedFilter === 'unsaved' && updated.is_saved);
+
+      if (shouldDisappear) {
+        const nextOffset =
+          jobs.length === 1 && pagination.offset > 0
+            ? Math.max(0, pagination.offset - PAGE_SIZE)
+            : pagination.offset;
+
+        if (nextOffset !== pagination.offset) {
+          setPagination((current) => ({ ...current, offset: nextOffset }));
+        } else {
+          setJobs((currentJobs) => currentJobs.filter((job) => job.job_id !== jobId));
+          setPagination((current) => ({
+            ...current,
+            total: Math.max(0, current.total - 1),
+            has_more: current.offset + current.limit < Math.max(0, current.total - 1),
+          }));
+        }
+      } else {
+        setJobs((currentJobs) =>
+          currentJobs.map((job) => (job.job_id === jobId ? updated : job)),
+        );
+      }
+
+      showToast(updated.is_saved ? t('jobs.savedAdded') : t('jobs.savedRemoved'), 'success');
+    } catch (err: any) {
+      const message = err.message || t('jobs.failedSaveToggle');
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSavingJobId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-6">
@@ -96,10 +140,24 @@ export function JobsPage() {
           </h1>
           <p className="text-slate-500 mt-2">{t('jobs.subtitle')}</p>
         </div>
-        <Link to="/jobs/new" className="btn-primary flex items-center justify-center gap-2 w-auto px-6">
-          <Plus size={18} />
-          {t('jobs.newTarget')}
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={savedFilter}
+            onChange={(e) => {
+              setSavedFilter(e.target.value as 'all' | 'saved' | 'unsaved');
+              setPagination((current) => ({ ...current, offset: 0 }));
+            }}
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <option value="all">{t('jobs.filtersAll')}</option>
+            <option value="saved">{t('jobs.filtersSaved')}</option>
+            <option value="unsaved">{t('jobs.filtersUnsaved')}</option>
+          </select>
+          <Link to="/jobs/new" className="btn-primary flex items-center justify-center gap-2 w-auto px-6">
+            <Plus size={18} />
+            {t('jobs.newTarget')}
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -139,6 +197,24 @@ export function JobsPage() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        onClick={() => handleToggleSaved(job.job_id)}
+                        disabled={savingJobId === job.job_id}
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                          job.is_saved
+                            ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300'
+                            : 'border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                        aria-label={job.is_saved ? t('jobs.unsaveAction') : t('jobs.saveAction')}
+                        title={job.is_saved ? t('jobs.unsaveAction') : t('jobs.saveAction')}
+                      >
+                        {savingJobId === job.job_id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Bookmark size={16} className={job.is_saved ? 'fill-current' : ''} />
+                        )}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDeleteJob(job.job_id)}
                         disabled={deletingJobId === job.job_id}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
@@ -164,6 +240,11 @@ export function JobsPage() {
                       {job.company || job.seniority || t('common.unknownCompany')}
                     </p>
                     <div className="mb-4 flex flex-wrap items-center gap-2">
+                      {job.is_saved && (
+                        <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                          {t('jobs.savedBadge')}
+                        </span>
+                      )}
                       <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
                         {t(`statuses.${job.status}`)}
                       </span>

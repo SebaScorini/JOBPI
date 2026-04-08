@@ -12,6 +12,7 @@ import {
   X,
   Tag,
   Search,
+  Star,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -40,6 +41,7 @@ export function CVLibraryPage() {
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([]);
   const [tagInputs, setTagInputs] = useState<Record<number, string>>({});
   const [savingTagCvId, setSavingTagCvId] = useState<number | null>(null);
+  const [togglingFavoriteCvId, setTogglingFavoriteCvId] = useState<number | null>(null);
   const [activeTagFilter, setActiveTagFilter] = useState<string>('');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -361,6 +363,29 @@ export function CVLibraryPage() {
     }
   };
 
+  const handleToggleFavorite = async (cvId: number) => {
+    setTogglingFavoriteCvId(cvId);
+    try {
+      const updatedCv = await apiService.toggleFavoriteCV(cvId);
+      setCvs((prev) => {
+        const next = prev.map((cv) => (cv.id === cvId ? updatedCv : cv));
+        return [...next].sort((a, b) => {
+          if (a.is_favorite !== b.is_favorite) {
+            return Number(b.is_favorite) - Number(a.is_favorite);
+          }
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      });
+      setTagInputs((prev) => ({ ...prev, [cvId]: updatedCv.tags.join(', ') }));
+      showToast(updatedCv.is_favorite ? t('library.favoriteAdded') : t('library.favoriteRemoved'), 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('library.failedFavoriteToggle');
+      showToast(message, 'error');
+    } finally {
+      setTogglingFavoriteCvId(null);
+    }
+  };
+
   const availableTags = Array.from(new Set(cvs.flatMap((cv) => cv.tags))).sort((a, b) =>
     a.localeCompare(b),
   );
@@ -580,7 +605,14 @@ export function CVLibraryPage() {
                       onClick={() => setSelectedCvId(cv.id)}
                       className="min-w-0 flex-1 text-left"
                     >
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">{cv.name}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">{cv.name}</p>
+                        {cv.is_favorite && (
+                          <span className="inline-flex shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                            {t('library.favoriteBadge')}
+                          </span>
+                        )}
+                      </div>
                       <p
                         className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400"
                         style={{
@@ -593,6 +625,20 @@ export function CVLibraryPage() {
                         {cv.library_summary}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">{new Date(cv.created_at).toLocaleDateString(language)}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFavorite(cv.id)}
+                      disabled={togglingFavoriteCvId === cv.id}
+                      className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        cv.is_favorite
+                          ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300'
+                          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                      }`}
+                      aria-label={cv.is_favorite ? t('library.unfavoriteAction') : t('library.favoriteAction')}
+                      title={cv.is_favorite ? t('library.unfavoriteAction') : t('library.favoriteAction')}
+                    >
+                      {togglingFavoriteCvId === cv.id ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} className={cv.is_favorite ? 'fill-current' : ''} />}
                     </button>
                   </div>
                 </div>
@@ -641,16 +687,42 @@ export function CVLibraryPage() {
             <div className="h-full flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white">{activeCv.name}</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-heading font-bold text-brand-text dark:text-white">{activeCv.name}</h2>
+                    {activeCv.is_favorite && (
+                      <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                        {t('library.favoriteBadge')}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Calendar size={12} /> {new Date(activeCv.created_at).toLocaleDateString(language)}</p>
                 </div>
-                <button
-                  onClick={() => handleDelete(activeCv.id)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300"
-                >
-                  <Trash2 size={14} />
-                  {t('common.delete')}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFavorite(activeCv.id)}
+                    disabled={togglingFavoriteCvId === activeCv.id}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      activeCv.is_favorite
+                        ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {togglingFavoriteCvId === activeCv.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Star size={14} className={activeCv.is_favorite ? 'fill-current' : ''} />
+                    )}
+                    {activeCv.is_favorite ? t('library.unfavoriteAction') : t('library.favoriteAction')}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(activeCv.id)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300"
+                  >
+                    <Trash2 size={14} />
+                    {t('common.delete')}
+                  </button>
+                </div>
               </div>
 
               <div className="rounded-xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">

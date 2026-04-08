@@ -144,6 +144,14 @@ class CvLibraryService:
         updated = crud.update_cv_tags(session, cv, normalized_tags)
         return self._serialize_cv(session, updated)
 
+    def toggle_cv_favorite(self, session: Session, user: User, cv_id: int) -> CVRead:
+        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        if cv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
+
+        updated = crud.update_cv_favorite(session, cv, not bool(cv.is_favorite))
+        return self._serialize_cv(session, updated)
+
     def bulk_delete_cvs(self, session: Session, user: User, cv_ids: list[int]) -> dict[str, int]:
         normalized_ids = [cv_id for cv_id in cv_ids if isinstance(cv_id, int) and cv_id > 0]
         if not normalized_ids:

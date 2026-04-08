@@ -72,6 +72,7 @@ class JobRead(BaseModel):
     description: str
     clean_description: str
     analysis_result: JobAnalysisPayload
+    is_saved: bool = False
     status: JobStatus = "saved"
     applied_date: datetime | None = None
     notes: str | None = None

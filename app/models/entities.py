@@ -41,6 +41,7 @@ class CV(SQLModel, table=True):
     clean_text: str = Field(sa_column=Column(Text, nullable=False))
     summary: str = Field(sa_column=Column(Text, nullable=False))
     library_summary: str = Field(sa_column=Column(Text, nullable=False, default=""))
+    is_favorite: bool = Field(sa_column=Column(Boolean, nullable=False, default=False), default=False)
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
@@ -61,6 +62,7 @@ class JobAnalysis(SQLModel, table=True):
     description: str = Field(sa_column=Column(Text, nullable=False))
     clean_description: str = Field(sa_column=Column(Text, nullable=False))
     analysis_result: dict = Field(sa_column=Column(JSON_FIELD, nullable=False))
+    is_saved: bool = Field(sa_column=Column(Boolean, nullable=False, default=False), default=False)
     status: str = Field(sa_column=Column(String(20), nullable=False, default="saved"), default="saved")
     applied_date: Optional[datetime] = Field(
         default=None,

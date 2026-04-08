@@ -24,6 +24,7 @@ class CVRead(BaseModel):
     display_name: str
     summary: str
     library_summary: str
+    is_favorite: bool = False
     tags: list[str]
     created_at: datetime
 

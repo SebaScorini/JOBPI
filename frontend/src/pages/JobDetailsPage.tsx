@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { JobAnalysisResponse, StoredCV, CVJobMatch, CVComparisonResult, JobApplicationStatus } from '../types';
-import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check, Trash2 } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check, Trash2, Bookmark } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -75,11 +75,12 @@ export function JobDetailsPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isDeletingJob, setIsDeletingJob] = useState(false);
+  const [isTogglingSaved, setIsTogglingSaved] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
   const [matchResult, setMatchResult] = useState<CVJobMatch | null>(null);
   const [comparisonResult, setComparisonResult] = useState<CVComparisonResult | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
-  const [isCopied, setIsCopied] = useState(false);
+  const [copiedSection, setCopiedSection] = useState<'cover' | 'match' | 'comparison' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DetailsTab>('overview');
 
@@ -174,7 +175,7 @@ export function JobDetailsPage() {
 
   useEffect(() => {
     setCoverLetter('');
-    setIsCopied(false);
+    setCopiedSection(null);
     setMatchResult(null);
     setError(null);
   }, [selectedCvId, jobId]);
@@ -270,7 +271,7 @@ export function JobDetailsPage() {
     if (!jobId || !selectedCvId) return;
 
     setIsCoverLetterLoading(true);
-    setIsCopied(false);
+    setCopiedSection(null);
     setError(null);
 
     try {
@@ -284,6 +285,23 @@ export function JobDetailsPage() {
       showToast(message, 'error');
     } finally {
       setIsCoverLetterLoading(false);
+    }
+  };
+
+  const handleToggleSaved = async () => {
+    if (!jobId || !job) return;
+
+    setIsTogglingSaved(true);
+    try {
+      const updated = await apiService.toggleSavedJob(Number(jobId));
+      setJob(updated);
+      showToast(updated.is_saved ? t('jobs.savedAdded') : t('jobs.savedRemoved'), 'success');
+    } catch (err: any) {
+      const message = err.message || t('jobs.failedSaveToggle');
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setIsTogglingSaved(false);
     }
   };
 
@@ -310,14 +328,14 @@ export function JobDetailsPage() {
     }
   };
 
-  const handleCopyCoverLetter = async () => {
-    if (!coverLetter) return;
+  const handleCopyText = async (text: string, section: 'cover' | 'match' | 'comparison') => {
+    if (!text) return;
 
     try {
-      await navigator.clipboard.writeText(coverLetter);
-      setIsCopied(true);
+      await navigator.clipboard.writeText(text);
+      setCopiedSection(section);
       showToast(t('common.copied'), 'success');
-      window.setTimeout(() => setIsCopied(false), 2000);
+      window.setTimeout(() => setCopiedSection(null), 2000);
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedCopy');
       setError(message);
@@ -388,6 +406,11 @@ export function JobDetailsPage() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {job.is_saved && (
+                    <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                      {t('jobs.savedBadge')}
+                    </span>
+                  )}
                   <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status]}`}>
                     {t(`statuses.${job.status}`)}
                   </span>
@@ -398,15 +421,30 @@ export function JobDetailsPage() {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleDeleteJob}
-                disabled={isDeletingJob}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
-              >
-                {isDeletingJob ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                {t('jobs.deleteAction')}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleSaved}
+                  disabled={isTogglingSaved}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    job.is_saved
+                      ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {isTogglingSaved ? <Loader2 size={16} className="animate-spin" /> : <Bookmark size={16} className={job.is_saved ? 'fill-current' : ''} />}
+                  {job.is_saved ? t('jobs.unsaveAction') : t('jobs.saveAction')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteJob}
+                  disabled={isDeletingJob}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                >
+                  {isDeletingJob ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {t('jobs.deleteAction')}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -540,9 +578,26 @@ export function JobDetailsPage() {
                 <div className="space-y-4 min-w-0">
                   {comparisonResult && cvA && cvB && (
                     <div className="rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 p-5 lg:p-6 bg-emerald-50/70 dark:bg-emerald-950/20 space-y-4">
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.recommendedCv')}</p>
-                        <p className="text-base lg:text-lg font-semibold text-emerald-700 dark:text-emerald-300 break-words leading-7">{comparisonResult.winner.label}</p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.recommendedCv')}</p>
+                          <p className="text-base lg:text-lg font-semibold text-emerald-700 dark:text-emerald-300 break-words leading-7">{comparisonResult.winner.label}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(
+                            [
+                              comparisonResult.overall_reason,
+                              ...comparisonResult.comparative_strengths,
+                              ...comparisonResult.comparative_weaknesses,
+                              ...comparisonResult.job_alignment_breakdown,
+                            ].join('\n'),
+                            'comparison',
+                          )}
+                          className="btn-secondary w-full sm:w-auto px-4 !py-2 text-sm flex items-center justify-center gap-2"
+                        >
+                          {copiedSection === 'comparison' ? <><Check size={14} /> {t('common.copied')}</> : <><Copy size={14} /> {t('common.copyToClipboard')}</>}
+                        </button>
                       </div>
 
                       {comparisonExplanationBlocks.length > 0 && (
@@ -606,7 +661,25 @@ export function JobDetailsPage() {
                     <div className="rounded-2xl border border-brand-primary/20 p-5 lg:p-6 bg-brand-primary/5 space-y-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.matchResults')}</h3>
-                        <span className={`text-sm font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>{matchResult.match_level}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-sm font-bold uppercase ${matchLevelTextClasses[matchResult.match_level]}`}>{matchResult.match_level}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(
+                              [
+                                matchResult.why_this_cv,
+                                ...matchResult.strengths,
+                                ...displayMissingSkills,
+                                ...matchSuggestions,
+                                ...matchReorderSuggestions,
+                              ].join('\n'),
+                              'match',
+                            )}
+                            className="btn-secondary w-full sm:w-auto px-4 !py-2 text-sm flex items-center justify-center gap-2"
+                          >
+                            {copiedSection === 'match' ? <><Check size={14} /> {t('common.copied')}</> : <><Copy size={14} /> {t('common.copyToClipboard')}</>}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="rounded-xl border border-slate-200/70 dark:border-slate-700 bg-white/70 dark:bg-slate-950/30 px-4 py-3">
@@ -766,8 +839,8 @@ export function JobDetailsPage() {
                     <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-300 font-sans max-h-[min(65vh,48rem)] overflow-y-auto pr-1">
                       {coverLetter}
                     </pre>
-                    <button onClick={handleCopyCoverLetter} className="btn-secondary mt-3 w-full sm:w-auto px-6 !py-2.5 text-sm flex items-center justify-center gap-2">
-                      {isCopied ? <><Check size={14} /> {t('common.copied')}</> : <><Copy size={14} /> {t('common.copyToClipboard')}</>}
+                    <button onClick={() => handleCopyText(coverLetter, 'cover')} className="btn-secondary mt-3 w-full sm:w-auto px-6 !py-2.5 text-sm flex items-center justify-center gap-2">
+                      {copiedSection === 'cover' ? <><Check size={14} /> {t('common.copied')}</> : <><Copy size={14} /> {t('common.copyToClipboard')}</>}
                     </button>
                   </div>
                 )}

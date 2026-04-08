@@ -289,8 +289,9 @@ class JobAnalyzerService:
         *,
         limit: int = 20,
         offset: int = 0,
+        is_saved: bool | None = None,
     ) -> tuple[list[JobRead], int]:
-        jobs, total = crud.get_jobs_for_user(session, user.id, limit=limit, offset=offset)
+        jobs, total = crud.get_jobs_for_user(session, user.id, limit=limit, offset=offset, is_saved=is_saved)
         return [self._serialize_job(job) for job in jobs], total
 
     def get_job(self, session: Session, user: User, job_id: int) -> JobRead:
@@ -349,6 +350,14 @@ class JobAnalyzerService:
         updated = crud.update_job_notes(session, job, normalized_notes or None)
         return self._serialize_job(updated)
 
+    def toggle_job_saved(self, session: Session, user: User, job_id: int) -> JobRead:
+        job = crud.get_job_for_user(session, user.id, job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
+
+        updated = crud.update_job_saved(session, job, not bool(job.is_saved))
+        return self._serialize_job(updated)
+
     def _serialize_job(self, job) -> JobRead:
         return JobRead(
             id=job.id,
@@ -357,6 +366,7 @@ class JobAnalyzerService:
             description=job.description,
             clean_description=job.clean_description,
             analysis_result=JobAnalysisPayload(**job.analysis_result),
+            is_saved=bool(job.is_saved),
             status=job.status,
             applied_date=job.applied_date,
             notes=job.notes,

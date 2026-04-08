@@ -51,6 +51,7 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "job_analyze_limit": 6,
         "match_cvs_window_seconds": 3600,
         "match_cvs_limit": 8,
+        # Keep production cover-letter limits unchanged until real usage data justifies a bump.
         "cover_letter_window_seconds": 3600,
         "cover_letter_limit": 4,
         "cv_upload_window_seconds": 3600,

@@ -40,6 +40,7 @@ export interface JobAnalysisResponse {
   resume_tips: string[];
   interview_tips: string[];
   portfolio_project_ideas: string[];
+  is_saved: boolean;
   status: JobApplicationStatus;
   applied_date: string | null;
   notes: string | null;
@@ -63,6 +64,7 @@ export interface StoredCV {
   name: string;
   summary: string;
   library_summary: string;
+  is_favorite: boolean;
   tags: string[];
   created_at: string;
 }

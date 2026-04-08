@@ -81,6 +81,7 @@ Example response:
   "display_name": "Resume",
   "summary": "Experienced software engineer...",
   "library_summary": "Software engineer with backend and frontend experience.",
+  "is_favorite": false,
   "tags": [],
   "created_at": "2026-04-02T12:00:00Z"
 }
@@ -107,6 +108,7 @@ Example response:
         "display_name": "Resume",
         "summary": "Experienced software engineer...",
         "library_summary": "Software engineer with backend and frontend experience.",
+        "is_favorite": false,
         "tags": [],
         "created_at": "2026-04-02T12:00:00Z"
       },
@@ -139,6 +141,7 @@ Example response:
       "display_name": "Backend Resume",
       "summary": "Experienced software engineer...",
       "library_summary": "Software engineer with backend and frontend experience.",
+      "is_favorite": false,
       "tags": ["backend", "python"],
       "created_at": "2026-04-02T12:00:00Z"
     }
@@ -171,6 +174,13 @@ Example request:
   "tags": ["backend", "python"]
 }
 ```
+
+Example response: updated CV summary object.
+
+### PATCH /cvs/{cv_id}/toggle-favorite
+
+Description: Toggle favorite state for a CV.
+Auth required: Yes
 
 Example response: updated CV summary object.
 
@@ -261,6 +271,7 @@ Auth required: Yes
 Query params:
 - `limit` default `20`, max `100`
 - `offset` default `0`
+- `saved` optional boolean filter for bookmarked jobs
 
 Example response: paginated object with `items` and `pagination`.
 
@@ -295,6 +306,13 @@ Example request:
   "applied_date": "2026-04-02T12:00:00Z"
 }
 ```
+
+Example response: updated job object including `is_saved`.
+
+### PATCH /jobs/{job_id}/toggle-saved
+
+Description: Toggle saved/bookmarked state for a job.
+Auth required: Yes
 
 Example response: updated job object.
 

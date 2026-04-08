@@ -47,6 +47,7 @@ def create_cv(
         clean_text=clean_text,
         summary=summary,
         library_summary=library_summary,
+        is_favorite=False,
         tags=tags or [],
     )
     session.add(cv)
@@ -80,7 +81,13 @@ def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: in
     total = int(session.exec(count_statement).one())
     
     # Get paginated results
-    statement = select(CV).where(CV.user_id == user_id).order_by(CV.created_at.desc()).offset(offset).limit(limit)
+    statement = (
+        select(CV)
+        .where(CV.user_id == user_id)
+        .order_by(CV.is_favorite.desc(), CV.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     cvs = list(session.exec(statement).all())
     return cvs, total
 
@@ -107,7 +114,7 @@ def get_filtered_cvs_for_user(
         statement = statement.where(search_clause)
         count_statement = count_statement.where(search_clause)
 
-    statement = statement.order_by(CV.created_at.desc())
+    statement = statement.order_by(CV.is_favorite.desc(), CV.created_at.desc())
 
     if not normalized_tags:
         total = int(session.exec(count_statement).one())
@@ -169,6 +176,14 @@ def update_cv_tags(session: Session, cv: CV, tags: list[str]) -> CV:
     return cv
 
 
+def update_cv_favorite(session: Session, cv: CV, is_favorite: bool) -> CV:
+    cv.is_favorite = is_favorite
+    session.add(cv)
+    session.commit()
+    session.refresh(cv)
+    return cv
+
+
 def update_multiple_cv_tags(session: Session, cvs: list[CV], tags: list[str]) -> int:
     updated = 0
     for cv in cvs:
@@ -216,6 +231,7 @@ def create_job_analysis(
         description=description,
         clean_description=clean_description,
         analysis_result=analysis_result,
+        is_saved=False,
     )
     session.add(job)
     try:
@@ -250,18 +266,17 @@ def get_jobs_for_user(
     *,
     limit: int = 20,
     offset: int = 0,
+    is_saved: bool | None = None,
 ) -> tuple[list[JobAnalysis], int]:
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     count_statement = select(func.count()).select_from(JobAnalysis).where(JobAnalysis.user_id == user_id)
+    statement = select(JobAnalysis).where(JobAnalysis.user_id == user_id)
+    if is_saved is not None:
+        count_statement = count_statement.where(JobAnalysis.is_saved == is_saved)
+        statement = statement.where(JobAnalysis.is_saved == is_saved)
     total = int(session.exec(count_statement).one())
-    statement = (
-        select(JobAnalysis)
-        .where(JobAnalysis.user_id == user_id)
-        .order_by(JobAnalysis.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    statement = statement.order_by(JobAnalysis.is_saved.desc(), JobAnalysis.created_at.desc()).offset(offset).limit(limit)
     return list(session.exec(statement).all()), total
 
 
@@ -309,6 +324,14 @@ def update_job_status(
 
 def update_job_notes(session: Session, job: JobAnalysis, notes: str | None) -> JobAnalysis:
     job.notes = notes
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
+def update_job_saved(session: Session, job: JobAnalysis, is_saved: bool) -> JobAnalysis:
+    job.is_saved = is_saved
     session.add(job)
     session.commit()
     session.refresh(job)

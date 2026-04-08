@@ -90,6 +90,7 @@ interface BackendJobRead {
   description: string;
   clean_description: string;
   analysis_result: BackendJobAnalysisPayload;
+  is_saved?: boolean;
   status?: JobApplicationStatus;
   applied_date?: string | null;
   notes?: string | null;
@@ -102,6 +103,7 @@ interface BackendCVRead {
   display_name: string;
   summary: string;
   library_summary: string;
+  is_favorite?: boolean;
   tags: string[];
   created_at: string;
 }
@@ -173,6 +175,10 @@ interface PaginationQuery {
 interface CVListQuery extends PaginationQuery {
   search?: string;
   tags?: string[];
+}
+
+interface JobListQuery extends PaginationQuery {
+  saved?: boolean;
 }
 
 interface BackendCVComparisonResponse {
@@ -288,6 +294,7 @@ function mapJob(job: BackendJobRead): JobAnalysisResponse {
     resume_tips: job.analysis_result.resume_tips,
     interview_tips: job.analysis_result.interview_tips,
     portfolio_project_ideas: job.analysis_result.portfolio_project_ideas,
+    is_saved: Boolean(job.is_saved),
     status: job.status ?? 'saved',
     applied_date: job.applied_date ?? null,
     notes: job.notes ?? null,
@@ -301,6 +308,7 @@ function mapCV(cv: BackendCVRead): StoredCV {
     name: cv.display_name,
     summary: cv.summary,
     library_summary: cv.library_summary || cv.summary,
+    is_favorite: Boolean(cv.is_favorite),
     tags: cv.tags ?? [],
     created_at: cv.created_at,
   };
@@ -493,7 +501,7 @@ export const apiService = {
     return response.items;
   },
 
-  async listJobsPage(params: PaginationQuery = {}): Promise<PaginatedResult<JobAnalysisResponse>> {
+  async listJobsPage(params: JobListQuery = {}): Promise<PaginatedResult<JobAnalysisResponse>> {
     const response = await request<BackendJobRead[] | BackendJobListResponse>(
       `/jobs${buildQueryString(params)}`,
       { auth: true },
@@ -507,6 +515,15 @@ export const apiService = {
 
   async getJob(jobId: number): Promise<JobAnalysisResponse> {
     const job = await request<BackendJobRead>(`/jobs/${jobId}`, { auth: true });
+    return mapJob(job);
+  },
+
+  async toggleSavedJob(jobId: number): Promise<JobAnalysisResponse> {
+    const job = await request<BackendJobRead>(`/jobs/${jobId}/toggle-saved`, {
+      method: 'PATCH',
+      auth: true,
+    });
+
     return mapJob(job);
   },
 
@@ -607,6 +624,15 @@ export const apiService = {
       auth: true,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tags }),
+    });
+
+    return mapCV(cv);
+  },
+
+  async toggleFavoriteCV(cvId: number): Promise<StoredCV> {
+    const cv = await request<BackendCVRead>(`/cvs/${cvId}/toggle-favorite`, {
+      method: 'PATCH',
+      auth: true,
     });
 
     return mapCV(cv);

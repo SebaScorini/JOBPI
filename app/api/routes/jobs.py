@@ -68,6 +68,7 @@ def analyze_job(
 def list_jobs(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    saved: bool | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobListResponse:
@@ -77,6 +78,7 @@ def list_jobs(
         current_user,
         limit=params.limit,
         offset=params.offset,
+        is_saved=saved,
     )
     return build_paginated_response(jobs, total, params.limit, params.offset)
 
@@ -132,6 +134,15 @@ def update_job_notes(
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
     return get_job_analyzer_service().update_job_notes(session, current_user, job_id, payload.notes)
+
+
+@router.patch("/{job_id}/toggle-saved", response_model=JobRead)
+def toggle_job_saved(
+    job_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> JobRead:
+    return get_job_analyzer_service().toggle_job_saved(session, current_user, job_id)
 
 
 @router.post("/{job_id}/match-cvs", response_model=CVJobMatchDetailRead)
