@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlmodel import Session
 
 from app.core.config import get_settings
+from app.core.pagination import PaginationParams, build_paginated_response
 from app.core.rate_limit import RateLimitPolicy, enforce_rate_limit
 from app.core.validation import reject_oversized_request
 from app.db.database import get_session
@@ -12,6 +13,7 @@ from app.schemas.job import (
     CoverLetterGenerateResponse,
     JobAnalysisRequest,
     JobDeleteResponse,
+    JobListResponse,
     JobNotesUpdateRequest,
     JobRead,
     JobStatusUpdateRequest,
@@ -62,12 +64,21 @@ def analyze_job(
     return get_job_analyzer_service().analyze(payload, session=session, user=current_user)
 
 
-@router.get("", response_model=list[JobRead])
+@router.get("", response_model=JobListResponse)
 def list_jobs(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> list[JobRead]:
-    return get_job_analyzer_service().list_jobs(session, current_user)
+) -> JobListResponse:
+    params = PaginationParams(limit=limit, offset=offset)
+    jobs, total = get_job_analyzer_service().list_jobs(
+        session,
+        current_user,
+        limit=params.limit,
+        offset=params.offset,
+    )
+    return build_paginated_response(jobs, total, params.limit, params.offset)
 
 
 @router.get("/{job_id}", response_model=JobRead)

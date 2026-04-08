@@ -282,8 +282,16 @@ class JobAnalyzerService:
             created_at=None,
         )
 
-    def list_jobs(self, session: Session, user: User) -> list[JobRead]:
-        return [self._serialize_job(job) for job in crud.get_jobs_for_user(session, user.id)]
+    def list_jobs(
+        self,
+        session: Session,
+        user: User,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[JobRead], int]:
+        jobs, total = crud.get_jobs_for_user(session, user.id, limit=limit, offset=offset)
+        return [self._serialize_job(job) for job in jobs], total
 
     def get_job(self, session: Session, user: User, job_id: int) -> JobRead:
         job = crud.get_job_for_user(session, user.id, job_id)

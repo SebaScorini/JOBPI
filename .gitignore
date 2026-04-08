@@ -59,3 +59,4 @@ skills-lock.json
 
 .vercel
 .env*.local
+.github/prompts/plan-jobpi.prompt.md

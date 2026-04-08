@@ -122,7 +122,35 @@ Example response:
 Description: List the authenticated user's CVs.
 Auth required: Yes
 
-Example response: array of CV summary objects.
+Query params:
+- `limit` default `20`, max `100`
+- `offset` default `0`
+- `search` optional case-insensitive display-name filter
+- `tags` optional repeated query param; any matching tag includes the CV
+
+Example response:
+
+```json
+{
+  "items": [
+    {
+      "id": 10,
+      "filename": "resume.pdf",
+      "display_name": "Backend Resume",
+      "summary": "Experienced software engineer...",
+      "library_summary": "Software engineer with backend and frontend experience.",
+      "tags": ["backend", "python"],
+      "created_at": "2026-04-02T12:00:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "limit": 20,
+    "offset": 0,
+    "has_more": false
+  }
+}
+```
 
 ### GET /cvs/{cv_id}
 
@@ -145,6 +173,53 @@ Example request:
 ```
 
 Example response: updated CV summary object.
+
+### POST /cvs/bulk-delete
+
+Description: Delete multiple CVs owned by the authenticated user.
+Auth required: Yes
+
+Example request:
+
+```json
+{
+  "cv_ids": [10, 11, 12]
+}
+```
+
+Example response:
+
+```json
+{
+  "deleted": 3,
+  "updated": 0,
+  "failed": 0
+}
+```
+
+### POST /cvs/bulk-tag
+
+Description: Append tags to multiple CVs owned by the authenticated user.
+Auth required: Yes
+
+Example request:
+
+```json
+{
+  "cv_ids": [10, 11],
+  "tags": ["backend", "python"]
+}
+```
+
+Example response:
+
+```json
+{
+  "deleted": 0,
+  "updated": 2,
+  "failed": 0
+}
+```
 
 ### DELETE /cvs/{cv_id}
 
@@ -183,7 +258,11 @@ Example response: analyzed job object with structured analysis.
 Description: List the authenticated user's analyzed jobs.
 Auth required: Yes
 
-Example response: array of job objects.
+Query params:
+- `limit` default `20`, max `100`
+- `offset` default `0`
+
+Example response: paginated object with `items` and `pagination`.
 
 ### GET /jobs/{job_id}
 
@@ -308,7 +387,11 @@ Example response:
 Description: List all saved matches for the authenticated user.
 Auth required: Yes
 
-Example response: array of match summary objects.
+Query params:
+- `limit` default `20`, max `100`
+- `offset` default `0`
+
+Example response: paginated object with `items` and `pagination`.
 
 ### GET /matches/{match_id}
 
@@ -318,6 +401,21 @@ Auth required: Yes
 Example response: match detail object.
 
 ## System
+
+## Error Format
+
+Error responses now follow this schema:
+
+```json
+{
+  "error": {
+    "code": "ERR_CV_NOT_FOUND",
+    "message": "CV not found.",
+    "request_id": "trace-id",
+    "timestamp": "2026-04-04T12:00:00Z"
+  }
+}
+```
 
 ### GET /health
 

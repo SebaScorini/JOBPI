@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Literal
+from typing import TypeAlias
 
 from pydantic import BaseModel, Field
 
+from app.core.pagination import PaginatedResponse
 from app.schemas.cv import CvAnalysisResponse
 from app.schemas.job import AIResponseLanguage
 
@@ -56,3 +58,6 @@ class CVJobMatchRead(BaseModel):
 class CVJobMatchDetailRead(CVJobMatchRead):
     heuristic_score: float
     result: CvAnalysisResponse
+
+
+MatchListResponse: TypeAlias = PaginatedResponse[CVJobMatchRead]

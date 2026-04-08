@@ -1,13 +1,24 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlmodel import Session
 
 from app.core.config import get_settings
+from app.core.pagination import PaginationParams, build_paginated_response
 from app.core.rate_limit import RateLimitPolicy, enforce_rate_limit
 from app.core.validation import reject_oversized_request
 from app.db.database import get_session
 from app.dependencies.auth import get_current_user
 from app.models import User
-from app.schemas.cv import CVDetailRead, CVRead, CVBatchUploadResponse, CVTagsUpdate, CVUploadResult
+from app.schemas.cv import (
+    BulkActionResponse,
+    CVBatchUploadResponse,
+    CVBulkDeleteRequest,
+    CVBulkTagRequest,
+    CVDetailRead,
+    CVListResponse,
+    CVRead,
+    CVTagsUpdate,
+    CVUploadResult,
+)
 from app.services.cv_library_service import get_cv_library_service
 
 
@@ -180,33 +191,25 @@ async def batch_upload_cvs(
     )
 
 
-@router.get("", response_model=dict)
+@router.get("", response_model=CVListResponse)
 def list_cvs(
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str = "",
+    tags: list[str] | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> dict:
-    """List user's CVs with pagination. Default returns 20 most recent CVs.
-    
-    Query params:
-        - limit: Number of items (1-200, default 20)
-        - offset: Pagination offset (default 0)
-    """
-    from app.schemas.cv import CVListResponse
-    
-    # Clamp and validate
-    limit = max(1, min(int(limit), 200))
-    offset = max(0, int(offset))
-    
-    cvs, total = get_cv_library_service().list_cvs(session, current_user, limit=limit, offset=offset)
-    return CVListResponse(
-        items=cvs,
-        total=total,
-        limit=limit,
-        offset=offset,
-        has_more=(offset + limit) < total,
-    ).model_dump()
+) -> CVListResponse:
+    params = PaginationParams(limit=limit, offset=offset)
+    cvs, total = get_cv_library_service().list_cvs_filtered(
+        session,
+        current_user,
+        search=search,
+        tags=tags,
+        limit=params.limit,
+        offset=params.offset,
+    )
+    return build_paginated_response(cvs, total, params.limit, params.offset)
 
 
 @router.get("/{cv_id}", response_model=CVDetailRead)
@@ -226,6 +229,24 @@ def update_cv_tags(
     current_user: User = Depends(get_current_user),
 ) -> CVRead:
     return get_cv_library_service().update_cv_tags(session, current_user, cv_id, payload.tags)
+
+
+@router.post("/bulk-delete", response_model=BulkActionResponse)
+def bulk_delete_cvs(
+    payload: CVBulkDeleteRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> BulkActionResponse:
+    return BulkActionResponse(**get_cv_library_service().bulk_delete_cvs(session, current_user, payload.cv_ids))
+
+
+@router.post("/bulk-tag", response_model=BulkActionResponse)
+def bulk_tag_cvs(
+    payload: CVBulkTagRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> BulkActionResponse:
+    return BulkActionResponse(**get_cv_library_service().bulk_tag_cvs(session, current_user, payload.cv_ids, payload.tags))
 
 
 @router.delete("/{cv_id}")

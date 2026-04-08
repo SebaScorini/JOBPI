@@ -1,5 +1,6 @@
 import sys
 import types
+from types import SimpleNamespace
 
 from app.db import migration_runner
 
@@ -84,4 +85,69 @@ def test_ensure_database_schema_only_upgrades_fresh_database(monkeypatch):
 
     migration_runner.ensure_database_schema()
 
+    assert calls == [("upgrade", "head")]
+
+
+def test_ensure_database_schema_uses_postgres_advisory_lock(monkeypatch):
+    calls: list[tuple[str, str]] = []
+    executed_sql: list[str] = []
+
+    fake_alembic = types.ModuleType("alembic")
+    fake_command = types.ModuleType("alembic.command")
+    fake_config = types.ModuleType("alembic.config")
+
+    class FakeConfig:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+        def set_main_option(self, key: str, value: str) -> None:
+            return None
+
+    def upgrade(config, revision: str) -> None:
+        calls.append(("upgrade", revision))
+
+    fake_command.stamp = lambda config, revision: None
+    fake_command.upgrade = upgrade
+    fake_config.Config = FakeConfig
+    fake_alembic.command = fake_command
+    fake_alembic.config = fake_config
+
+    monkeypatch.setitem(sys.modules, "alembic", fake_alembic)
+    monkeypatch.setitem(sys.modules, "alembic.command", fake_command)
+    monkeypatch.setitem(sys.modules, "alembic.config", fake_config)
+
+    monkeypatch.setattr(
+        migration_runner,
+        "get_settings",
+        lambda: SimpleNamespace(is_postgres=True, database_url="postgresql://example"),
+    )
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, statement, params):
+            executed_sql.append(str(statement))
+            assert params == {"lock_id": migration_runner.MIGRATION_LOCK_ID}
+
+    class FakeEngine:
+        def connect(self):
+            return FakeConnection()
+
+    class FakeInspector:
+        def get_table_names(self):
+            return ["alembic_version"]
+
+    monkeypatch.setattr(migration_runner, "engine", FakeEngine())
+    monkeypatch.setattr(migration_runner, "inspect", lambda engine: FakeInspector())
+
+    migration_runner.ensure_database_schema()
+
+    assert executed_sql == [
+        "SELECT pg_advisory_lock(:lock_id)",
+        "SELECT pg_advisory_unlock(:lock_id)",
+    ]
     assert calls == [("upgrade", "head")]

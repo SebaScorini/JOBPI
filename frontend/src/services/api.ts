@@ -94,10 +94,32 @@ interface BackendCVRead {
 
 interface BackendCVListResponse {
   items: BackendCVRead[];
-  total: number;
-  limit: number;
-  offset: number;
-  has_more: boolean;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+}
+
+interface BackendJobListResponse {
+  items: BackendJobRead[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+}
+
+interface BackendMatchListResponse {
+  items: BackendMatchRead[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
 }
 
 interface BackendMatchRead {
@@ -194,6 +216,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const message =
+      (data && typeof data.error?.message === 'string' && data.error.message) ||
       (data && typeof data.detail === 'string' && data.detail) ||
       (data && Array.isArray(data.detail) && data.detail[0]?.msg) ||
       `API error: ${response.status} ${response.statusText}`;
@@ -250,6 +273,22 @@ function mapCV(cv: BackendCVRead): StoredCV {
 }
 
 function normalizeCVListResponse(payload: BackendCVRead[] | BackendCVListResponse): BackendCVRead[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+function normalizeJobListResponse(payload: BackendJobRead[] | BackendJobListResponse): BackendJobRead[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+function normalizeMatchListResponse(payload: BackendMatchRead[] | BackendMatchListResponse): BackendMatchRead[] {
   if (Array.isArray(payload)) {
     return payload;
   }
@@ -366,7 +405,8 @@ export const apiService = {
   },
 
   async listJobs(): Promise<JobAnalysisResponse[]> {
-    const jobs = await request<BackendJobRead[]>('/jobs', { auth: true });
+    const response = await request<BackendJobRead[] | BackendJobListResponse>('/jobs', { auth: true });
+    const jobs = normalizeJobListResponse(response);
     return jobs.map(mapJob);
   },
 
@@ -522,7 +562,8 @@ export const apiService = {
   },
 
   async listMatches(): Promise<CVJobMatch[]> {
-    const matches = await request<BackendMatchRead[]>('/matches', { auth: true });
+    const response = await request<BackendMatchRead[] | BackendMatchListResponse>('/matches', { auth: true });
+    const matches = normalizeMatchListResponse(response);
     return matches.map(mapMatch);
   },
 

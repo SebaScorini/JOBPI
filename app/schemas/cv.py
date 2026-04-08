@@ -1,6 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
+from typing import TypeAlias
+
+from app.core.pagination import PaginatedResponse, PaginationParams
 
 
 class CvAnalysisResponse(BaseModel):
@@ -48,26 +51,19 @@ class CVTagsUpdate(BaseModel):
     tags: list[str]
 
 
-class PaginationParams(BaseModel):
-    """Query parameters for list endpoints with pagination."""
-    limit: int = Field(default=20, ge=1, le=200)
-    offset: int = Field(default=0)  # No ge=0 constraint; validator will clamp
-    
-    @field_validator('offset', mode='before')
-    @classmethod
-    def validate_offset(cls, v) -> int:
-        """Clamp negative offsets to 0."""
-        try:
-            offset = int(v)
-            return max(0, offset)
-        except (ValueError, TypeError):
-            return 0
+class CVBulkDeleteRequest(BaseModel):
+    cv_ids: list[int] = Field(default_factory=list)
 
 
-class CVListResponse(BaseModel):
-    """Paginated CV list response."""
-    items: list[CVRead]
-    total: int
-    limit: int
-    offset: int
-    has_more: bool = Field(default=False)
+class CVBulkTagRequest(BaseModel):
+    cv_ids: list[int] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class BulkActionResponse(BaseModel):
+    updated: int = 0
+    deleted: int = 0
+    failed: int = 0
+
+
+CVListResponse: TypeAlias = PaginatedResponse[CVRead]

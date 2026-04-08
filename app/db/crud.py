@@ -1,7 +1,8 @@
 from datetime import timezone
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, func, select
+from sqlmodel import Session, select
 
 from app.models import CV, CVJobMatch, JobAnalysis, User
 
@@ -84,6 +85,43 @@ def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: in
     return cvs, total
 
 
+def get_filtered_cvs_for_user(
+    session: Session,
+    user_id: int,
+    *,
+    search: str = "",
+    tags: list[str] | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[CV], int]:
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    normalized_search = search.strip().lower()
+    normalized_tags = [tag.strip().lower() for tag in (tags or []) if tag.strip()]
+
+    statement = select(CV).where(CV.user_id == user_id)
+    count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id)
+
+    if normalized_search:
+        search_clause = func.lower(CV.display_name).contains(normalized_search)
+        statement = statement.where(search_clause)
+        count_statement = count_statement.where(search_clause)
+
+    statement = statement.order_by(CV.created_at.desc())
+
+    if not normalized_tags:
+        total = int(session.exec(count_statement).one())
+        items = list(session.exec(statement.offset(offset).limit(limit)).all())
+        return items, total
+
+    candidates = list(session.exec(statement).all())
+    filtered = [
+        cv for cv in candidates if {tag.lower() for tag in (cv.tags or [])} & set(normalized_tags)
+    ]
+    total = len(filtered)
+    return filtered[offset : offset + limit], total
+
+
 def get_cv_for_user(session: Session, user_id: int, cv_id: int) -> CV | None:
     statement = select(CV).where(CV.id == cv_id, CV.user_id == user_id)
     return session.exec(statement).first()
@@ -115,12 +153,43 @@ def delete_cv(session: Session, cv: CV) -> None:
     session.commit()
 
 
+def get_cvs_for_user_by_ids(session: Session, user_id: int, cv_ids: list[int]) -> list[CV]:
+    normalized_ids = [cv_id for cv_id in cv_ids if cv_id > 0]
+    if not normalized_ids:
+        return []
+    statement = select(CV).where(CV.user_id == user_id, CV.id.in_(normalized_ids))
+    return list(session.exec(statement).all())
+
+
 def update_cv_tags(session: Session, cv: CV, tags: list[str]) -> CV:
     cv.tags = tags
     session.add(cv)
     session.commit()
     session.refresh(cv)
     return cv
+
+
+def update_multiple_cv_tags(session: Session, cvs: list[CV], tags: list[str]) -> int:
+    updated = 0
+    for cv in cvs:
+        existing = list(cv.tags or [])
+        merged = existing[:]
+        for tag in tags:
+            if tag not in merged:
+                merged.append(tag)
+        cv.tags = merged
+        session.add(cv)
+        updated += 1
+    session.commit()
+    return updated
+
+
+def delete_multiple_cvs(session: Session, cvs: list[CV]) -> int:
+    deleted = 0
+    for cv in cvs:
+        delete_cv(session, cv)
+        deleted += 1
+    return deleted
 
 
 def update_cv_library_summary(session: Session, cv: CV, library_summary: str) -> CV:
@@ -175,9 +244,25 @@ def get_matching_job_analysis(
     return session.exec(statement).first()
 
 
-def get_jobs_for_user(session: Session, user_id: int) -> list[JobAnalysis]:
-    statement = select(JobAnalysis).where(JobAnalysis.user_id == user_id).order_by(JobAnalysis.created_at.desc())
-    return list(session.exec(statement).all())
+def get_jobs_for_user(
+    session: Session,
+    user_id: int,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[JobAnalysis], int]:
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    count_statement = select(func.count()).select_from(JobAnalysis).where(JobAnalysis.user_id == user_id)
+    total = int(session.exec(count_statement).one())
+    statement = (
+        select(JobAnalysis)
+        .where(JobAnalysis.user_id == user_id)
+        .order_by(JobAnalysis.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.exec(statement).all()), total
 
 
 def get_job_for_user(session: Session, user_id: int, job_id: int) -> JobAnalysis | None:
@@ -354,9 +439,25 @@ def get_match_for_user_by_cv_and_job(session: Session, user_id: int, cv_id: int,
     return session.exec(statement).first()
 
 
-def get_matches_for_user(session: Session, user_id: int) -> list[CVJobMatch]:
-    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id).order_by(CVJobMatch.created_at.desc())
-    return list(session.exec(statement).all())
+def get_matches_for_user(
+    session: Session,
+    user_id: int,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[CVJobMatch], int]:
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    count_statement = select(func.count()).select_from(CVJobMatch).where(CVJobMatch.user_id == user_id)
+    total = int(session.exec(count_statement).one())
+    statement = (
+        select(CVJobMatch)
+        .where(CVJobMatch.user_id == user_id)
+        .order_by(CVJobMatch.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.exec(statement).all()), total
 
 
 def get_match_for_user(session: Session, user_id: int, match_id: int) -> CVJobMatch | None:

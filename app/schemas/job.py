@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Literal
+from typing import TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.core.pagination import PaginatedResponse
 
 
 AIResponseLanguage = Literal["english", "spanish"]
@@ -73,3 +76,6 @@ class JobRead(BaseModel):
     applied_date: datetime | None = None
     notes: str | None = None
     created_at: datetime | None
+
+
+JobListResponse: TypeAlias = PaginatedResponse[JobRead]

@@ -102,6 +102,26 @@ class CvLibraryService:
         cvs, total = crud.get_cvs_for_user(session, user.id, limit=limit, offset=offset)
         return [self._serialize_cv(session, cv) for cv in cvs], total
 
+    def list_cvs_filtered(
+        self,
+        session: Session,
+        user: User,
+        *,
+        search: str = "",
+        tags: list[str] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[CVRead], int]:
+        cvs, total = crud.get_filtered_cvs_for_user(
+            session,
+            user.id,
+            search=search,
+            tags=self._normalize_tags(tags or []),
+            limit=limit,
+            offset=offset,
+        )
+        return [self._serialize_cv(session, cv) for cv in cvs], total
+
     def get_cv(self, session: Session, user: User, cv_id: int) -> CVDetailRead:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
         if cv is None:
@@ -123,6 +143,31 @@ class CvLibraryService:
         normalized_tags = self._normalize_tags(tags)
         updated = crud.update_cv_tags(session, cv, normalized_tags)
         return self._serialize_cv(session, updated)
+
+    def bulk_delete_cvs(self, session: Session, user: User, cv_ids: list[int]) -> dict[str, int]:
+        normalized_ids = [cv_id for cv_id in cv_ids if isinstance(cv_id, int) and cv_id > 0]
+        if not normalized_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide at least one CV id.")
+
+        cvs = crud.get_cvs_for_user_by_ids(session, user.id, normalized_ids)
+        found_ids = {cv.id for cv in cvs}
+        failed = len({cv_id for cv_id in normalized_ids if cv_id not in found_ids})
+        deleted = crud.delete_multiple_cvs(session, cvs)
+        return {"deleted": deleted, "failed": failed}
+
+    def bulk_tag_cvs(self, session: Session, user: User, cv_ids: list[int], tags: list[str]) -> dict[str, int]:
+        normalized_ids = [cv_id for cv_id in cv_ids if isinstance(cv_id, int) and cv_id > 0]
+        normalized_tags = self._normalize_tags(tags)
+        if not normalized_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide at least one CV id.")
+        if not normalized_tags:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide at least one tag.")
+
+        cvs = crud.get_cvs_for_user_by_ids(session, user.id, normalized_ids)
+        found_ids = {cv.id for cv in cvs}
+        failed = len({cv_id for cv_id in normalized_ids if cv_id not in found_ids})
+        updated = crud.update_multiple_cv_tags(session, cvs, normalized_tags)
+        return {"updated": updated, "failed": failed}
 
     def match_job_to_cv(
         self,
@@ -216,7 +261,7 @@ class CvLibraryService:
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        cvs = crud.get_cvs_for_user(session, user.id)
+        cvs, _ = crud.get_cvs_for_user(session, user.id, limit=10_000, offset=0)
         if not cvs:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -266,9 +311,16 @@ class CvLibraryService:
 
         return created_matches
 
-    def list_matches(self, session: Session, user: User) -> list[CVJobMatchRead]:
-        matches = crud.get_matches_for_user(session, user.id)
-        return [self._serialize_match(match) for match in matches]
+    def list_matches(
+        self,
+        session: Session,
+        user: User,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[CVJobMatchRead], int]:
+        matches, total = crud.get_matches_for_user(session, user.id, limit=limit, offset=offset)
+        return [self._serialize_match(match) for match in matches], total
 
     def get_match(self, session: Session, user: User, match_id: int) -> CVJobMatchRead:
         match = crud.get_match_for_user(session, user.id, match_id)
