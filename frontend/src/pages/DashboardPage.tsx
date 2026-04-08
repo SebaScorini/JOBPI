@@ -2,40 +2,62 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
-import { JobAnalysisResponse, StoredCV } from '../types';
-import { Target, FileText, ArrowRight, Loader2, Briefcase } from 'lucide-react';
+import { JobAnalysisResponse } from '../types';
+import { Target, FileText, ArrowRight, Briefcase } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { SkeletonCard, SkeletonLoader } from '../components/SkeletonLoader';
+import { useToast } from '../context/ToastContext';
 
 export function DashboardPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const userLabel = user?.email?.split('@')[0] ?? 'there';
   const [recentJobs, setRecentJobs] = useState<JobAnalysisResponse[]>([]);
   const [jobCount, setJobCount] = useState(0);
-  const [cvs, setCvs] = useState<StoredCV[]>([]);
+  const [cvCount, setCvCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
         const [jobsData, cvsData] = await Promise.all([
-          apiService.listJobs().catch(() => []),
-          apiService.listCVs().catch(() => []),
+          apiService.listJobsPage({ limit: 5 }).catch(() => ({
+            items: [],
+            pagination: { total: 0, limit: 5, offset: 0, has_more: false },
+          })),
+          apiService.listCVsPage({ limit: 1 }).catch(() => ({
+            items: [],
+            pagination: { total: 0, limit: 1, offset: 0, has_more: false },
+          })),
         ]);
-        setJobCount(jobsData.length);
-        setRecentJobs(jobsData.slice(0, 5));
-        setCvs(cvsData);
+        setJobCount(jobsData.pagination.total);
+        setRecentJobs(jobsData.items);
+        setCvCount(cvsData.pagination.total);
       } finally {
         setIsLoading(false);
       }
     }
     loadDashboard();
-  }, []);
+  }, [showToast]);
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <div className="glass-card-solid rounded-2xl p-5">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="skeleton-block h-7 w-40 rounded-xl" />
+              <div className="skeleton-block h-6 w-16 rounded-xl" />
+            </div>
+            <SkeletonLoader lines={5} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -69,7 +91,7 @@ export function DashboardPage() {
                 <FileText size={20} />
               </div>
               <h3 className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">{t('dashboard.storedCvs')}</h3>
-              <p className="text-3xl font-heading font-bold text-slate-900 dark:text-white">{cvs.length}</p>
+              <p className="text-3xl font-heading font-bold text-slate-900 dark:text-white">{cvCount}</p>
             </div>
           </div>
 

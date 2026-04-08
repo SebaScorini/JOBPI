@@ -8,7 +8,10 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-import jwt
+try:
+    import jwt
+except ModuleNotFoundError:  # pragma: no cover - local fallback when PyJWT is unavailable
+    jwt = None  # type: ignore[assignment]
 
 from app.core.config import get_settings
 
@@ -40,7 +43,9 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
         "exp": int(expire_at.timestamp()),
         "iat": int(now.timestamp()),
     }
-    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    if jwt is not None:
+        return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    return _legacy_encode_jwt(payload, settings.secret_key)
 
 
 def decode_access_token(token: str) -> dict:
@@ -66,17 +71,18 @@ def _legacy_encode_jwt(payload: dict, secret: str) -> str:
 
 
 def _decode_jwt(token: str, secret: str) -> dict:
-    try:
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=["HS256"],
-            options={"verify_exp": False},
-        )
-        if isinstance(payload, dict):
-            return payload
-    except jwt.PyJWTError:
-        pass
+    if jwt is not None:
+        try:
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256"],
+                options={"verify_exp": False},
+            )
+            if isinstance(payload, dict):
+                return payload
+        except jwt.PyJWTError:
+            pass
 
     return _legacy_decode_jwt(token, secret)
 

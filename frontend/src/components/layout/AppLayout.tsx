@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -15,34 +15,14 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { LanguageSelector } from '../LanguageSelector';
+import { useAppTheme } from '../../context/AppThemeContext';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
+  const { resolvedTheme, toggleDarkMode } = useAppTheme();
   const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return (
-        document.documentElement.classList.contains('dark') ||
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-      );
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add('theme-transition');
-    if (isDarkMode) {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    const timer = setTimeout(() => root.classList.remove('theme-transition'), 500);
-    return () => clearTimeout(timer);
-  }, [isDarkMode]);
 
   const handleLogout = () => {
     logout();
@@ -148,11 +128,11 @@ export function AppLayout() {
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-brand-primary focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
             />
             <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
+              onClick={toggleDarkMode}
               className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-brand-primary dark:hover:text-brand-secondary hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               aria-label={t('common.themeToggle')}
             >
-              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
         </header>

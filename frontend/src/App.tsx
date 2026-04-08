@@ -14,6 +14,9 @@ import { LandingPage } from './pages/LandingPage';
 import { JSX, useEffect } from 'react';
 import { LanguageProvider } from './context/LanguageContext';
 import { TrackerPage } from './pages/TrackerPage';
+import { AppThemeProvider } from './context/AppThemeContext';
+import { ToastProvider } from './context/ToastContext';
+import { ToastViewport } from './components/Toast';
 
 const DEFAULT_TITLE = 'JOBPI';
 const SITE_NAME = 'JOBPI';
@@ -131,14 +134,17 @@ function AppRouter() {
 
 function App() {
   return (
-    // BrowserRouter is outermost so routing hooks work everywhere.
-    // AuthProvider wraps AppRouter so useAuth() is always in context.
     <BrowserRouter>
-      <AuthProvider>
-        <LanguageProvider>
-          <AppRouter />
-        </LanguageProvider>
-      </AuthProvider>
+      <AppThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <LanguageProvider>
+              <AppRouter />
+              <ToastViewport />
+            </LanguageProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </AppThemeProvider>
     </BrowserRouter>
   );
 }

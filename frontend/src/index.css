@@ -8,6 +8,11 @@
   body {
     @apply bg-brand-background text-brand-text antialiased font-sans;
   }
+
+  body,
+  #root {
+    min-height: 100vh;
+  }
   
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading tracking-tight;
@@ -53,6 +58,33 @@
   
   .input-field {
     @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm transition-all focus:border-brand-primary focus:outline-none focus:ring-[3px] focus:ring-brand-primary/20 dark:border-slate-700 dark:bg-[#0B0F19] dark:text-slate-200 dark:focus:border-brand-secondary dark:focus:ring-brand-secondary/20 placeholder:text-slate-400 dark:placeholder:text-slate-500;
+  }
+
+  .input-field-error {
+    @apply border-rose-300 focus:border-rose-500 focus:ring-rose-500/20 dark:border-rose-800 dark:focus:border-rose-500;
+  }
+
+  .skeleton-block {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, rgba(226, 232, 240, 0.9) 25%, rgba(241, 245, 249, 1) 37%, rgba(226, 232, 240, 0.9) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .dark .skeleton-block {
+    background: linear-gradient(90deg, rgba(30, 41, 59, 0.9) 25%, rgba(51, 65, 85, 1) 37%, rgba(30, 41, 59, 0.9) 63%);
+    background-size: 400% 100%;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
   }
 }
 

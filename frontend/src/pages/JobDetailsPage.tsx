@@ -4,6 +4,8 @@ import { apiService } from '../services/api';
 import { JobAnalysisResponse, StoredCV, CVJobMatch, CVComparisonResult, JobApplicationStatus } from '../types';
 import { Briefcase, ArrowLeft, Loader2, CheckCircle2, ChevronRight, Zap, Copy, Check, Trash2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 
 type DetailsTab = 'overview' | 'match' | 'improvements' | 'cover' | 'tracker';
 
@@ -57,6 +59,7 @@ function dedupeItems(items: string[]): string[] {
 
 export function JobDetailsPage() {
   const { aiLanguage, language, t } = useLanguage();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<JobAnalysisResponse | null>(null);
@@ -152,8 +155,9 @@ export function JobDetailsPage() {
         if (cancelled) {
           return;
         }
-        console.error('Failed to load data', err);
-        setError(t('jobDetails.failedLoad'));
+        const message = err instanceof Error ? err.message : t('jobDetails.failedLoad');
+        setError(message);
+        showToast(message, 'error');
       } finally {
         if (!cancelled) {
           setIsJobLoading(false);
@@ -166,7 +170,7 @@ export function JobDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, showToast, t]);
 
   useEffect(() => {
     setCoverLetter('');
@@ -192,7 +196,9 @@ export function JobDetailsPage() {
       setMatchResult(result);
       setActiveTab('match');
     } catch (err: any) {
-      setError(err.message || t('jobDetails.failedMatch'));
+      const message = err.message || t('jobDetails.failedMatch');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsMatchLoading(false);
     }
@@ -201,7 +207,9 @@ export function JobDetailsPage() {
   const handleCompare = async () => {
     if (!jobId || !compareCvIdA || !compareCvIdB) return;
     if (compareCvIdA === compareCvIdB) {
-      setError(t('jobDetails.compareDifferentCvs'));
+      const message = t('jobDetails.compareDifferentCvs');
+      setError(message);
+      showToast(message, 'warning');
       return;
     }
 
@@ -213,7 +221,9 @@ export function JobDetailsPage() {
       const result = await apiService.compareCVsForJob(parseInt(jobId), Number(compareCvIdA), Number(compareCvIdB), aiLanguage);
       setComparisonResult(result);
     } catch (err: any) {
-      setError(err.message || t('jobDetails.failedCompare'));
+      const message = err.message || t('jobDetails.failedCompare');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsCompareLoading(false);
     }
@@ -228,8 +238,11 @@ export function JobDetailsPage() {
       const updated = await apiService.updateJobStatus(Number(jobId), status, payloadDate);
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
+      showToast('Job status updated.', 'success');
     } catch (err: any) {
-      setError(err.message || t('jobDetails.failedStatus'));
+      const message = err.message || t('jobDetails.failedStatus');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -243,8 +256,11 @@ export function JobDetailsPage() {
       const updated = await apiService.updateJobNotes(Number(jobId), notesDraft.trim() || null);
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
+      showToast('Notes saved.', 'success');
     } catch (err: any) {
-      setError(err.message || t('jobDetails.failedNotes'));
+      const message = err.message || t('jobDetails.failedNotes');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsSavingNotes(false);
     }
@@ -261,8 +277,11 @@ export function JobDetailsPage() {
       const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setCoverLetter(result.generated_cover_letter);
       setActiveTab('cover');
+      showToast('Cover letter generated.', 'success');
     } catch (err: any) {
-      setError(err.message || t('jobDetails.failedCoverLetter'));
+      const message = err.message || t('jobDetails.failedCoverLetter');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsCoverLetterLoading(false);
     }
@@ -280,9 +299,12 @@ export function JobDetailsPage() {
     setError(null);
     try {
       await apiService.deleteJob(Number(jobId));
+      showToast('Job deleted.', 'success');
       navigate('/jobs');
     } catch (err: any) {
-      setError(err.message || t('jobs.failedDelete'));
+      const message = err.message || t('jobs.failedDelete');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setIsDeletingJob(false);
     }
@@ -294,9 +316,12 @@ export function JobDetailsPage() {
     try {
       await navigator.clipboard.writeText(coverLetter);
       setIsCopied(true);
+      showToast(t('common.copied'), 'success');
       window.setTimeout(() => setIsCopied(false), 2000);
     } catch (err: any) {
-      setError(err.message || t('jobDetails.failedCopy'));
+      const message = err.message || t('jobDetails.failedCopy');
+      setError(message);
+      showToast(message, 'error');
     }
   };
 
@@ -318,8 +343,14 @@ export function JobDetailsPage() {
 
   if (isJobLoading) {
     return (
-      <div className="flex justify-center py-20 animate-in fade-in duration-300">
-        <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
+      <div className="animate-in fade-in space-y-4 duration-300">
+        <div className="skeleton-block h-6 w-32 rounded-xl" />
+        <div className="glass-card rounded-3xl p-5">
+          <div className="space-y-4">
+            <div className="skeleton-block h-10 w-1/2 rounded-xl" />
+            <SkeletonLoader lines={8} />
+          </div>
+        </div>
       </div>
     );
   }

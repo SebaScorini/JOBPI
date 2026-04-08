@@ -92,11 +92,18 @@ def get_rate_limiter() -> InMemoryRateLimiter | RedisRateLimiter:
         return _limiter
 
     if settings.redis_url:
-        logger.info("rate_limiter_backend backend=redis")
-        _limiter = RedisRateLimiter(
-            redis_url=settings.redis_url,
-            fallback_limiter=InMemoryRateLimiter(),
-        )
+        try:
+            logger.info("rate_limiter_backend backend=redis")
+            _limiter = RedisRateLimiter(
+                redis_url=settings.redis_url,
+                fallback_limiter=InMemoryRateLimiter(),
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "rate_limiter_backend backend=in_memory reason=%s",
+                str(exc),
+            )
+            _limiter = InMemoryRateLimiter()
     else:
         logger.info("rate_limiter_backend backend=in_memory")
         _limiter = InMemoryRateLimiter()

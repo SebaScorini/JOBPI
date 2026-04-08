@@ -10,7 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
-import sentry_sdk
+try:
+    import sentry_sdk
+except ModuleNotFoundError:  # pragma: no cover - optional in local environments
+    sentry_sdk = None  # type: ignore[assignment]
 
 from app.api.routes.auth import router as auth_router
 from app.api.routes.cvs import router as cvs_router
@@ -44,7 +47,7 @@ def _request_body_size(request: Request) -> int | None:
 
 
 def _capture_exception_with_sentry(request: Request, exc: Exception) -> None:
-    if not sentry_sdk.is_initialized():
+    if sentry_sdk is None or not sentry_sdk.is_initialized():
         return
 
     with sentry_sdk.push_scope() as scope:
@@ -66,7 +69,7 @@ def _capture_exception_with_sentry(request: Request, exc: Exception) -> None:
 
 def _setup_sentry() -> None:
     settings = get_settings()
-    if not settings.sentry_dsn or sentry_sdk.is_initialized():
+    if sentry_sdk is None or not settings.sentry_dsn or sentry_sdk.is_initialized():
         return
 
     sentry_sdk.init(

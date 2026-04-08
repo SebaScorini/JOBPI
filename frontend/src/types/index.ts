@@ -67,6 +67,18 @@ export interface StoredCV {
   created_at: string;
 }
 
+export interface PaginationMeta {
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  pagination: PaginationMeta;
+}
+
 export interface CVJobMatch {
   id: number;
   cv_id: number;

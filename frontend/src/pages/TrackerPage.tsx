@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { JobAnalysisResponse, JobApplicationStatus } from '../types';
-import { Briefcase, ArrowRight, Loader2 } from 'lucide-react';
+import { JobAnalysisResponse, JobApplicationStatus, PaginationMeta } from '../types';
+import { Briefcase, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { SkeletonLoader } from '../components/SkeletonLoader';
+import { useToast } from '../context/ToastContext';
+import { PaginationControls } from '../components/PaginationControls';
 
 const statusBadgeMap: Record<JobApplicationStatus, string> = {
   saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -16,24 +19,37 @@ const statusBadgeMap: Record<JobApplicationStatus, string> = {
 const statusOrder: JobApplicationStatus[] = ['applied', 'interview', 'offer', 'saved', 'rejected'];
 
 export function TrackerPage() {
+  const PAGE_SIZE = 12;
   const { t, language } = useLanguage();
+  const { showToast } = useToast();
   const [jobs, setJobs] = useState<JobAnalysisResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pagination, setPagination] = useState<PaginationMeta>({
+    total: 0,
+    limit: PAGE_SIZE,
+    offset: 0,
+    has_more: false,
+  });
 
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const data = await apiService.listJobs();
-        setJobs(data);
+        const data = await apiService.listJobsPage({
+          limit: PAGE_SIZE,
+          offset: pagination.offset,
+        });
+        setJobs(data.items);
+        setPagination(data.pagination);
       } catch (error) {
-        console.error('Failed to load tracker jobs', error);
+        const message = error instanceof Error ? error.message : t('jobs.failedLoad');
+        showToast(message, 'error');
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchJobs();
-  }, []);
+  }, [pagination.offset, showToast, t]);
 
   const sortedJobs = useMemo(
     () =>
@@ -59,8 +75,8 @@ export function TrackerPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
+        <div className="glass-card-solid rounded-2xl p-5">
+          <SkeletonLoader lines={6} />
         </div>
       ) : sortedJobs.length === 0 ? (
         <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
@@ -103,6 +119,22 @@ export function TrackerPage() {
               <ArrowRight size={18} className="shrink-0 text-slate-400 group-hover:text-brand-primary group-hover:translate-x-1 transition-all" />
             </Link>
           ))}
+          <PaginationControls
+            pagination={pagination}
+            itemLabel={t('jobs.resultsLabel')}
+            onPrevious={() =>
+              setPagination((current) => ({
+                ...current,
+                offset: Math.max(0, current.offset - PAGE_SIZE),
+              }))
+            }
+            onNext={() =>
+              setPagination((current) => ({
+                ...current,
+                offset: current.offset + PAGE_SIZE,
+              }))
+            }
+          />
         </div>
       )}
     </div>

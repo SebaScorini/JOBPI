@@ -3,7 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import redis
+try:
+    import redis
+except ModuleNotFoundError:  # pragma: no cover - optional local dependency
+    redis = None  # type: ignore[assignment]
 from fastapi import HTTPException, Request, status
 
 from app.core.config import get_settings
@@ -21,6 +24,8 @@ class RedisRateLimiter:
         fallback_limiter: Any,
         client: redis.Redis | None = None,
     ) -> None:
+        if redis is None:
+            raise RuntimeError("redis_package_missing")
         self.redis_url = redis_url
         self._fallback_limiter = fallback_limiter
         self._client = client or redis.Redis.from_url(redis_url, decode_responses=True)

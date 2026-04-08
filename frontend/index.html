@@ -35,6 +35,17 @@
     <script id="jobpi-schema" type="application/ld+json"></script>
     <script>
       (function () {
+        var themeStorageKey = 'jobpi_theme_mode';
+        var storedThemeMode = localStorage.getItem(themeStorageKey);
+        var systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var resolvedTheme =
+          storedThemeMode === 'light' || storedThemeMode === 'dark'
+            ? storedThemeMode
+            : systemPrefersDark
+              ? 'dark'
+              : 'light';
+        document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+
         var origin = window.location.origin.replace(/\/$/, '');
         var homeUrl = origin + '/';
         var imageUrl = origin + '/favicon.svg';

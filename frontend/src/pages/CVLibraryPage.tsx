@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiService } from '../services/api';
-import { StoredCV } from '../types';
+import { PaginationMeta, StoredCV } from '../types';
 import {
   FileText,
   Loader2,
@@ -11,8 +11,13 @@ import {
   AlertCircle,
   X,
   Tag,
+  Search,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
+import { SkeletonLoader } from '../components/SkeletonLoader';
+import { validateUploadFiles } from '../utils/validation';
+import { PaginationControls } from '../components/PaginationControls';
 
 interface UploadFile {
   file: File;
@@ -21,20 +26,43 @@ interface UploadFile {
 }
 
 export function CVLibraryPage() {
+  const PAGE_SIZE = 20;
   const { t, language } = useLanguage();
+  const { showToast } = useToast();
   const [cvs, setCvs] = useState<StoredCV[]>([]);
   const [selectedCvId, setSelectedCvId] = useState<number | null>(null);
+  const [selectedCvIds, setSelectedCvIds] = useState<number[]>([]);
+  const [bulkTagInput, setBulkTagInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkTagging, setIsBulkTagging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([]);
   const [tagInputs, setTagInputs] = useState<Record<number, string>>({});
   const [savingTagCvId, setSavingTagCvId] = useState<number | null>(null);
   const [activeTagFilter, setActiveTagFilter] = useState<string>('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pagination, setPagination] = useState<PaginationMeta>({
+    total: 0,
+    limit: PAGE_SIZE,
+    offset: 0,
+    has_more: false,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPagination((current) => ({ ...current, offset: 0 }));
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  useEffect(() => {
     loadCVs();
-  }, []);
+  }, [pagination.offset, searchQuery, activeTagFilter]);
 
   useEffect(() => {
     if (selectedCvId && !cvs.some((cv) => cv.id === selectedCvId)) {
@@ -45,18 +73,29 @@ export function CVLibraryPage() {
     }
   }, [cvs, selectedCvId]);
 
+  useEffect(() => {
+    setSelectedCvIds((current) => current.filter((cvId) => cvs.some((cv) => cv.id === cvId)));
+  }, [cvs]);
+
   const loadCVs = async () => {
     try {
-      const data = await apiService.listCVs();
-      setCvs(data);
+      const data = await apiService.listCVsPage({
+        limit: PAGE_SIZE,
+        offset: pagination.offset,
+        search: searchQuery || undefined,
+        tags: activeTagFilter ? [activeTagFilter] : undefined,
+      });
+      setCvs(data.items);
+      setPagination(data.pagination);
       setTagInputs(
-        data.reduce((acc, cv) => {
+        data.items.reduce((acc, cv) => {
           acc[cv.id] = cv.tags.join(', ');
           return acc;
         }, {} as Record<number, string>),
       );
     } catch (err) {
-      console.error('Failed to load CVs', err);
+      const message = err instanceof Error ? err.message : t('library.failedLoad');
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -74,6 +113,12 @@ export function CVLibraryPage() {
       fileInputRef.current.value = '';
     }
 
+    const validationError = validateUploadFiles(files);
+    if (validationError) {
+      showToast(validationError, 'error');
+      return;
+    }
+
     const newFiles: UploadFile[] = files.map((file) => ({
       file,
       status: 'pending',
@@ -87,6 +132,12 @@ export function CVLibraryPage() {
 
   const handleBatchUpload = async () => {
     if (selectedFiles.length === 0) return;
+
+    const validationError = validateUploadFiles(selectedFiles.map((item) => item.file));
+    if (validationError) {
+      showToast(validationError, 'error');
+      return;
+    }
 
     setIsUploading(true);
     setSelectedFiles((prev) => prev.map((file) => ({ ...file, status: 'uploading' as const })));
@@ -113,17 +164,24 @@ export function CVLibraryPage() {
       );
 
       await loadCVs();
+      showToast(
+        result.summary.failed === 0
+          ? 'CV upload complete.'
+          : `Upload finished: ${result.summary.succeeded} succeeded, ${result.summary.failed} failed.`,
+        result.summary.failed === 0 ? 'success' : 'warning',
+      );
 
       window.setTimeout(() => {
         setSelectedFiles((prev) => prev.filter((file) => file.status === 'error'));
       }, 1800);
     } catch (err) {
-      console.error('Failed to upload CVs', err);
+      const message = err instanceof Error ? err.message : t('library.uploadFailed');
+      showToast(message, 'error');
       setSelectedFiles((prev) =>
         prev.map((file) => ({
           ...file,
           status: 'error',
-          error: t('library.uploadFailed'),
+          error: message,
         })),
       );
     } finally {
@@ -136,9 +194,145 @@ export function CVLibraryPage() {
 
     try {
       await apiService.deleteCV(cvId);
-      setCvs((prev) => prev.filter((cv) => cv.id !== cvId));
+      const nextOffset =
+        cvs.length === 1 && pagination.offset > 0
+          ? Math.max(0, pagination.offset - PAGE_SIZE)
+          : pagination.offset;
+
+      if (nextOffset !== pagination.offset) {
+        setPagination((current) => ({ ...current, offset: nextOffset }));
+      } else {
+        setCvs((prev) => prev.filter((cv) => cv.id !== cvId));
+        setPagination((current) => ({
+          ...current,
+          total: Math.max(0, current.total - 1),
+          has_more: current.offset + current.limit < Math.max(0, current.total - 1),
+        }));
+      }
+      showToast('CV deleted.', 'success');
     } catch (err) {
-      console.error('Failed to delete CV', err);
+      const message = err instanceof Error ? err.message : t('library.failedDelete');
+      showToast(message, 'error');
+    }
+  };
+
+  const toggleCvSelection = (cvId: number) => {
+    setSelectedCvIds((current) =>
+      current.includes(cvId) ? current.filter((id) => id !== cvId) : [...current, cvId],
+    );
+  };
+
+  const handleSelectAllVisible = () => {
+    const visibleIds = visibleCvs.map((cv) => cv.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((cvId) => selectedCvIds.includes(cvId));
+    setSelectedCvIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((cvId) => !visibleIds.includes(cvId));
+      }
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedCvIds.length === 0) {
+      return;
+    }
+    if (!window.confirm(t('library.bulkDeleteConfirm'))) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    try {
+      const result = await apiService.bulkDeleteCVs(selectedCvIds);
+      setSelectedCvIds([]);
+      const remainingItems = cvs.filter((cv) => !selectedCvIds.includes(cv.id));
+      const nextOffset =
+        remainingItems.length === 0 && pagination.offset > 0
+          ? Math.max(0, pagination.offset - PAGE_SIZE)
+          : pagination.offset;
+
+      if (nextOffset !== pagination.offset) {
+        setPagination((current) => ({ ...current, offset: nextOffset }));
+      } else {
+        setCvs(remainingItems);
+        setPagination((current) => ({
+          ...current,
+          total: Math.max(0, current.total - result.deleted),
+          has_more: current.offset + current.limit < Math.max(0, current.total - result.deleted),
+        }));
+      }
+      showToast(
+        result.failed > 0
+          ? `${result.deleted} deleted, ${result.failed} failed.`
+          : `${result.deleted} CVs deleted.`,
+        result.failed > 0 ? 'warning' : 'success',
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('library.failedDelete');
+      showToast(message, 'error');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkTag = async () => {
+    const tags = bulkTagInput
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    if (selectedCvIds.length === 0 || tags.length === 0) {
+      return;
+    }
+
+    setIsBulkTagging(true);
+    try {
+      const result = await apiService.bulkTagCVs(selectedCvIds, tags);
+      setCvs((current) =>
+        current.map((cv) => {
+          if (!selectedCvIds.includes(cv.id)) {
+            return cv;
+          }
+
+          const mergedTags = [...cv.tags];
+          for (const tag of tags) {
+            if (!mergedTags.includes(tag)) {
+              mergedTags.push(tag);
+            }
+          }
+
+          return { ...cv, tags: mergedTags };
+        }),
+      );
+      setTagInputs((current) => {
+        const next = { ...current };
+        for (const cvId of selectedCvIds) {
+          const existingTags = (next[cvId] ?? '')
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean);
+          const mergedTags = [...existingTags];
+          for (const tag of tags) {
+            if (!mergedTags.includes(tag)) {
+              mergedTags.push(tag);
+            }
+          }
+          next[cvId] = mergedTags.join(', ');
+        }
+        return next;
+      });
+      setBulkTagInput('');
+      showToast(
+        result.failed > 0
+          ? `${result.updated} updated, ${result.failed} failed.`
+          : `${result.updated} CVs updated.`,
+        result.failed > 0 ? 'warning' : 'success',
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('library.failedBulkTag');
+      showToast(message, 'error');
+    } finally {
+      setIsBulkTagging(false);
     }
   };
 
@@ -154,12 +348,14 @@ export function CVLibraryPage() {
       const updatedCv = await apiService.updateCVTags(cvId, tags);
       setCvs((prev) => prev.map((cv) => (cv.id === cvId ? updatedCv : cv)));
       setTagInputs((prev) => ({ ...prev, [cvId]: updatedCv.tags.join(', ') }));
+      showToast('Tags updated.', 'success');
 
       if (activeTagFilter && !updatedCv.tags.includes(activeTagFilter)) {
         setActiveTagFilter('');
       }
     } catch (err) {
-      console.error('Failed to update CV tags', err);
+      const message = err instanceof Error ? err.message : t('library.failedSaveTags');
+      showToast(message, 'error');
     } finally {
       setSavingTagCvId(null);
     }
@@ -168,12 +364,14 @@ export function CVLibraryPage() {
   const availableTags = Array.from(new Set(cvs.flatMap((cv) => cv.tags))).sort((a, b) =>
     a.localeCompare(b),
   );
-  const visibleCvs = activeTagFilter ? cvs.filter((cv) => cv.tags.includes(activeTagFilter)) : cvs;
+  const visibleCvs = cvs;
   const activeCv = visibleCvs.find((cv) => cv.id === selectedCvId) ?? visibleCvs[0] ?? null;
+  const allVisibleSelected =
+    visibleCvs.length > 0 && visibleCvs.every((cv) => selectedCvIds.includes(cv.id));
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300 h-full">
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-800">
         <div>
           <h1 className="text-2xl lg:text-3xl font-heading font-extrabold tracking-tight text-brand-text dark:text-white">
             {t('library.title')}
@@ -181,7 +379,46 @@ export function CVLibraryPage() {
           <p className="text-slate-500 mt-1 text-sm">{t('library.subtitle')}</p>
         </div>
 
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedCvIds.length > 0 && (
+            <>
+              <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {t('library.selectedCount', { count: selectedCvIds.length })}
+              </span>
+              <input
+                type="text"
+                value={bulkTagInput}
+                onChange={(e) => setBulkTagInput(e.target.value)}
+                placeholder={t('library.bulkTagsPlaceholder')}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none transition focus:border-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              />
+              <button
+                type="button"
+                onClick={handleBulkTag}
+                disabled={isBulkTagging || bulkTagInput.trim().length === 0}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-brand-primary/20 bg-brand-primary/10 px-4 text-xs font-semibold text-brand-primary transition-colors hover:bg-brand-primary/15 disabled:cursor-not-allowed disabled:opacity-60 dark:border-brand-secondary/20 dark:text-brand-secondary"
+              >
+                {isBulkTagging ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
+                {t('library.bulkApplyTags')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCvIds([])}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                {t('library.clearSelection')}
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-300"
+              >
+                {isBulkDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {t('library.bulkDelete')}
+              </button>
+            </>
+          )}
           <input
             type="file"
             ref={fileInputRef}
@@ -244,19 +481,44 @@ export function CVLibraryPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-[560px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 min-h-[560px]">
         <aside className="glass-card p-3 rounded-2xl flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
               <Tag size={14} />
               <span>{t('library.filterByTag')}</span>
             </div>
-            <span className="text-xs text-slate-500">{visibleCvs.length}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">{visibleCvs.length}</span>
+              {!isLoading && visibleCvs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSelectAllVisible}
+                  className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  {allVisibleSelected ? t('library.clearSelection') : t('library.selectAllVisible')}
+                </button>
+              )}
+            </div>
           </div>
+
+          <label className="relative mb-3 block">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={t('library.searchPlaceholder')}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-brand-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            />
+          </label>
 
           <div className="flex flex-wrap gap-1.5 mb-3">
             <button
-              onClick={() => setActiveTagFilter('')}
+              onClick={() => {
+                setActiveTagFilter('');
+                setPagination((current) => ({ ...current, offset: 0 }));
+              }}
               className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
                 activeTagFilter === ''
                   ? 'bg-brand-primary text-white'
@@ -268,7 +530,10 @@ export function CVLibraryPage() {
             {availableTags.map((tag) => (
               <button
                 key={tag}
-                onClick={() => setActiveTagFilter(tag)}
+                onClick={() => {
+                  setActiveTagFilter(tag);
+                  setPagination((current) => ({ ...current, offset: 0 }));
+                }}
                 className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
                   activeTagFilter === tag
                     ? 'bg-brand-primary text-white'
@@ -282,43 +547,90 @@ export function CVLibraryPage() {
 
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="animate-spin text-brand-primary h-6 w-6" />
+              <div className="space-y-3 py-1">
+                <div className="skeleton-block h-8 w-24 rounded-full" />
+                <SkeletonLoader lines={5} />
               </div>
             ) : visibleCvs.length === 0 ? (
-              <p className="text-xs text-slate-500 p-2">{cvs.length === 0 ? t('library.emptyLibrary') : t('library.noTagMatches')}</p>
+              <p className="text-xs text-slate-500 p-2">
+                {pagination.total === 0 && !searchQuery && !activeTagFilter
+                  ? t('library.emptyLibrary')
+                  : t('library.noTagMatches')}
+              </p>
             ) : (
               visibleCvs.map((cv) => (
-                <button
+                <div
                   key={cv.id}
-                  onClick={() => setSelectedCvId(cv.id)}
                   className={`w-full text-left rounded-xl px-3 py-2 border transition-colors ${
                     activeCv?.id === cv.id
                       ? 'border-brand-primary bg-brand-primary/10'
                       : 'border-slate-200 bg-white/70 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/30 dark:hover:border-slate-700'
                   }`}
                 >
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">{cv.name}</p>
-                  <p
-                    className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400"
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {cv.library_summary}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">{new Date(cv.created_at).toLocaleDateString(language)}</p>
-                </button>
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedCvIds.includes(cv.id)}
+                      onChange={() => toggleCvSelection(cv.id)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary dark:border-slate-700 dark:bg-slate-900"
+                      aria-label={`Select ${cv.name}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCvId(cv.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">{cv.name}</p>
+                      <p
+                        className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {cv.library_summary}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">{new Date(cv.created_at).toLocaleDateString(language)}</p>
+                    </button>
+                  </div>
+                </div>
               ))
             )}
           </div>
+
+          {!isLoading && pagination.total > 0 && (
+            <PaginationControls
+              className="mt-3"
+              pagination={pagination}
+              itemLabel={t('library.resultsLabel')}
+              onPrevious={() =>
+                setPagination((current) => ({
+                  ...current,
+                  offset: Math.max(0, current.offset - PAGE_SIZE),
+                }))
+              }
+              onNext={() =>
+                setPagination((current) => ({
+                  ...current,
+                  offset: current.offset + PAGE_SIZE,
+                }))
+              }
+            />
+          )}
         </aside>
 
         <section className="glass-card p-4 rounded-2xl min-h-0">
-          {!activeCv ? (
+          {isLoading ? (
+            <div className="space-y-4">
+              <div className="skeleton-block h-8 w-1/3 rounded-xl" />
+              <div className="skeleton-block h-4 w-1/4 rounded-xl" />
+              <div className="rounded-xl border border-slate-200/70 p-4 dark:border-slate-800">
+                <SkeletonLoader lines={6} />
+              </div>
+            </div>
+          ) : !activeCv ? (
             <div className="h-full flex items-center justify-center text-center border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
               <div>
                 <FileText size={32} className="mx-auto text-slate-400 mb-3" />

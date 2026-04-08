@@ -8,6 +8,8 @@ import {
   JobAnalysisRequest,
   JobAnalysisResponse,
   MatchLevel,
+  PaginatedResult,
+  PaginationMeta,
   StoredCV,
   TokenResponse,
   User,
@@ -40,6 +42,18 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 const TOKEN_STORAGE_KEY = 'jobpi_token';
+const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
+  ERR_RATE_LIMIT: "You're making requests too quickly. Please wait a moment.",
+  ERR_AI_TIMEOUT: 'Analysis took too long. Please try again.',
+  ERR_CV_NOT_FOUND: 'CV not found. It may have been deleted.',
+  ERR_JOB_NOT_FOUND: 'Job not found. It may have been removed.',
+  ERR_MATCH_NOT_FOUND: 'Match not found.',
+  ERR_PAYLOAD_TOO_LARGE: 'That file or request is too large.',
+  ERR_VALIDATION: 'Please review the highlighted inputs and try again.',
+  ERR_SERVICE_UNAVAILABLE: 'This service is temporarily unavailable. Please try again.',
+  ERR_UNAUTHORIZED: 'Your session expired. Please sign in again.',
+  ERR_FORBIDDEN: 'You do not have permission to perform this action.',
+};
 
 type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
   headers?: HeadersInit;
@@ -151,6 +165,16 @@ interface DeleteSuccessResponse {
   success: boolean;
 }
 
+interface PaginationQuery {
+  limit?: number;
+  offset?: number;
+}
+
+interface CVListQuery extends PaginationQuery {
+  search?: string;
+  tags?: string[];
+}
+
 interface BackendCVComparisonResponse {
   winner: {
     cv_id: number;
@@ -162,8 +186,16 @@ interface BackendCVComparisonResponse {
   job_alignment_breakdown: string[];
 }
 
-class ApiError extends Error {
-  constructor(message: string, public readonly status?: number) {
+interface BackendErrorResponse {
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  detail?: string | Array<{ msg?: string }>;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status?: number, public readonly code?: string) {
     super(message);
     this.name = 'ApiError';
   }
@@ -212,15 +244,17 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json().catch(() => null);
+  const data = (await response.json().catch(() => null)) as BackendErrorResponse | null;
 
   if (!response.ok) {
-    const message =
+    const code = data?.error?.code;
+    const rawMessage =
       (data && typeof data.error?.message === 'string' && data.error.message) ||
       (data && typeof data.detail === 'string' && data.detail) ||
       (data && Array.isArray(data.detail) && data.detail[0]?.msg) ||
       `API error: ${response.status} ${response.statusText}`;
-    throw new ApiError(message, response.status);
+    const message = (code && FRIENDLY_ERROR_MESSAGES[code]) || rawMessage;
+    throw new ApiError(message, response.status, code);
   }
 
   return data as T;
@@ -294,6 +328,56 @@ function normalizeMatchListResponse(payload: BackendMatchRead[] | BackendMatchLi
   }
 
   return Array.isArray(payload.items) ? payload.items : [];
+}
+
+function normalizePaginationMeta(
+  payload: BackendCVRead[] | BackendJobRead[] | BackendMatchRead[] | BackendCVListResponse | BackendJobListResponse | BackendMatchListResponse,
+  itemCount: number,
+  fallbackLimit?: number,
+  fallbackOffset?: number,
+): PaginationMeta {
+  if (Array.isArray(payload)) {
+    const limit = fallbackLimit ?? payload.length;
+    const offset = fallbackOffset ?? 0;
+    return {
+      total: payload.length,
+      limit,
+      offset,
+      has_more: offset + itemCount < payload.length,
+    };
+  }
+
+  const pagination = payload.pagination;
+  return {
+    total: pagination?.total ?? itemCount,
+    limit: pagination?.limit ?? fallbackLimit ?? itemCount,
+    offset: pagination?.offset ?? fallbackOffset ?? 0,
+    has_more: Boolean(pagination?.has_more),
+  };
+}
+
+function buildQueryString(params: PaginationQuery | CVListQuery): string {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params as Record<string, string | number | undefined | string[]>).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (entry) {
+          searchParams.append(key, entry);
+        }
+      });
+      return;
+    }
+
+    searchParams.set(key, String(value));
+  });
+
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
 }
 
 function mapCvResult(match: BackendMatchRead): CvAnalysisResponse {
@@ -405,9 +489,20 @@ export const apiService = {
   },
 
   async listJobs(): Promise<JobAnalysisResponse[]> {
-    const response = await request<BackendJobRead[] | BackendJobListResponse>('/jobs', { auth: true });
+    const response = await this.listJobsPage();
+    return response.items;
+  },
+
+  async listJobsPage(params: PaginationQuery = {}): Promise<PaginatedResult<JobAnalysisResponse>> {
+    const response = await request<BackendJobRead[] | BackendJobListResponse>(
+      `/jobs${buildQueryString(params)}`,
+      { auth: true },
+    );
     const jobs = normalizeJobListResponse(response);
-    return jobs.map(mapJob);
+    return {
+      items: jobs.map(mapJob),
+      pagination: normalizePaginationMeta(response, jobs.length, params.limit, params.offset),
+    };
   },
 
   async getJob(jobId: number): Promise<JobAnalysisResponse> {
@@ -485,9 +580,20 @@ export const apiService = {
   },
 
   async listCVs(): Promise<StoredCV[]> {
-    const response = await request<BackendCVRead[] | BackendCVListResponse>('/cvs', { auth: true });
+    const response = await this.listCVsPage();
+    return response.items;
+  },
+
+  async listCVsPage(params: CVListQuery = {}): Promise<PaginatedResult<StoredCV>> {
+    const response = await request<BackendCVRead[] | BackendCVListResponse>(
+      `/cvs${buildQueryString(params)}`,
+      { auth: true },
+    );
     const cvs = normalizeCVListResponse(response);
-    return cvs.map(mapCV);
+    return {
+      items: cvs.map(mapCV),
+      pagination: normalizePaginationMeta(response, cvs.length, params.limit, params.offset),
+    };
   },
 
   async getCV(cvId: number): Promise<StoredCV> {
@@ -510,6 +616,24 @@ export const apiService = {
     await request<{ ok: boolean }>(`/cvs/${cvId}`, {
       method: 'DELETE',
       auth: true,
+    });
+  },
+
+  async bulkDeleteCVs(cvIds: number[]): Promise<{ deleted: number; failed: number; updated: number }> {
+    return request<{ deleted: number; failed: number; updated: number }>('/cvs/bulk-delete', {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cv_ids: cvIds }),
+    });
+  },
+
+  async bulkTagCVs(cvIds: number[], tags: string[]): Promise<{ deleted: number; failed: number; updated: number }> {
+    return request<{ deleted: number; failed: number; updated: number }>('/cvs/bulk-tag', {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cv_ids: cvIds, tags }),
     });
   },
 
@@ -562,9 +686,20 @@ export const apiService = {
   },
 
   async listMatches(): Promise<CVJobMatch[]> {
-    const response = await request<BackendMatchRead[] | BackendMatchListResponse>('/matches', { auth: true });
+    const response = await this.listMatchesPage();
+    return response.items;
+  },
+
+  async listMatchesPage(params: PaginationQuery = {}): Promise<PaginatedResult<CVJobMatch>> {
+    const response = await request<BackendMatchRead[] | BackendMatchListResponse>(
+      `/matches${buildQueryString(params)}`,
+      { auth: true },
+    );
     const matches = normalizeMatchListResponse(response);
-    return matches.map(mapMatch);
+    return {
+      items: matches.map(mapMatch),
+      pagination: normalizePaginationMeta(response, matches.length, params.limit, params.offset),
+    };
   },
 
   async getMatch(matchId: number): Promise<CVJobMatch> {

@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { JobAnalysisResponse } from '../types';
+import { JobAnalysisResponse, PaginationMeta } from '../types';
 import { Briefcase, ArrowRight, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { SkeletonCard } from '../components/SkeletonLoader';
+import { useToast } from '../context/ToastContext';
+import { PaginationControls } from '../components/PaginationControls';
 
 const statusBadgeMap: Record<string, string> = {
   saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -14,27 +17,40 @@ const statusBadgeMap: Record<string, string> = {
 };
 
 export function JobsPage() {
+  const PAGE_SIZE = 9;
   const { t, language } = useLanguage();
+  const { showToast } = useToast();
   const [jobs, setJobs] = useState<JobAnalysisResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationMeta>({
+    total: 0,
+    limit: PAGE_SIZE,
+    offset: 0,
+    has_more: false,
+  });
 
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const data = await apiService.listJobs();
-        setJobs(data);
+        const data = await apiService.listJobsPage({
+          limit: PAGE_SIZE,
+          offset: pagination.offset,
+        });
+        setJobs(data.items);
+        setPagination(data.pagination);
         setError(null);
       } catch (err) {
-        console.error('Failed to load jobs', err);
-        setError(t('jobs.failedLoad'));
+        const message = err instanceof Error ? err.message : t('jobs.failedLoad');
+        setError(message);
+        showToast(message, 'error');
       } finally {
         setIsLoading(false);
       }
     }
     fetchJobs();
-  }, [t]);
+  }, [pagination.offset, showToast, t]);
 
   const handleDeleteJob = async (jobId: number) => {
     const confirmed = window.confirm(t('jobs.confirmDelete'));
@@ -46,9 +62,26 @@ export function JobsPage() {
     setError(null);
     try {
       await apiService.deleteJob(jobId);
-      setJobs((currentJobs) => currentJobs.filter((job) => job.job_id !== jobId));
+      const nextOffset =
+        jobs.length === 1 && pagination.offset > 0
+          ? Math.max(0, pagination.offset - PAGE_SIZE)
+          : pagination.offset;
+
+      if (nextOffset !== pagination.offset) {
+        setPagination((current) => ({ ...current, offset: nextOffset }));
+      } else {
+        setJobs((currentJobs) => currentJobs.filter((job) => job.job_id !== jobId));
+        setPagination((current) => ({
+          ...current,
+          total: Math.max(0, current.total - 1),
+          has_more: current.offset + current.limit < Math.max(0, current.total - 1),
+        }));
+      }
+      showToast('Job deleted.', 'success');
     } catch (err: any) {
-      setError(err.message || t('jobs.failedDelete'));
+      const message = err.message || t('jobs.failedDelete');
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setDeletingJobId(null);
     }
@@ -76,8 +109,10 @@ export function JobsPage() {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <SkeletonCard key={index} />
+          ))}
         </div>
       ) : jobs.length === 0 ? (
         <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
@@ -89,72 +124,90 @@ export function JobsPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {jobs.map((job) => (
-            <article
-              key={job.job_id} 
-              className="interactive-card glass-card-solid p-6 rounded-2xl flex flex-col justify-between group h-full"
-            >
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                    <Briefcase size={20} />
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {jobs.map((job) => (
+              <article
+                key={job.job_id}
+                className="interactive-card glass-card-solid p-6 rounded-2xl flex flex-col justify-between group h-full"
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                      <Briefcase size={20} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteJob(job.job_id)}
+                        disabled={deletingJobId === job.job_id}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                        aria-label={t('jobs.deleteAction')}
+                        title={t('jobs.deleteAction')}
+                      >
+                        {deletingJobId === job.job_id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      </button>
+                      <Link
+                        to={`/jobs/${job.job_id}`}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-all hover:text-brand-primary hover:translate-x-1"
+                        aria-label={t('jobs.openJob')}
+                      >
+                        <ArrowRight size={20} />
+                      </Link>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteJob(job.job_id)}
-                      disabled={deletingJobId === job.job_id}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/50 dark:text-rose-300 dark:hover:bg-rose-950/30"
-                      aria-label={t('jobs.deleteAction')}
-                      title={t('jobs.deleteAction')}
-                    >
-                      {deletingJobId === job.job_id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                    </button>
-                    <Link
-                      to={`/jobs/${job.job_id}`}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-all hover:text-brand-primary hover:translate-x-1"
-                      aria-label={t('jobs.openJob')}
-                    >
-                      <ArrowRight size={20} />
-                    </Link>
-                  </div>
+                  <Link to={`/jobs/${job.job_id}`} className="block">
+                    <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors break-words">
+                      {job.title || job.role_type || t('common.untitledRole')}
+                    </h3>
+                    <p className="text-slate-500 font-medium mb-4">
+                      {job.company || job.seniority || t('common.unknownCompany')}
+                    </p>
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                      <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
+                        {t(`statuses.${job.status}`)}
+                      </span>
+                      {job.applied_date && (
+                        <span className="text-xs text-slate-500">
+                          {t('jobs.appliedOn', {
+                            date: new Date(job.applied_date).toLocaleDateString(language),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-2">
+                      {job.required_skills?.slice(0, 3).map((skill, i) => (
+                        <span key={i} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {skill}
+                        </span>
+                      ))}
+                      {(job.required_skills?.length || 0) > 3 && (
+                        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-800">
+                          +{job.required_skills.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
                 </div>
-                <Link to={`/jobs/${job.job_id}`} className="block">
-                  <h3 className="font-heading font-bold text-xl text-brand-text dark:text-white mb-2 leading-tight group-hover:text-brand-primary transition-colors break-words">
-                    {job.title || job.role_type || t('common.untitledRole')}
-                  </h3>
-                  <p className="text-slate-500 font-medium mb-4">
-                    {job.company || job.seniority || t('common.unknownCompany')}
-                  </p>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${statusBadgeMap[job.status] ?? statusBadgeMap.saved}`}>
-                      {t(`statuses.${job.status}`)}
-                    </span>
-                    {job.applied_date && (
-                      <span className="text-xs text-slate-500">
-                        {t('jobs.appliedOn', {
-                          date: new Date(job.applied_date).toLocaleDateString(language),
-                        })}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-auto">
-                    {job.required_skills?.slice(0, 3).map((skill, i) => (
-                      <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg">
-                        {skill}
-                      </span>
-                    ))}
-                    {(job.required_skills?.length || 0) > 3 && (
-                      <span className="px-2.5 py-1 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg">
-                        +{job.required_skills.length - 3}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-              </div>
-            </article>
-          ))}
+              </article>
+            ))}
+          </div>
+          <PaginationControls
+            pagination={pagination}
+            itemLabel={t('jobs.resultsLabel')}
+            onPrevious={() =>
+              setPagination((current) => ({
+                ...current,
+                offset: Math.max(0, current.offset - PAGE_SIZE),
+              }))
+            }
+            onNext={() =>
+              setPagination((current) => ({
+                ...current,
+                offset: current.offset + PAGE_SIZE,
+              }))
+            }
+          />
         </div>
       )}
     </div>

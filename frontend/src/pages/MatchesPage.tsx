@@ -1,13 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
-import { CVJobMatch } from '../types';
-import { Loader2, Zap, LayoutDashboard } from 'lucide-react';
+import { CVJobMatch, PaginationMeta } from '../types';
+import { Zap, LayoutDashboard } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { SkeletonCard } from '../components/SkeletonLoader';
+import { useToast } from '../context/ToastContext';
+import { PaginationControls } from '../components/PaginationControls';
 
 export function MatchesPage() {
+  const PAGE_SIZE = 8;
   const { t, language } = useLanguage();
+  const { showToast } = useToast();
   const [matches, setMatches] = useState<CVJobMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pagination, setPagination] = useState<PaginationMeta>({
+    total: 0,
+    limit: PAGE_SIZE,
+    offset: 0,
+    has_more: false,
+  });
   const matchLevelClasses = {
     strong: 'bg-emerald-100 text-emerald-700',
     medium: 'bg-amber-100 text-amber-700',
@@ -17,16 +28,21 @@ export function MatchesPage() {
   useEffect(() => {
     async function fetchMatches() {
       try {
-        const data = await apiService.listMatches();
-        setMatches(data);
+        const data = await apiService.listMatchesPage({
+          limit: PAGE_SIZE,
+          offset: pagination.offset,
+        });
+        setMatches(data.items);
+        setPagination(data.pagination);
       } catch (err) {
-        console.error('Failed to load matches', err);
+        const message = err instanceof Error ? err.message : t('matches.failedLoad');
+        showToast(message, 'error');
       } finally {
         setIsLoading(false);
       }
     }
     fetchMatches();
-  }, []);
+  }, [pagination.offset, showToast, t]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -40,8 +56,10 @@ export function MatchesPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="animate-spin text-brand-primary h-8 w-8" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <SkeletonCard key={index} />
+          ))}
         </div>
       ) : matches.length === 0 ? (
         <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
@@ -50,41 +68,59 @@ export function MatchesPage() {
            <p className="text-slate-500 max-w-sm mx-auto">{t('matches.emptySubtitle')}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {matches.map((match) => (
-            <div key={match.id} className="glass-card-solid p-6 rounded-2xl flex flex-col h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                  <Zap size={20} />
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {matches.map((match) => (
+              <div key={match.id} className="glass-card-solid p-6 rounded-2xl flex flex-col h-full">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                    <Zap size={20} />
+                  </div>
+                  <div className={`rounded-full px-3 py-1 text-sm font-bold ${
+                    matchLevelClasses[match.match_level]
+                   }`}>
+                    {t('matches.matchBadge', { level: match.match_level })}
+                  </div>
                 </div>
-                <div className={`px-3 py-1 text-sm font-bold rounded-full ${
-                  matchLevelClasses[match.match_level]
-                 }`}>
-                  {t('matches.matchBadge', { level: match.match_level })}
+                <h3 className="mb-2 break-words text-lg font-heading font-bold text-brand-text dark:text-white">
+                  {t('matches.jobAndCv', { jobId: match.job_id, cvId: match.cv_id })}
+                </h3>
+                <p className="mb-4 max-h-32 flex-1 overflow-y-auto pr-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                  {match.why_this_cv || match.result?.fit_summary || t('jobDetails.noSummary')}
+                </p>
+                {match.strengths?.length > 0 && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {match.strengths.slice(0, 2).map((strength) => (
+                      <span key={strength} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        {strength}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-auto flex items-center gap-2 text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">
+                  <span>{t('common.score')}: {Math.round(match.heuristic_score * 100)}%</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+                  <span>{t('common.date')}: {new Date(match.created_at).toLocaleDateString(language)}</span>
                 </div>
               </div>
-              <h3 className="text-lg font-heading font-bold text-brand-text dark:text-white mb-2 break-words">
-                {t('matches.jobAndCv', { jobId: match.job_id, cvId: match.cv_id })}
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 leading-relaxed flex-1 max-h-32 overflow-y-auto pr-1">
-                 {match.why_this_cv || match.result?.fit_summary || t('jobDetails.noSummary')}
-              </p>
-              {match.strengths?.length > 0 && (
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {match.strengths.slice(0, 2).map((strength) => (
-                    <span key={strength} className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-xs font-semibold">
-                      {strength}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="mt-auto text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase flex items-center gap-2">
-                 <span>{t('common.score')}: {Math.round(match.heuristic_score * 100)}%</span>
-                 <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                 <span>{t('common.date')}: {new Date(match.created_at).toLocaleDateString(language)}</span>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <PaginationControls
+            pagination={pagination}
+            itemLabel={t('matches.resultsLabel')}
+            onPrevious={() =>
+              setPagination((current) => ({
+                ...current,
+                offset: Math.max(0, current.offset - PAGE_SIZE),
+              }))
+            }
+            onNext={() =>
+              setPagination((current) => ({
+                ...current,
+                offset: current.offset + PAGE_SIZE,
+              }))
+            }
+          />
         </div>
       )}
     </div>

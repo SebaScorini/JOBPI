@@ -4,7 +4,10 @@ import contextvars
 import logging
 from typing import Any
 
-from pythonjsonlogger.json import JsonFormatter
+try:
+    from pythonjsonlogger.json import JsonFormatter
+except ModuleNotFoundError:  # pragma: no cover - local fallback when optional dependency is absent
+    JsonFormatter = None  # type: ignore[assignment]
 
 
 TRACE_ID_CONTEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
@@ -58,11 +61,18 @@ def get_request_context() -> dict[str, str | None]:
 
 def _build_handler() -> logging.Handler:
     handler = logging.StreamHandler()
-    handler.setFormatter(
-        JsonFormatter(
-            "%(asctime)s %(levelname)s %(name)s %(message)s %(trace_id)s %(user_id)s %(method)s %(path)s %(status_code)s %(duration_ms)s"
+    if JsonFormatter is not None:
+        handler.setFormatter(
+            JsonFormatter(
+                "%(asctime)s %(levelname)s %(name)s %(message)s %(trace_id)s %(user_id)s %(method)s %(path)s %(status_code)s %(duration_ms)s"
+            )
         )
-    )
+    else:
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(name)s %(message)s trace_id=%(trace_id)s user_id=%(user_id)s method=%(method)s path=%(path)s status_code=%(status_code)s duration_ms=%(duration_ms)s"
+            )
+        )
     handler.addFilter(RequestContextFilter())
     return handler
 
