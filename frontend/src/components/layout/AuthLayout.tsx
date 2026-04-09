@@ -51,6 +51,7 @@ export function AuthLayout() {
             <h1 className="text-2xl font-heading font-extrabold tracking-tight">JobPi</h1>
           </div>
           <p className="text-slate-500 font-medium">{t('auth.tagline')}</p>
+          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">{t('auth.privacyHint')}</p>
         </div>
         
         <Outlet />

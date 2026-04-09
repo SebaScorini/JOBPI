@@ -10,9 +10,25 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required.'),
 });
 
+export const PASSWORD_MIN_LENGTH = 8;
+
+export function getPasswordRequirementState(password: string) {
+  return {
+    minLength: password.length >= PASSWORD_MIN_LENGTH,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    digit: /\d/.test(password),
+  };
+}
+
 export const registerSchema = z.object({
   email: z.string().trim().min(1, 'Email is required.').email('Enter a valid email address.'),
-  password: z.string().min(6, 'Password must contain at least 6 characters.'),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `Password must contain at least ${PASSWORD_MIN_LENGTH} characters.`)
+    .refine((value) => /[A-Z]/.test(value), 'Password must contain at least one uppercase letter.')
+    .refine((value) => /[a-z]/.test(value), 'Password must contain at least one lowercase letter.')
+    .refine((value) => /\d/.test(value), 'Password must contain at least one number.'),
 });
 
 export const jobAnalysisSchema = z.object({

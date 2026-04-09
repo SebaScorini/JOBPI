@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import sys
 from typing import Any
 
 try:
@@ -60,7 +61,8 @@ def get_request_context() -> dict[str, str | None]:
 
 
 def _build_handler() -> logging.Handler:
-    handler = logging.StreamHandler()
+    # Vercel classifies stderr lines as errors even when the log level is INFO/WARNING.
+    handler = logging.StreamHandler(sys.stdout)
     if JsonFormatter is not None:
         handler.setFormatter(
             JsonFormatter(

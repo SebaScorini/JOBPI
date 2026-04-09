@@ -197,11 +197,16 @@ interface BackendErrorResponse {
     code?: string;
     message?: string;
   };
-  detail?: string | Array<{ msg?: string }>;
+  detail?: string | Array<{ loc?: Array<string | number>; msg?: string }>;
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status?: number, public readonly code?: string) {
+  constructor(
+    message: string,
+    public readonly status?: number,
+    public readonly code?: string,
+    public readonly details?: Array<{ loc?: Array<string | number>; msg?: string }>,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -254,13 +259,14 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const code = data?.error?.code;
+    const details = Array.isArray(data?.detail) ? data.detail : undefined;
     const rawMessage =
       (data && typeof data.error?.message === 'string' && data.error.message) ||
       (data && typeof data.detail === 'string' && data.detail) ||
-      (data && Array.isArray(data.detail) && data.detail[0]?.msg) ||
+      details?.[0]?.msg ||
       `API error: ${response.status} ${response.statusText}`;
     const message = (code && FRIENDLY_ERROR_MESSAGES[code]) || rawMessage;
-    throw new ApiError(message, response.status, code);
+    throw new ApiError(message, response.status, code, details);
   }
 
   return data as T;

@@ -726,7 +726,7 @@ export function CVLibraryPage() {
               </div>
 
               <div className="rounded-xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Summary</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('library.summary')}</h3>
                 <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{activeCv.library_summary}</p>
               </div>
 
