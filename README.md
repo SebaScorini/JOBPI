@@ -124,26 +124,30 @@ For a complete directory guide, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STR
 
 ## Testing
 
-Tests are organized in the `tests/` directory and cover validation, pagination, and API health.
+Tests are organized in the `tests/` directory and now cover validation, auth, uploads, pagination, matching, cover-letter generation, and API reliability flows.
 
-### Run tests with Docker
+### Backend tests
 ```bash
-make test
+pytest -q
+pytest --cov=app --cov-report=term-missing -q
 ```
 
-### Run tests locally
+### Local benchmark baseline
 ```bash
-python tests/test_improvements.py
+python tests/benchmark.py
 ```
 
-### Run with pytest
+### Frontend tests
 ```bash
-python -m pytest                          # Run all tests
-python -m pytest tests/test_improvements.py -v  # Specific test
-python -m pytest --cov=app tests/         # With coverage
+cd frontend
+npm run test
+npm run build
 ```
 
-See [tests/README.md](tests/README.md) for detailed test documentation.
+### CI
+The repository includes [ci.yml](.github/workflows/ci.yml) to run backend tests with coverage, a benchmark smoke script, frontend tests, and the frontend production build.
+
+See [tests/README.md](tests/README.md) for more detailed test documentation.
 
 ## Documentation
 

@@ -2,6 +2,21 @@
 
 Use this checklist after each deployment to confirm JOBPI is healthy and observable.
 
+## Sprint 6 Local Reliability Checks
+
+Before deployment, run:
+
+```powershell
+pytest -q
+pytest --cov=app --cov-report=term-missing -q
+python tests/benchmark.py
+cd frontend
+npm run test
+npm run build
+```
+
+Record the printed benchmark timings so you can compare future changes against the same local baseline.
+
 ## Core API
 
 1. Verify the health endpoint responds successfully.

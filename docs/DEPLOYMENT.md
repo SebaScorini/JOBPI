@@ -70,3 +70,24 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 - Schema changes are managed in Alembic revisions; see [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md).
 - Existing databases that predate Alembic are stamped to the baseline revision automatically before newer revisions run.
 - PostgreSQL keeps `NullPool` in production for serverless safety; local PostgreSQL uses a small `QueuePool` for faster repeat queries.
+
+## Sprint 6 Pre-Deploy Verification
+
+Run these checks before merging or deploying Sprint 6 changes:
+
+```powershell
+pytest -q
+pytest --cov=app --cov-report=term-missing -q
+python tests/benchmark.py
+cd frontend
+npm run test
+npm run build
+```
+
+Expected outcomes:
+
+- Backend suite passes.
+- Coverage stays at or above the Sprint 6 target baseline.
+- The benchmark script prints local latency baselines for `/health`, `/auth/login`, and paginated CV listing.
+- Frontend component tests pass.
+- The production frontend build completes successfully.

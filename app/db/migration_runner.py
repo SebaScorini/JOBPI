@@ -64,7 +64,11 @@ def ensure_database_schema() -> None:
     config = Config(str(ALEMBIC_INI_PATH))
     config.set_main_option("script_location", str((BASE_DIR / "app" / "db" / "migrations").resolve()))
     config.set_main_option("sqlalchemy.url", get_settings().database_url)
-    config.attributes["skip_logging_config"] = True
+    config_attributes = getattr(config, "attributes", None)
+    if config_attributes is None:
+        config_attributes = {}
+        setattr(config, "attributes", config_attributes)
+    config_attributes["skip_logging_config"] = True
 
     with _postgres_migration_lock():
         inspector = inspect(engine)

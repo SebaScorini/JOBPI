@@ -13,3 +13,4 @@ python-json-logger
 sentry-sdk
 PyJWT
 redis
+pytest-cov

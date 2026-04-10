@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ApiError, apiService } from '../services/api';
-import { UserPlus, Loader2 } from 'lucide-react';
+import { UserPlus, Loader2, CheckCircle2, Circle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { getPasswordRequirementState, registerSchema } from '../utils/validation';
 import { useToast } from '../context/ToastContext';
@@ -22,6 +22,12 @@ export function RegisterPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const passwordRequirements = getPasswordRequirementState(password);
+  const passwordRequirementItems = [
+    { key: 'minLength', label: t('auth.passwordRequirementMinLength'), met: passwordRequirements.minLength },
+    { key: 'uppercase', label: t('auth.passwordRequirementUppercase'), met: passwordRequirements.uppercase },
+    { key: 'lowercase', label: t('auth.passwordRequirementLowercase'), met: passwordRequirements.lowercase },
+    { key: 'digit', label: t('auth.passwordRequirementNumber'), met: passwordRequirements.digit },
+  ];
 
   const applyBackendFieldErrors = (apiError: ApiError) => {
     const nextErrors: RegisterFieldErrors = {};
@@ -133,27 +139,35 @@ export function RegisterPage() {
         />
         {fieldErrors.password && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.password}</p>}
         {!fieldErrors.password && <p className="mt-2 text-xs text-slate-500">{t('auth.passwordCaseSensitive')}</p>}
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-            {t('auth.passwordRequirementsTitle')}
-          </p>
-          <ul className="mt-2 space-y-1 text-xs text-slate-600">
-            <li className={passwordRequirements.minLength ? 'text-emerald-600' : ''}>
-              {passwordRequirements.minLength ? '✓ ' : '• '}
-              {t('auth.passwordRequirementMinLength')}
-            </li>
-            <li className={passwordRequirements.uppercase ? 'text-emerald-600' : ''}>
-              {passwordRequirements.uppercase ? '✓ ' : '• '}
-              {t('auth.passwordRequirementUppercase')}
-            </li>
-            <li className={passwordRequirements.lowercase ? 'text-emerald-600' : ''}>
-              {passwordRequirements.lowercase ? '✓ ' : '• '}
-              {t('auth.passwordRequirementLowercase')}
-            </li>
-            <li className={passwordRequirements.digit ? 'text-emerald-600' : ''}>
-              {passwordRequirements.digit ? '✓ ' : '• '}
-              {t('auth.passwordRequirementNumber')}
-            </li>
+
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:to-slate-950">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              {t('auth.passwordRequirementsTitle')}
+            </p>
+            <span className="rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              {passwordRequirementItems.filter((item) => item.met).length}/{passwordRequirementItems.length}
+            </span>
+          </div>
+
+          <ul className="space-y-2">
+            {passwordRequirementItems.map((item) => {
+              const Icon = item.met ? CheckCircle2 : Circle;
+
+              return (
+                <li
+                  key={item.key}
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition-all ${
+                    item.met
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      : 'border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400'
+                  }`}
+                >
+                  <Icon size={16} className={item.met ? 'shrink-0' : 'shrink-0 opacity-70'} />
+                  <span className={item.met ? 'font-medium' : ''}>{item.label}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
