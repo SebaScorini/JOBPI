@@ -700,7 +700,7 @@ export function CVLibraryPage() {
                   <FileText size={28} className="text-brand-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100 mb-2">No CV Selected</h3>
-                <p className="text-sm text-slate-500 mb-5">{t('library.emptyLibraryDesc', 'Select a CV from the list on the left to view its details, or upload a new one to get started.')}</p>
+                <p className="text-sm text-slate-500 mb-5">{t('library.emptyLibraryDesc')}</p>
                 <button onClick={handleUploadClick} className="btn-primary mx-auto flex items-center justify-center gap-2 px-5 h-10 text-sm">
                   <UploadCloud size={16} />
                   Upload a new CV

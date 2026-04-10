@@ -177,13 +177,13 @@ export function JobsPage() {
           <div className="w-20 h-20 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto mb-6 group-hover:scale-105 transition-transform">
             <Briefcase size={32} className="text-brand-primary" fill="currentColor" fillOpacity={0.2} />
           </div>
-          <p className="text-2xl font-bold font-heading text-slate-800 dark:text-slate-100 mb-2">{t('jobs.emptyTitle', 'No jobs tracked yet')}</p>
+          <p className="text-2xl font-bold font-heading text-slate-800 dark:text-slate-100 mb-2">{t('jobs.emptyTitle')}</p>
           <p className="text-slate-500 max-w-md mx-auto mb-8 text-[15px] leading-relaxed">
-            {t('jobs.emptySubtitle', 'Paste job details to see how your CV matches, generate cover letters, and track your application progress.')}
+            {t('jobs.emptySubtitle')}
           </p>
           <Link to="/jobs/new" className="btn-primary inline-flex justify-center items-center py-3 w-56 text-[15px] font-semibold mx-auto group shadow-lg shadow-brand-primary/20">
             <Plus size={18} className="mr-2" />
-            {t('jobs.firstAnalysis', 'Analyze a Job')}
+            {t('jobs.firstAnalysis')}
           </Link>
         </div>
       ) : (
