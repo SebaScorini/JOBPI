@@ -42,23 +42,23 @@ export function OnboardingOverlay() {
   const steps = [
     {
       icon: <UploadCloud size={40} className="text-brand-primary mx-auto mb-4" />,
-      title: "Welcome! Let's get your profile ready",
-      desc: "Start by uploading your CV so we can use it to find the perfect job matches for you.",
-      cta: "Next",
+      title: t('onboarding.welcomeTitle'),
+      desc: t('onboarding.welcomeDesc'),
+      cta: t('onboarding.ctaNext'),
       action: () => setStep(2)
     },
     {
       icon: <Briefcase size={40} className="text-brand-primary mx-auto mb-4" />,
-      title: "Paste job posting details",
-      desc: "Found a job you like? Paste the connection job details right into our Job Analysis tool.",
-      cta: "Next",
+      title: t('onboarding.pasteTitle'),
+      desc: t('onboarding.pasteDesc'),
+      cta: t('onboarding.ctaNext'),
       action: () => setStep(3)
     },
     {
       icon: <Zap size={40} className="text-brand-primary mx-auto mb-4" />,
-      title: "See how well you match!",
-      desc: "We will analyze the job against your CV and generate customized cover letters and reports.",
-      cta: "Get Started",
+      title: t('onboarding.matchTitle'),
+      desc: t('onboarding.matchDesc'),
+      cta: t('onboarding.ctaGetStarted'),
       action: () => { navigate('/library'); handleDismiss(); }
     }
   ];
@@ -109,7 +109,7 @@ export function OnboardingOverlay() {
                 onClick={handleDismiss}
                 className="text-sm font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 mt-2"
               >
-                Skip tutorial
+                {t('onboarding.skipTutorial')}
               </button>
             )}
           </div>

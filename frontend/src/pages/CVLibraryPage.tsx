@@ -699,11 +699,11 @@ export function CVLibraryPage() {
                 <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto mb-4">
                   <FileText size={28} className="text-brand-primary" />
                 </div>
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100 mb-2">No CV Selected</h3>
-                <p className="text-sm text-slate-500 mb-5">{t('library.emptyLibraryDesc')}</p>
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100 mb-2">{t('library.selectCvViewTitle')}</h3>
+                <p className="text-sm text-slate-500 mb-5">{t('library.selectCvViewDesc')}</p>
                 <button onClick={handleUploadClick} className="btn-primary mx-auto flex items-center justify-center gap-2 px-5 h-10 text-sm">
                   <UploadCloud size={16} />
-                  Upload a new CV
+                  {t('library.uploadNewCv')}
                 </button>
               </div>
             </div>
