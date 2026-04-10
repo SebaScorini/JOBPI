@@ -1,10 +1,13 @@
 # CONTEXT
 
-This repository is documented in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md) and [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md).
+This file is the documentation entry point for quick orientation.
 
-Use this file as a short entry point if you need the high-level summary without opening the fuller references.
+Primary overview:
 
-Key docs:
+- [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)
+- [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
+
+Core references:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)

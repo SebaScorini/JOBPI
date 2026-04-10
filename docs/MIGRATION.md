@@ -55,9 +55,9 @@ python .scripts/docker_helper.py [command]
 
 All documentation has been updated to use the new file structure:
 
-- [docs/DOCKER.md](docs/DOCKER.md) - Complete Docker reference (40+ commands)
-- [docs/DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md) - 5-minute setup
-- [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) - Full directory guide
+- [docs/DOCKER.md](DOCKER.md) - Complete Docker reference (40+ commands)
+- [docs/DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md) - 5-minute setup
+- [docs/PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - Full directory guide
 - [README.md](../README.md) - Main project README
 
 ## Working Directory Structure
@@ -119,6 +119,6 @@ All functionality remains identical; the project is just better organized.
 ## Questions?
 
 See the updated documentation:
-- Quick setup: [docs/DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md)
-- Full reference: [docs/DOCKER.md](docs/DOCKER.md)
-- File organization: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
+- Quick setup: [docs/DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md)
+- Full reference: [docs/DOCKER.md](DOCKER.md)
+- File organization: [docs/PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)

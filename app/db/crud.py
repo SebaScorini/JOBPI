@@ -1,10 +1,61 @@
+import hashlib
 from datetime import timezone
 
-from sqlalchemy import func
+from sqlalchemy import delete, func, update
+from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import load_only
 from sqlmodel import Session, select
 
 from app.models import CV, CVJobMatch, JobAnalysis, User
+
+
+def _is_postgres_session(session: Session) -> bool:
+    bind = session.get_bind()
+    return bind is not None and bind.dialect.name == "postgresql"
+
+
+CV_LIST_COLUMNS = (
+    CV.id,
+    CV.filename,
+    CV.display_name,
+    CV.summary,
+    CV.library_summary,
+    CV.is_favorite,
+    CV.tags,
+    CV.created_at,
+)
+
+JOB_LIST_COLUMNS = (
+    JobAnalysis.id,
+    JobAnalysis.title,
+    JobAnalysis.company,
+    JobAnalysis.description,
+    JobAnalysis.clean_description,
+    JobAnalysis.analysis_result,
+    JobAnalysis.is_saved,
+    JobAnalysis.status,
+    JobAnalysis.applied_date,
+    JobAnalysis.notes,
+    JobAnalysis.created_at,
+)
+
+
+def _group_cv_ids_by_user(cvs: list[CV]) -> dict[int, list[int]]:
+    grouped: dict[int, list[int]] = {}
+    for cv in cvs:
+        if cv.id is None:
+            continue
+        grouped.setdefault(cv.user_id, []).append(cv.id)
+    return grouped
+
+
+def _sha256_hex(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _postgres_sha256_expr(column):
+    return func.encode(func.digest(column, "sha256"), "hex")
 
 
 def create_user(session: Session, email: str, hashed_password: str) -> User:
@@ -83,6 +134,7 @@ def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: in
     # Get paginated results
     statement = (
         select(CV)
+        .options(load_only(*CV_LIST_COLUMNS))
         .where(CV.user_id == user_id)
         .order_by(CV.is_favorite.desc(), CV.created_at.desc())
         .offset(offset)
@@ -106,7 +158,7 @@ def get_filtered_cvs_for_user(
     normalized_search = search.strip().lower()
     normalized_tags = [tag.strip().lower() for tag in (tags or []) if tag.strip()]
 
-    statement = select(CV).where(CV.user_id == user_id)
+    statement = select(CV).options(load_only(*CV_LIST_COLUMNS)).where(CV.user_id == user_id)
     count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id)
 
     if normalized_search:
@@ -114,9 +166,14 @@ def get_filtered_cvs_for_user(
         statement = statement.where(search_clause)
         count_statement = count_statement.where(search_clause)
 
+    if normalized_tags and _is_postgres_session(session):
+        tag_clause = CV.tags.op("?|")(pg_array(normalized_tags))
+        statement = statement.where(tag_clause)
+        count_statement = count_statement.where(tag_clause)
+
     statement = statement.order_by(CV.is_favorite.desc(), CV.created_at.desc())
 
-    if not normalized_tags:
+    if not normalized_tags or _is_postgres_session(session):
         total = int(session.exec(count_statement).one())
         items = list(session.exec(statement.offset(offset).limit(limit)).all())
         return items, total
@@ -135,29 +192,20 @@ def get_cv_for_user(session: Session, user_id: int, cv_id: int) -> CV | None:
 
 
 def get_cv_for_user_by_clean_text(session: Session, user_id: int, clean_text: str) -> CV | None:
-    statement = select(CV).where(CV.user_id == user_id, CV.clean_text == clean_text)
+    if _is_postgres_session(session):
+        clean_text_hash = _sha256_hex(clean_text)
+        statement = select(CV).where(
+            CV.user_id == user_id,
+            _postgres_sha256_expr(CV.clean_text) == clean_text_hash,
+            CV.clean_text == clean_text,
+        )
+    else:
+        statement = select(CV).where(CV.user_id == user_id, CV.clean_text == clean_text)
     return session.exec(statement).first()
 
 
 def delete_cv(session: Session, cv: CV) -> None:
-    cover_letter_jobs = session.exec(
-        select(JobAnalysis).where(
-            JobAnalysis.user_id == cv.user_id,
-            JobAnalysis.cover_letter_cv_id == cv.id,
-        )
-    ).all()
-    for job in cover_letter_jobs:
-        job.cover_letter_cv_id = None
-        job.cover_letter_language = None
-        job.generated_cover_letter = None
-        session.add(job)
-
-    statement = select(CVJobMatch).where(CVJobMatch.cv_id == cv.id, CVJobMatch.user_id == cv.user_id)
-    matches = session.exec(statement).all()
-    for match in matches:
-        session.delete(match)
-    session.delete(cv)
-    session.commit()
+    delete_multiple_cvs(session, [cv])
 
 
 def get_cvs_for_user_by_ids(session: Session, user_id: int, cv_ids: list[int]) -> list[CV]:
@@ -200,11 +248,42 @@ def update_multiple_cv_tags(session: Session, cvs: list[CV], tags: list[str]) ->
 
 
 def delete_multiple_cvs(session: Session, cvs: list[CV]) -> int:
-    deleted = 0
-    for cv in cvs:
-        delete_cv(session, cv)
-        deleted += 1
-    return deleted
+    grouped_cv_ids = _group_cv_ids_by_user(cvs)
+    if not grouped_cv_ids:
+        return 0
+
+    try:
+        for user_id, cv_ids in grouped_cv_ids.items():
+            session.exec(
+                update(JobAnalysis)
+                .where(
+                    JobAnalysis.user_id == user_id,
+                    JobAnalysis.cover_letter_cv_id.in_(cv_ids),
+                )
+                .values(
+                    cover_letter_cv_id=None,
+                    cover_letter_language=None,
+                    generated_cover_letter=None,
+                )
+            )
+            session.exec(
+                delete(CVJobMatch).where(
+                    CVJobMatch.user_id == user_id,
+                    CVJobMatch.cv_id.in_(cv_ids),
+                )
+            )
+            session.exec(
+                delete(CV).where(
+                    CV.user_id == user_id,
+                    CV.id.in_(cv_ids),
+                )
+            )
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
+
+    return sum(len(cv_ids) for cv_ids in grouped_cv_ids.values())
 
 
 def update_cv_library_summary(session: Session, cv: CV, library_summary: str) -> CV:
@@ -251,12 +330,22 @@ def get_matching_job_analysis(
     clean_description: str,
 ) -> JobAnalysis | None:
     # Check for identical analysis to avoid re-running slow LLM calls
-    statement = select(JobAnalysis).where(
-        JobAnalysis.user_id == user_id,
-        JobAnalysis.title == title,
-        JobAnalysis.company == company,
-        JobAnalysis.clean_description == clean_description,
-    )
+    if _is_postgres_session(session):
+        clean_description_hash = _sha256_hex(clean_description)
+        statement = select(JobAnalysis).where(
+            JobAnalysis.user_id == user_id,
+            JobAnalysis.title == title,
+            JobAnalysis.company == company,
+            _postgres_sha256_expr(JobAnalysis.clean_description) == clean_description_hash,
+            JobAnalysis.clean_description == clean_description,
+        )
+    else:
+        statement = select(JobAnalysis).where(
+            JobAnalysis.user_id == user_id,
+            JobAnalysis.title == title,
+            JobAnalysis.company == company,
+            JobAnalysis.clean_description == clean_description,
+        )
     return session.exec(statement).first()
 
 
@@ -271,7 +360,7 @@ def get_jobs_for_user(
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     count_statement = select(func.count()).select_from(JobAnalysis).where(JobAnalysis.user_id == user_id)
-    statement = select(JobAnalysis).where(JobAnalysis.user_id == user_id)
+    statement = select(JobAnalysis).options(load_only(*JOB_LIST_COLUMNS)).where(JobAnalysis.user_id == user_id)
     if is_saved is not None:
         count_statement = count_statement.where(JobAnalysis.is_saved == is_saved)
         statement = statement.where(JobAnalysis.is_saved == is_saved)
@@ -438,16 +527,37 @@ def update_match_analysis(
 
 def clear_recommendations_for_job(session: Session, user_id: int, job_id: int) -> None:
     # Toggle off recommended flag before setting a new winner
-    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.job_id == job_id)
-    for match in session.exec(statement).all():
-        match.recommended = False
-        session.add(match)
+    session.exec(
+        update(CVJobMatch)
+        .where(CVJobMatch.user_id == user_id, CVJobMatch.job_id == job_id)
+        .values(recommended=False)
+    )
     session.commit()
 
 
 def set_recommended_match(session: Session, match: CVJobMatch) -> CVJobMatch:
     match.recommended = True
     session.add(match)
+    session.commit()
+    session.refresh(match)
+    return match
+
+
+def replace_recommended_match(session: Session, match: CVJobMatch) -> CVJobMatch:
+    session.exec(
+        update(CVJobMatch)
+        .where(CVJobMatch.user_id == match.user_id, CVJobMatch.job_id == match.job_id)
+        .values(recommended=False)
+    )
+    session.exec(
+        update(CVJobMatch)
+        .where(
+            CVJobMatch.id == match.id,
+            CVJobMatch.user_id == match.user_id,
+            CVJobMatch.job_id == match.job_id,
+        )
+        .values(recommended=True)
+    )
     session.commit()
     session.refresh(match)
     return match

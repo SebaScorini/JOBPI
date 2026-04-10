@@ -124,6 +124,27 @@ class CvLibraryPersistenceTests(unittest.TestCase):
             stored_by_id[second_cv.id].library_summary,
         )
 
+    def test_get_cv_does_not_persist_library_summary_during_read(self):
+        service = CvLibraryService()
+        cv = crud.create_cv(
+            self.session,
+            user_id=self.user.id,
+            filename="missing-summary.pdf",
+            display_name="Missing Summary CV",
+            raw_text="Raw summary-free CV",
+            clean_text="Python FastAPI PostgreSQL engineer",
+            summary="Backend profile",
+            library_summary="",
+            tags=[],
+        )
+
+        payload = service.get_cv(self.session, self.user, cv.id)
+        refreshed = crud.get_cv_for_user(self.session, self.user.id, cv.id)
+
+        self.assertTrue(payload.library_summary)
+        self.assertIsNotNone(refreshed)
+        self.assertEqual(refreshed.library_summary, "")
+
 
 class CvLibrarySummaryNormalizationTests(unittest.TestCase):
     def test_normalize_library_summary_strips_model_completion_artifacts(self):

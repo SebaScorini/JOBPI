@@ -1,6 +1,14 @@
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import SQLModel, Session, create_engine
+
+from app.models import JobAnalysis, User
 
 from app.db import migration_runner
 
@@ -151,3 +159,36 @@ def test_ensure_database_schema_uses_postgres_advisory_lock(monkeypatch):
         "SELECT pg_advisory_unlock(:lock_id)",
     ]
     assert calls == [("upgrade", "head")]
+
+
+def test_job_analysis_status_check_constraint_is_enforced():
+    tmp_dir = Path.cwd() / ".tmp-tests"
+    tmp_dir.mkdir(exist_ok=True)
+    db_path = tmp_dir / f"status-check-{uuid4().hex}.db"
+    engine = create_engine(f"sqlite:///{db_path.resolve().as_posix()}")
+
+    try:
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            user = User(email="constraint@example.com", hashed_password="hashed")
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+            invalid_job = JobAnalysis(
+                user_id=user.id,
+                title="Backend Engineer",
+                company="Acme",
+                description="desc",
+                clean_description="desc",
+                analysis_result={"summary": "ok"},
+                status="invalid-status",
+            )
+            session.add(invalid_job)
+
+            with pytest.raises(IntegrityError):
+                session.commit()
+    finally:
+        engine.dispose()
+        if db_path.exists():
+            db_path.unlink()

@@ -13,6 +13,8 @@
 - `frontend/src/components/`: shared UI and layout components.
 - `frontend/src/services/`: API client and mapping helpers.
 
+Reference structure map: [`docs/PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
+
 ## Request Flow
 
 1. A frontend page calls the API client in `frontend/src/services/api.ts`.
@@ -20,6 +22,12 @@
 3. The service layer performs preprocessing, AI calls, persistence, and response shaping.
 4. SQLModel stores or reads user-scoped data through the database layer.
 5. The frontend renders normalized DTOs returned by the backend.
+
+Request lifecycle controls:
+
+- Request and response size guardrails are enforced at middleware and route levels.
+- Structured error envelopes are returned for application and validation failures.
+- Trace IDs are attached to responses for diagnostics.
 
 ## Auth Flow
 
@@ -29,6 +37,12 @@
 4. The backend resolves the current user from the token subject.
 5. All CV, job, and match operations remain scoped to that user.
 
+Auth implementation details:
+
+- Passwords are stored as hashes.
+- Bearer tokens are signed with `SECRET_KEY`.
+- Auth endpoints are rate-limited separately from AI-heavy endpoints.
+
 ## Database Flow
 
 - `users` stores the account identity and password hash.
@@ -37,6 +51,11 @@
 - `cv_job_matches` stores job-to-CV fit results and recommended match data.
 - SQLite is supported locally, but PostgreSQL is the production target.
 
+Schema management:
+
+- Alembic migrations are applied during startup when available.
+- Existing pre-migration databases are stamped to baseline before upgrade.
+
 ## Deployment Architecture
 
 - Backend deployment entrypoint: `api/index.py`.
@@ -44,8 +63,23 @@
 - Vercel rewrites route all requests to the Python entrypoint in this repository.
 - Supabase provides the hosted production database.
 
+Production topology (logical):
+
+1. Browser requests frontend assets.
+2. Frontend calls backend API over HTTPS.
+3. Backend executes auth, validation, and orchestration.
+4. Backend calls OpenRouter for AI generation and Supabase Postgres for persistence.
+5. Optional services: Redis for distributed rate limiting and Sentry for exception telemetry.
+
 ## Notes
 
 - Runtime schema creation is handled on backend startup.
 - AI features are routed through DSPy with OpenRouter as the provider.
 - Production uses stricter rate limits and smaller upload budgets than local development.
+
+## Related Docs
+
+- Context and boundaries: [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)
+- API contract: [`docs/API_REFERENCE.md`](API_REFERENCE.md)
+- Deployment runbook: [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)
+- Env reference: [`docs/ENVIRONMENT.md`](ENVIRONMENT.md)

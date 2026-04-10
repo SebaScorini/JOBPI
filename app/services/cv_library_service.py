@@ -2,6 +2,7 @@ import re
 import logging
 
 from fastapi import HTTPException, status
+from sqlalchemy import inspect as sa_inspect
 from sqlmodel import Session
 
 from app.core.config import get_settings
@@ -126,8 +127,7 @@ class CvLibraryService:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
-        enriched = self._ensure_library_summary(session, cv)
-        return CVDetailRead.model_validate(enriched)
+        return self._serialize_cv_detail(cv)
 
     def delete_cv(self, session: Session, user: User, cv_id: int) -> None:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
@@ -313,8 +313,7 @@ class CvLibraryService:
         if scored_matches:
             # Highlight the mathematically best match based on keywords
             best_match = max(scored_matches, key=lambda item: item[0])[1]
-            crud.clear_recommendations_for_job(session, user_id=user.id, job_id=job.id)
-            crud.set_recommended_match(session, best_match)
+            crud.replace_recommended_match(session, best_match)
             created_matches = [self._serialize_match(match) for _, match in scored_matches]
 
         return created_matches
@@ -732,15 +731,61 @@ class CvLibraryService:
         except Exception:
             return _heuristic_library_summary(clean_text)
 
-    def _ensure_library_summary(self, session: Session, cv: object):
+    def _get_loaded_attr(self, obj: object, attr_name: str) -> str:
+        try:
+            state = sa_inspect(obj)
+        except Exception:
+            value = getattr(obj, attr_name, "")
+            return value if isinstance(value, str) else ""
+
+        if attr_name in getattr(state, "unloaded", set()):
+            return ""
+
+        value = getattr(obj, attr_name, "")
+        return value if isinstance(value, str) else ""
+
+    def _ensure_library_summary(self, session: Session | None, cv: object) -> str:
         current = getattr(cv, "library_summary", "")
         if isinstance(current, str) and current.strip():
-            return cv
-        return crud.update_cv_library_summary(session, cv, self._build_library_summary(cv.clean_text))
+            return current
+
+        # Avoid write-on-read and expensive lazy loads in list endpoints.
+        clean_text = self._get_loaded_attr(cv, "clean_text")
+        if clean_text.strip():
+            return _heuristic_library_summary(clean_text)
+
+        summary = getattr(cv, "summary", "")
+        if isinstance(summary, str) and summary.strip():
+            return _heuristic_library_summary(summary)
+
+        display_name = getattr(cv, "display_name", "")
+        return _heuristic_library_summary(display_name if isinstance(display_name, str) else "")
 
     def _serialize_cv(self, session: Session, cv: object) -> CVRead:
-        enriched = self._ensure_library_summary(session, cv)
-        return CVRead.model_validate(enriched)
+        return CVRead(
+            id=cv.id,
+            filename=cv.filename,
+            display_name=cv.display_name,
+            summary=cv.summary,
+            library_summary=self._ensure_library_summary(session, cv),
+            is_favorite=bool(cv.is_favorite),
+            tags=list(cv.tags or []),
+            created_at=cv.created_at,
+        )
+
+    def _serialize_cv_detail(self, cv: object) -> CVDetailRead:
+        return CVDetailRead(
+            id=cv.id,
+            filename=cv.filename,
+            display_name=cv.display_name,
+            summary=cv.summary,
+            library_summary=self._ensure_library_summary(None, cv),
+            is_favorite=bool(cv.is_favorite),
+            tags=list(cv.tags or []),
+            created_at=cv.created_at,
+            raw_text=cv.raw_text,
+            clean_text=cv.clean_text,
+        )
 
     def _normalize_tags(self, tags: list[str]) -> list[str]:
         normalized: list[str] = []

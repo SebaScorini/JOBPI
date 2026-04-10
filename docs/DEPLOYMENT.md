@@ -7,6 +7,13 @@ JOBPI supports two documented ways to use the app:
 - Local installation, where you run the backend and frontend yourself and provide your own `OPENROUTER_API_KEY` and `DSPY_MODEL`.
 - Hosted usage at https://jobpi-app.vercel.app/.
 
+## Prerequisites
+
+- Python and Node.js toolchains for local execution.
+- A PostgreSQL database for production deployments.
+- OpenRouter API credentials for AI-enabled features.
+- Vercel projects for backend and frontend hosting (if using Vercel).
+
 ## Local Run
 
 Backend:
@@ -26,6 +33,12 @@ npm install
 npm run dev
 ```
 
+Local endpoints:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- OpenAPI: `http://localhost:8000/docs`
+
 ## Environment Setup
 
 - Copy the values from `.env.example` into a local `.env`.
@@ -34,7 +47,20 @@ npm run dev
 - Set `VITE_API_URL` for the frontend so it points at the deployed backend.
 - For local installation, you can also change `DSPY_MODEL` to your preferred model.
 
-See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for the full variable list.
+See [`docs/ENVIRONMENT.md`](ENVIRONMENT.md) for the full variable list.
+
+Minimum production backend variables:
+
+- `APP_ENV=production`
+- `DATABASE_URL` (PostgreSQL)
+- `SECRET_KEY`
+- `OPENROUTER_API_KEY`
+
+Recommended production variables:
+
+- `REDIS_URL`
+- `SENTRY_DSN`
+- `FRONTEND_URL` or `CORS_ORIGINS` / `CORS_ORIGIN_REGEX`
 
 ## Vercel Deploy
 
@@ -48,6 +74,11 @@ See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for the full variable list.
 8. Set `VITE_API_URL` in the frontend project to the backend URL.
 9. Make sure the backend environment installs `alembic`; startup now upgrades the schema to `head`.
 
+Suggested project split on Vercel:
+
+- Backend project rooted at repository root using `api/index.py`.
+- Frontend project rooted at `frontend/` with build command `npm run build`.
+
 The repo includes `vercel.json` rewrites so requests are routed to the Python app.
 
 ## Supabase Setup
@@ -58,6 +89,11 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 4. Set that value as `DATABASE_URL` in the backend deployment.
 5. Run `alembic upgrade head` or start the backend once so the migration bootstrap can apply the current schema.
 
+Supabase notes:
+
+- Use pooled production credentials and enforce SSL.
+- Keep migration history in sync with deployed backend version.
+
 ## Operational Notes
 
 - Production rate limits are stricter than local defaults.
@@ -67,9 +103,16 @@ The repo includes `vercel.json` rewrites so requests are routed to the Python ap
 - If `SENTRY_DSN` is configured, unexpected runtime exceptions are sent to Sentry with request metadata.
 - If you use preview deployments, configure `CORS_ORIGIN_REGEX` to allow the preview domain pattern.
 - The hosted app uses the production backend and production AI settings; local installs can override both.
-- Schema changes are managed in Alembic revisions; see [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md).
+- Schema changes are managed in Alembic revisions; see [`docs/MIGRATIONS.md`](MIGRATIONS.md).
 - Existing databases that predate Alembic are stamped to the baseline revision automatically before newer revisions run.
 - PostgreSQL keeps `NullPool` in production for serverless safety; local PostgreSQL uses a small `QueuePool` for faster repeat queries.
+
+## Related Docs
+
+- Environment variables: [`docs/ENVIRONMENT.md`](ENVIRONMENT.md)
+- API contract: [`docs/API_REFERENCE.md`](API_REFERENCE.md)
+- Architecture overview: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
+- Migration details: [`docs/MIGRATIONS.md`](MIGRATIONS.md)
 
 ## Sprint 6 Pre-Deploy Verification
 

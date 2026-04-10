@@ -1,8 +1,14 @@
 # PROJECT CONTEXT
 
-JOBPI is an AI-assisted job application workspace with a React frontend and a FastAPI backend. It helps authenticated users upload CVs, analyze job descriptions, compare multiple CVs against a role, generate cover letters, and track application progress over time.
+JOBPI is an AI-assisted job application workspace with a React frontend and a FastAPI backend. It helps authenticated users upload CVs, analyze job descriptions, compare CV fit, generate cover letters, and track application progress.
 
-## Runtime Shape
+## What the Project Does
+
+- Centralizes CV library management, job analysis, and application tracking.
+- Provides AI-assisted fit analysis and cover-letter generation.
+- Supports authenticated, user-scoped workflows end to end.
+
+## Architecture Overview
 
 - Frontend: Vite + React SPA in `frontend/`
 - Backend: FastAPI app in `app/`
@@ -10,20 +16,35 @@ JOBPI is an AI-assisted job application workspace with a React frontend and a Fa
 - Database: PostgreSQL in production, SQLite fallback for local development
 - AI provider path: DSPy configured against OpenRouter
 
-## Core Product Flows
+## Backend Role
+
+- Owns authentication, request validation, rate limiting, and orchestration.
+- Persists users, CVs, jobs, and match outputs.
+- Exposes REST endpoints used by the frontend.
+
+## Frontend Role
+
+- Handles routing, forms, dashboards, and rendering of backend responses.
+- Uses one API client layer in `frontend/src/services/api.ts`.
+- Stores bearer token and attaches it to protected calls.
+
+## Database Role
+
+- Uses PostgreSQL in production and SQLite for local fallback.
+- Stores user accounts, uploaded CVs, analyzed jobs, and CV-job matches.
+
+## Auth Flow
 
 1. Register or log in through `/auth`.
-2. Upload one or more CV PDFs through `/cvs`.
-3. Analyze a job description through `/jobs/analyze`.
-4. Match a selected CV to a job, compare CVs, or generate a cover letter.
-5. Track job status, saved state, and notes from the dashboard UI.
+2. Backend returns a bearer token.
+3. Frontend sends token on protected requests.
+4. Backend resolves current user and enforces ownership checks.
 
-## Safety-Critical Boundaries
+## External Services
 
-- Auth is JWT-based and all user-owned records are filtered by `user_id`.
-- Request size checks and rate limiting protect AI-heavy endpoints from abuse.
-- Secrets and deployment settings are loaded from environment variables in the backend only.
-- Production startup expects a real `SECRET_KEY` and a PostgreSQL `DATABASE_URL`.
+- OpenRouter for model inference.
+- Supabase for hosted PostgreSQL.
+- Vercel for deployment.
 
 ## Local Development Notes
 

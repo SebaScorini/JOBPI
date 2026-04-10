@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -54,6 +54,12 @@ class CV(SQLModel, table=True):
 
 class JobAnalysis(SQLModel, table=True):
     __tablename__ = "job_analyses"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('saved', 'applied', 'interview', 'rejected', 'offer')",
+            name="ck_job_analyses_status_valid",
+        ),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True, nullable=False)
