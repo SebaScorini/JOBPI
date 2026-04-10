@@ -9,7 +9,7 @@ venv/
 .venv/
 env/
 .env
-.env_deploy
+.env.deploy
 .env.local
 .env.*.local
 !.env.example
