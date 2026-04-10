@@ -16,6 +16,7 @@ import {
 import { useLanguage } from '../../context/LanguageContext';
 import { LanguageSelector } from '../LanguageSelector';
 import { useAppTheme } from '../../context/AppThemeContext';
+import { OnboardingOverlay } from '../OnboardingOverlay';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -40,6 +41,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-brand-background dark:bg-[#0B0F19] transition-colors duration-500 flex selection:bg-brand-primary/20">
+      <OnboardingOverlay />
       {/* Mobile overlay */}
       {isSidebarOpen && (
         <div

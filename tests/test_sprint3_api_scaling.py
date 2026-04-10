@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import uuid4
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, Session, create_engine
 
@@ -224,6 +225,39 @@ def test_request_size_limit_returns_413():
         payload = response.json()
         assert payload["error"]["code"] == "ERR_PAYLOAD_TOO_LARGE"
     finally:
+        _teardown_client(client, session, app, engine, db_path)
+
+
+def test_ai_timeout_maps_to_standardized_error_code():
+    client, session, user, app, engine, db_path = _build_client()
+    try:
+        import app.services.job_analyzer as job_service_module
+
+        service = job_service_module.get_job_analyzer_service()
+        original_analyze = service.analyze
+
+        def _raise_timeout(*args, **kwargs):
+            raise HTTPException(status_code=504, detail="AI request timed out. Please try again.")
+
+        service.analyze = _raise_timeout
+        response = client.post(
+            "/jobs/analyze",
+            json={
+                "title": "Backend Engineer",
+                "company": "Acme",
+                "description": (
+                    "Python FastAPI role with SQL, API ownership, testing, and cross-team delivery "
+                    "expectations for backend platform work."
+                ),
+            },
+        )
+
+        assert response.status_code == 504
+        payload = response.json()
+        assert payload["error"]["code"] == "ERR_AI_TIMEOUT"
+        assert payload["error"]["request_id"]
+    finally:
+        service.analyze = original_analyze
         _teardown_client(client, session, app, engine, db_path)
 
 

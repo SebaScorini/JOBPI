@@ -43,8 +43,8 @@ function resolveApiBaseUrl(): string {
 const API_BASE_URL = resolveApiBaseUrl();
 const TOKEN_STORAGE_KEY = 'jobpi_token';
 const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
-  ERR_RATE_LIMIT: "You're making requests too quickly. Please wait a moment.",
-  ERR_AI_TIMEOUT: 'Analysis took too long. Please try again.',
+  ERR_RATE_LIMIT: "You're moving fast! Please wait a moment before trying again.",
+  ERR_AI_TIMEOUT: 'Our AI is taking longer than expected. Please try again in a minute.',
   ERR_CV_NOT_FOUND: 'CV not found. It may have been deleted.',
   ERR_JOB_NOT_FOUND: 'Job not found. It may have been removed.',
   ERR_MATCH_NOT_FOUND: 'Match not found.',
@@ -53,6 +53,8 @@ const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
   ERR_SERVICE_UNAVAILABLE: 'This service is temporarily unavailable. Please try again.',
   ERR_UNAUTHORIZED: 'Your session expired. Please sign in again.',
   ERR_FORBIDDEN: 'You do not have permission to perform this action.',
+  ERR_PDF_INVALID: "This file doesn't look like a valid PDF. Please try a different file.",
+  ERR_CIRCUIT_BREAKER_OPEN: 'Our analysis service is temporarily busy. Please try again shortly.',
 };
 
 type ApiRequestOptions = Omit<RequestInit, 'headers'> & {

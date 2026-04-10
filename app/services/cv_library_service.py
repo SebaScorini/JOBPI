@@ -3,6 +3,7 @@ import logging
 
 from fastapi import HTTPException, status
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import NoInspectionAvailable
 from sqlmodel import Session
 
 from app.core.config import get_settings
@@ -729,12 +730,13 @@ class CvLibraryService:
         try:
             return self._get_library_summary_service().generate(clean_text)
         except Exception:
+            logger.warning("cv_library_summary_service_unavailable", exc_info=True)
             return _heuristic_library_summary(clean_text)
 
     def _get_loaded_attr(self, obj: object, attr_name: str) -> str:
         try:
             state = sa_inspect(obj)
-        except Exception:
+        except NoInspectionAvailable:
             value = getattr(obj, attr_name, "")
             return value if isinstance(value, str) else ""
 

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlmodel import Session
 
@@ -23,6 +25,7 @@ from app.services.cv_library_service import get_cv_library_service
 
 
 router = APIRouter(prefix="/cvs", tags=["cvs"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/upload", response_model=CVRead, status_code=status.HTTP_201_CREATED)
@@ -88,7 +91,7 @@ async def batch_upload_cvs(
     current_user: User = Depends(get_current_user),
 ) -> CVBatchUploadResponse:
     """Upload multiple CV files at once. Processes each file independently."""
-    
+
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -184,7 +187,12 @@ async def batch_upload_cvs(
                 )
             )
             failed += 1
-        except Exception as exc:
+        except Exception:
+            logger.warning(
+                "cv_batch_item_failed filename=%s",
+                file.filename or "unknown",
+                exc_info=True,
+            )
             results.append(
                 CVUploadResult(
                     filename=file.filename or "unknown",

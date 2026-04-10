@@ -2,7 +2,7 @@
 
 Use this checklist after each deployment to confirm JOBPI is healthy and observable.
 
-## Sprint 6 Local Reliability Checks
+## Sprint 7 Local Reliability Checks
 
 Before deployment, run:
 
@@ -35,6 +35,7 @@ Record the printed benchmark timings so you can compare future changes against t
 2. Call `GET /auth/me` with a bearer token.
 3. Confirm successful authenticated requests return `200`.
 4. Confirm invalid credentials still return the expected `401` or `403`.
+5. Confirm AI timeout responses, when triggered, return the standardized `ERR_AI_TIMEOUT` code.
 
 ## Database-Backed Flows
 

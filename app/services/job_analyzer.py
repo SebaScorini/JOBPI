@@ -379,7 +379,7 @@ class JobAnalyzerService:
 
     def _build_payload_from_result(self, result: object) -> JobAnalysisPayload:
         return JobAnalysisPayload(
-            summary=_normalize_text(getattr(result, "summary", ""), MAX_SUMMARY_CHARS),
+            summary=_normalize_summary_text(getattr(result, "summary", ""), MAX_SUMMARY_CHARS),
             seniority=_normalize_text(getattr(result, "seniority", ""), 40),
             role_type=_normalize_text(getattr(result, "role_type", ""), 40),
             required_skills=_normalize_list(getattr(result, "req_skills", [])),
@@ -496,6 +496,51 @@ def _normalize_text(value: object, limit: int) -> str:
     if cutoff < int(limit * 0.6):
         cutoff = limit
     return text[:cutoff].rstrip(" ,;:.")
+
+
+def _normalize_summary_text(value: object, limit: int) -> str:
+    text = _normalize_text(value, max(limit * 3, limit))
+    if len(text) <= limit:
+        return text
+
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if sentence.strip()
+    ]
+
+    if sentences:
+        selected: list[str] = []
+        for sentence in sentences:
+            candidate = " ".join(selected + [sentence]).strip()
+            if len(candidate) > limit:
+                break
+            selected.append(sentence)
+            if len(selected) >= 2:
+                break
+
+        if selected:
+            return " ".join(selected).rstrip(" ,;:")
+
+        return _truncate_summary_segment(sentences[0], limit)
+
+    return _truncate_summary_segment(text, limit)
+
+
+def _truncate_summary_segment(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text.rstrip(" ,;:")
+
+    cutoff = max(
+        text.rfind(". ", 0, limit),
+        text.rfind("; ", 0, limit),
+        text.rfind(": ", 0, limit),
+        text.rfind(", ", 0, limit),
+        text.rfind(" ", 0, limit),
+    )
+    if cutoff < int(limit * 0.6):
+        cutoff = limit
+    return text[:cutoff].rstrip(" ,;:")
 
 
 def _build_cache_key(title: str, company: str, description: str, language: AIResponseLanguage) -> str:

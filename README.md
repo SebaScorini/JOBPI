@@ -16,11 +16,12 @@ Frontend: React, TypeScript, Vite, Tailwind CSS, React Router.
 
 - JWT authentication
 - Single and batch CV upload
-- CV summaries and tags
+- CV summaries, tags, and favorite CV support
 - Job description analysis
 - CV-to-job matching and comparison
 - Tailored cover letter generation
-- Job tracking with status and notes
+- Job tracking with status, notes, and saved/bookmarked jobs
+- Job-detail copy actions for high-signal analysis sections
 - English/Spanish UI support
 
 ## Quick Start
@@ -84,6 +85,7 @@ For production observability and scaling, also set:
 - `REDIS_URL` for shared rate limiting across instances
 
 The frontend should be built with `VITE_API_URL` pointing to the deployed backend. `VITE_SITE_URL` is recommended for production canonical URLs.
+The committed frontend runtime currently requires `VITE_API_URL`; `VITE_SITE_URL` remains optional deployment metadata.
 
 If you use the hosted version, open https://jobpi-app.vercel.app/ and sign in normally. If you install locally, you can point the app to your own backend and configure your own AI provider values in `.env`.
 
@@ -149,6 +151,16 @@ npm run build
 The repository includes [ci.yml](.github/workflows/ci.yml) to run backend tests with coverage, a benchmark smoke script, frontend tests, and the frontend production build.
 
 See [tests/README.md](tests/README.md) for more detailed test documentation.
+
+### Sprint 7 verification
+```bash
+pytest -q
+pytest --cov=app --cov-report=term-missing -q
+python tests/benchmark.py
+cd frontend
+npm run test
+npm run build
+```
 
 ## Documentation
 

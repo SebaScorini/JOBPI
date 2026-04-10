@@ -59,7 +59,7 @@ This document lists all environment variables currently referenced in applicatio
 | Variable | Required | Purpose | Notes |
 | --- | --- | --- | --- |
 | `VITE_API_URL` | Yes (prod frontend) | Backend base URL for SPA requests | Local fallback logic exists for localhost and default hosted API |
-| `VITE_SITE_URL` | No | Canonical site URL for SEO metadata | Used by frontend app metadata handling |
+| `VITE_SITE_URL` | No | Canonical site URL for deployment metadata | Included in `.env.example` for hosted deployments; not currently consumed by committed frontend runtime code |
 
 ## Example Sources
 
@@ -74,3 +74,5 @@ This document lists all environment variables currently referenced in applicatio
 - Keep `OPENROUTER_API_KEY`, `SECRET_KEY`, and database credentials out of source control.
 - Use `REDIS_URL` in multi-instance production environments to avoid per-instance limiter drift.
 - Prefer `CORS_ORIGIN_REGEX` for preview URLs rather than broad wildcard origin rules.
+- `VITE_API_URL` is the only frontend environment variable currently read at runtime.
+- `VITE_SITE_URL` is documented for deploy parity and future metadata use, but it is optional today.

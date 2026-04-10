@@ -119,6 +119,8 @@ def _http_error_code(request: Request, exc: HTTPException) -> str:
         return "ERR_VALIDATION"
     if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
         return "ERR_RATE_LIMIT"
+    if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+        return "ERR_AI_TIMEOUT"
     if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
         return "ERR_SERVICE_UNAVAILABLE"
     return f"ERR_HTTP_{exc.status_code}"

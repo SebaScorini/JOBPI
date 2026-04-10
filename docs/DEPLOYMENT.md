@@ -73,6 +73,7 @@ Recommended production variables:
 7. Set `FRONTEND_URL` or `CORS_ORIGINS` for the deployed frontend domain.
 8. Set `VITE_API_URL` in the frontend project to the backend URL.
 9. Make sure the backend environment installs `alembic`; startup now upgrades the schema to `head`.
+10. Treat `VITE_SITE_URL` as optional deployment metadata only; the committed frontend runtime does not currently require it.
 
 Suggested project split on Vercel:
 
@@ -114,9 +115,28 @@ Supabase notes:
 - Architecture overview: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 - Migration details: [`docs/MIGRATIONS.md`](MIGRATIONS.md)
 
-## Sprint 6 Pre-Deploy Verification
+## Post-Deploy Health Check
 
-Run these checks before merging or deploying Sprint 6 changes:
+After each deployment:
+
+1. Verify `GET /health` returns HTTP `200` and `{"status":"ok"}`.
+2. Sign in and confirm `GET /auth/me` succeeds with a bearer token.
+3. Exercise one database-backed flow such as listing CVs or jobs.
+4. Run one AI-backed flow if `OPENROUTER_API_KEY` is configured.
+5. Confirm logs include JSON request entries with a `trace_id`.
+
+Use [`docs/HEALTH_CHECK.md`](HEALTH_CHECK.md) for the full checklist.
+
+## Rollback
+
+1. Re-deploy the previous known-good backend and frontend build in Vercel.
+2. Keep environment variables aligned with that release, especially `DATABASE_URL`, `SECRET_KEY`, and `OPENROUTER_API_KEY`.
+3. If a schema migration caused the issue, stop and verify the database state before attempting an Alembic downgrade.
+4. Re-run the health-check flow after rollback to confirm recovery.
+
+## Sprint 7 Pre-Deploy Verification
+
+Run these checks before merging or deploying Sprint 7 changes:
 
 ```powershell
 pytest -q
@@ -134,3 +154,4 @@ Expected outcomes:
 - The benchmark script prints local latency baselines for `/health`, `/auth/login`, and paginated CV listing.
 - Frontend component tests pass.
 - The production frontend build completes successfully.
+- Error responses keep the standardized `error.code`, `error.message`, `error.request_id`, and `error.timestamp` envelope.

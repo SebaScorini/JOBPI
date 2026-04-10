@@ -469,7 +469,7 @@ export function CVLibraryPage() {
             {selectedFiles.map((item, index) => (
               <div
                 key={`${item.file.name}-${index}`}
-                className={`flex items-center justify-between p-2 rounded-lg border ${
+                className={`relative overflow-hidden flex items-center justify-between p-2 rounded-lg border ${
                   item.status === 'success'
                     ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
                     : item.status === 'error'
@@ -492,6 +492,9 @@ export function CVLibraryPage() {
                     </button>
                   )}
                 </div>
+                {item.status === 'uploading' && (
+                  <div className="absolute bottom-0 left-0 h-[2px] bg-brand-primary animate-pulse w-full" />
+                )}
               </div>
             ))}
           </div>
@@ -577,11 +580,25 @@ export function CVLibraryPage() {
                 <SkeletonLoader lines={5} />
               </div>
             ) : visibleCvs.length === 0 ? (
-              <p className="text-xs text-slate-500 p-2">
-                {pagination.total === 0 && !searchQuery && !activeTagFilter
-                  ? t('library.emptyLibrary')
-                  : t('library.noTagMatches')}
-              </p>
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center h-full min-h-[200px]">
+                {pagination.total === 0 && !searchQuery && !activeTagFilter ? (
+                  <>
+                    <div className="h-12 w-12 rounded-full bg-brand-primary/10 flex items-center justify-center mb-3">
+                      <UploadCloud size={20} className="text-brand-primary" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">No CVs yet</h3>
+                    <p className="text-xs text-slate-500 mb-4 max-w-[180px]">{t('library.emptyLibrary')}</p>
+                    <button onClick={handleUploadClick} className="btn-primary !py-1.5 px-4 text-xs">
+                      Upload your first CV
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <FileText size={24} className="text-slate-400 mb-2" />
+                    <p className="text-xs text-slate-500">{t('library.noTagMatches')}</p>
+                  </>
+                )}
+              </div>
             ) : (
               visibleCvs.map((cv) => (
                 <div
@@ -677,10 +694,17 @@ export function CVLibraryPage() {
               </div>
             </div>
           ) : !activeCv ? (
-            <div className="h-full flex items-center justify-center text-center border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
-              <div>
-                <FileText size={32} className="mx-auto text-slate-400 mb-3" />
-                <p className="text-sm text-slate-500">{t('library.emptyLibraryDesc')}</p>
+            <div className="h-full flex items-center justify-center text-center border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/20">
+              <div className="max-w-xs px-4">
+                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto mb-4">
+                  <FileText size={28} className="text-brand-primary" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-gray-100 mb-2">No CV Selected</h3>
+                <p className="text-sm text-slate-500 mb-5">{t('library.emptyLibraryDesc', 'Select a CV from the list on the left to view its details, or upload a new one to get started.')}</p>
+                <button onClick={handleUploadClick} className="btn-primary mx-auto flex items-center justify-center gap-2 px-5 h-10 text-sm">
+                  <UploadCloud size={16} />
+                  Upload a new CV
+                </button>
               </div>
             </div>
           ) : (

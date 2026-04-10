@@ -131,7 +131,6 @@ class CvLibrarySummaryService:
             logger.warning("cv_library_summary_fallback reason=timeout_or_http")
         except Exception:
             logger.exception("cv_library_summary_fallback reason=unexpected_error")
-            pass
 
         logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_fallback")
         return _heuristic_library_summary(clean_text)

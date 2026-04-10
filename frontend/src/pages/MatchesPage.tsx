@@ -62,10 +62,15 @@ export function MatchesPage() {
           ))}
         </div>
       ) : matches.length === 0 ? (
-        <div className="text-center py-20 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
-           <LayoutDashboard size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-           <p className="text-xl font-semibold text-slate-600 dark:text-slate-400 mb-2">{t('matches.emptyTitle')}</p>
-           <p className="text-slate-500 max-w-sm mx-auto">{t('matches.emptySubtitle')}</p>
+        <div className="text-center py-24 px-4 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
+           <div className="w-20 h-20 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto mb-6">
+             <Zap size={32} className="text-brand-primary" fill="currentColor" fillOpacity={0.2} />
+           </div>
+           <p className="text-2xl font-bold font-heading text-slate-800 dark:text-slate-100 mb-2">{t('matches.emptyTitle', 'No matches found')}</p>
+           <p className="text-slate-500 max-w-md mx-auto mb-8">{t('matches.emptySubtitle', 'Compare your CV against job postings to see how well you match and get personalized tips.')}</p>
+           <Link to="/jobs/new" className="btn-primary inline-flex justify-center items-center py-3 w-56 text-[15px] font-semibold mx-auto group">
+             Go to Job Analysis
+           </Link>
         </div>
       ) : (
         <div className="space-y-5">

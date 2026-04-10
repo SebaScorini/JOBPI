@@ -7,11 +7,12 @@ export interface ToastItem {
   message: string;
   type: ToastType;
   duration: number;
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastContextValue {
   toasts: ToastItem[];
-  showToast: (message: string, type?: ToastType, duration?: number) => void;
+  showToast: (message: string, type?: ToastType, duration?: number, action?: { label: string; onClick: () => void }) => void;
   dismissToast: (id: string) => void;
 }
 
@@ -26,12 +27,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, type: ToastType = 'info', duration = 5000) => {
+    (message: string, type: ToastType = 'info', duration = 5000, action?: { label: string; onClick: () => void }) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      setToasts((current) => [...current, { id, message, type, duration }].slice(-MAX_TOASTS));
-      window.setTimeout(() => {
-        dismissToast(id);
-      }, duration);
+      setToasts((current) => [...current, { id, message, type, duration, action }].slice(-MAX_TOASTS));
+      if (duration > 0) {
+        window.setTimeout(() => {
+          dismissToast(id);
+        }, duration);
+      }
     },
     [dismissToast],
   );

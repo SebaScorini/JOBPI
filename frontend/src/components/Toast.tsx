@@ -37,11 +37,25 @@ export function ToastViewport() {
           >
             <div className="flex items-start gap-3">
               <Icon size={18} className="mt-0.5 shrink-0" />
-              <p className="min-w-0 flex-1 text-sm font-medium leading-6">{toast.message}</p>
+              <div className="flex flex-1 flex-col justify-center">
+                <p className="text-sm font-medium leading-5">{toast.message}</p>
+                {toast.action && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toast.action!.onClick();
+                      dismissToast(toast.id);
+                    }}
+                    className="mt-2 w-fit rounded-lg border border-current px-3 py-1 text-xs font-semibold opacity-80 transition hover:opacity-100"
+                  >
+                    {toast.action.label}
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => dismissToast(toast.id)}
-                className="rounded-lg p-1 opacity-70 transition-opacity hover:opacity-100"
+                className="rounded-lg p-1 opacity-70 transition-opacity hover:opacity-100 shrink-0"
                 aria-label="Dismiss notification"
               >
                 <X size={16} />

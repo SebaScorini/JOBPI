@@ -177,7 +177,7 @@ export function JobAnalysisPage() {
         </div>
 
         <aside className="glass-card rounded-3xl p-5">
-          <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">Preview</h2>
+          <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">{t('jobAnalysis.previewTitle')}</h2>
           {isLoading ? (
             <div className="space-y-4">
               <div className="skeleton-block h-7 w-2/3 rounded-xl" />
@@ -190,14 +190,14 @@ export function JobAnalysisPage() {
           ) : (
             <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
               <p className="leading-7">
-                Paste a target role, company, and job description to generate a concise analysis you can act on quickly.
+                {t('jobAnalysis.previewDesc')}
               </p>
               <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/20">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">What you will get</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('jobAnalysis.previewWhatYouGet')}</p>
                 <ul className="mt-3 list-disc space-y-2 pl-5 leading-6">
-                  <li>Key skills and responsibilities</li>
-                  <li>Preparation and interview guidance</li>
-                  <li>Resume improvement suggestions</li>
+                  <li>{t('jobAnalysis.previewItem1')}</li>
+                  <li>{t('jobAnalysis.previewItem2')}</li>
+                  <li>{t('jobAnalysis.previewItem3')}</li>
                 </ul>
               </div>
             </div>
