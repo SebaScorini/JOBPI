@@ -237,7 +237,6 @@ function buildHeaders(options: ApiRequestOptions): HeadersInit {
 
 async function request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { auth = false, token, headers, ...init } = options;
-
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,

@@ -34,7 +34,7 @@ def register(
 
     if "@" not in payload.email or payload.email.startswith("@") or payload.email.endswith("@"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A valid email address is required.",
         )
 

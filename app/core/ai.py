@@ -11,7 +11,7 @@ import dspy
 from fastapi import HTTPException, status
 
 from app.core.circuit_breaker import AICircuitBreaker
-from app.core.config import get_settings
+from app.core.config import get_settings, normalize_dspy_model
 
 
 AI_TIMEOUT_DETAIL = "AI request timed out. Please try again."
@@ -29,7 +29,7 @@ def clamp_lm_max_tokens(value: int) -> int:
 def dspy_lm_override(*, max_tokens: int) -> Any:
     settings = get_settings()
     lm = dspy.LM(
-        model=settings.dspy_model,
+        model=normalize_dspy_model(settings.dspy_model, settings.openrouter_base_url),
         api_key=settings.openrouter_api_key,
         api_base=settings.openrouter_base_url,
         temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
@@ -61,6 +61,7 @@ def run_ai_call_with_timeout(
             )
         return result
     except FuturesTimeoutError as exc:
+        future.cancel()
         logger.warning("ai_timeout operation=%s timeout_seconds=%s", operation, timeout_seconds)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,

@@ -11,6 +11,7 @@ env/
 .env
 .env.deploy
 .env.local
+.env.vercel.production
 .env.*.local
 !.env.example
 .pytest_cache/
@@ -64,6 +65,7 @@ temp/
 tmp/
 .tmp-tests/
 storage/
+scratch/
 
 # AI Tools / Codex
 .agent/

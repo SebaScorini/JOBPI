@@ -11,14 +11,14 @@ from app.core.security import _legacy_encode_jwt, create_access_token, decode_ac
 from app.core.config import get_settings
 
 
-def _build_request() -> Request:
+def _build_request(client_host: str = "127.0.0.1") -> Request:
     return Request(
         {
             "type": "http",
             "method": "GET",
             "path": "/test",
             "headers": [],
-            "client": ("127.0.0.1", 12345),
+            "client": (client_host, 12345),
         }
     )
 
@@ -105,6 +105,22 @@ def test_get_rate_limiter_uses_in_memory_when_redis_url_missing(monkeypatch):
     limiter = get_rate_limiter()
 
     assert isinstance(limiter, InMemoryRateLimiter)
+
+
+def test_in_memory_rate_limiter_enforces_email_bucket_across_ip_changes(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+    get_settings.cache_clear()
+
+    limiter = InMemoryRateLimiter()
+    policy = RateLimitPolicy(name="auth_login", limit=1, window_seconds=60)
+
+    limiter.enforce(request=_build_request(client_host="127.0.0.1"), policy=policy, email="same@example.com")
+
+    with pytest.raises(HTTPException) as exc_info:
+        limiter.enforce(request=_build_request(client_host="10.0.0.2"), policy=policy, email="same@example.com")
+
+    assert exc_info.value.status_code == 429
+    get_settings.cache_clear()
 
 
 def test_decode_access_token_accepts_legacy_signed_token(monkeypatch):

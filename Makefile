@@ -7,7 +7,7 @@ COMPOSE_FILE := .config/docker/docker-compose.yml
 .PHONY: help up down logs build bash clean test restart ps
 
 help:
-	@echo "🐳 JOBPI Docker Helper"
+	@echo "JOBPI Docker Helper"
 	@echo "======================================"
 	@echo ""
 	@echo "Location: $(COMPOSE_FILE)"
@@ -32,19 +32,19 @@ help:
 	@echo ""
 
 up:
-	@echo "▶ Starting Docker services..."
+	@echo "Starting Docker services..."
 	docker compose -f $(COMPOSE_FILE) up -d
 
 down:
-	@echo "▶ Stopping Docker services..."
+	@echo "Stopping Docker services..."
 	docker compose -f $(COMPOSE_FILE) down
 
 restart:
-	@echo "▶ Restarting Docker services..."
+	@echo "Restarting Docker services..."
 	docker compose -f $(COMPOSE_FILE) restart
 
 build:
-	@echo "▶ Building Docker images..."
+	@echo "Building Docker images..."
 	docker compose -f $(COMPOSE_FILE) build --progress=plain
 
 ps:

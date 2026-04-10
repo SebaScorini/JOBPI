@@ -53,14 +53,14 @@ async def upload_cv(
 
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Uploaded file must be a PDF.",
         )
 
     file_bytes = await file.read()
     if not is_trusted_user and len(file_bytes) > settings.max_pdf_size_bytes:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"PDF file must be under {settings.max_pdf_size_mb} MB.",
         )
 
@@ -75,7 +75,7 @@ async def upload_cv(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -97,6 +97,15 @@ async def batch_upload_cvs(
 
     settings = get_settings()
     is_trusted_user = settings.should_bypass_user_limits(current_user.email)
+    enforce_rate_limit(
+        request=request,
+        user=current_user,
+        policy=RateLimitPolicy(
+            name="cv_upload",
+            limit=settings.cv_upload_limit,
+            window_seconds=settings.cv_upload_window_seconds,
+        ),
+    )
     if not is_trusted_user:
         reject_oversized_request(
             request=request,
@@ -108,7 +117,7 @@ async def batch_upload_cvs(
         )
     if not is_trusted_user and len(files) > settings.max_cvs_per_upload:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"You can upload up to {settings.max_cvs_per_upload} CVs per request.",
         )
 

@@ -93,14 +93,15 @@ See the detailed guides in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md),
 
 JOBPI is organized for clarity and maintainability:
 
-```
-├── .config/              # Configuration and Docker resources
-│   └── docker/          # Docker compose, images, nginx config
-├── .scripts/            # Helper scripts
-├── app/                 # Backend FastAPI application
-├── frontend/            # Frontend React application
-├── docs/                # Documentation
-└── tests/               # Test suite
+```text
+JOBPI/
+|-- .config/    Configuration and Docker resources
+|-- .scripts/   Helper scripts
+|-- api/        Vercel backend entrypoint
+|-- app/        Backend FastAPI application
+|-- frontend/   React application
+|-- docs/       Canonical documentation
+|-- tests/      Test suite
 ```
 
 For a complete directory guide, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
@@ -124,7 +125,7 @@ For a complete directory guide, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STR
 
 ## Testing
 
-Tests are organized in the `tests/` directory and now cover validation, auth, uploads, pagination, matching, cover-letter generation, and API reliability flows.
+Tests are organized in the `tests/` directory and cover validation, auth, uploads, pagination, matching, cover-letter generation, and API reliability flows. The backend pytest suite imports the application directly and does not require a separately running API server.
 
 ### Backend tests
 ```bash

@@ -4,7 +4,9 @@ pydantic
 pydantic[email]
 sqlmodel
 alembic
-psycopg[binary]
+psycopg
+psycopg-binary
+psycopg2-binary
 dspy
 python-dotenv
 pypdf

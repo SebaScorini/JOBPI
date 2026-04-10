@@ -74,7 +74,26 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
 
 
 def _get_env_str(name: str, default: str = "") -> str:
-    return os.getenv(name, default).strip()
+    return _strip_wrapping_quotes(os.getenv(name, default).strip())
+
+
+def _strip_wrapping_quotes(value: str) -> str:
+    cleaned = value.strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {'"', "'"}:
+        return cleaned[1:-1].strip()
+    return cleaned
+
+
+def normalize_dspy_model(model: str, api_base: str) -> str:
+    cleaned_model = _strip_wrapping_quotes(model)
+    cleaned_api_base = _strip_wrapping_quotes(api_base).lower()
+    if not cleaned_model:
+        return cleaned_model
+    if "openrouter.ai" not in cleaned_api_base:
+        return cleaned_model
+    if cleaned_model.lower().startswith("openrouter/"):
+        return cleaned_model
+    return f"openrouter/{cleaned_model.lstrip('/')}"
 
 
 def _get_app_env() -> AppEnv:
@@ -286,6 +305,8 @@ class Settings(BaseModel):
         self.database_url = self.database_url.strip()
         if not self.database_url and self.app_env == "development":
             self.database_url = _default_sqlite_database_url()
+        self.openrouter_base_url = _strip_wrapping_quotes(self.openrouter_base_url).rstrip("/")
+        self.dspy_model = normalize_dspy_model(self.dspy_model, self.openrouter_base_url)
         self.trusted_user_email = self.trusted_user_email.lower()
         self.dspy_temperature = min(max(self.dspy_temperature, 0.2), 0.4)
         self.sqlite_timeout_seconds = max(1, self.sqlite_timeout_seconds)
@@ -381,7 +402,7 @@ def configure_dspy() -> dspy.LM:
             return _DSPY_LM
 
         lm = dspy.LM(
-            model=settings.dspy_model,
+            model=normalize_dspy_model(settings.dspy_model, settings.openrouter_base_url),
             api_key=settings.openrouter_api_key,
             api_base=settings.openrouter_base_url,
             temperature=min(max(settings.dspy_temperature, 0.2), 0.4),

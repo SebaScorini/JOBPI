@@ -44,11 +44,10 @@ class RedisRateLimiter:
         if user is not None and settings.is_trusted_user(getattr(user, "email", None)):
             return
 
-        subject = _build_subject(request=request, user=user)
-        key = f"ratelimit:{policy.name}:{subject}"
+        keys = [f"ratelimit:{policy.name}:{subject}" for subject in _build_subjects(request=request, user=user, email=email)]
 
         try:
-            current_count, ttl_seconds = self._increment(key=key, window_seconds=policy.window_seconds)
+            counters = [self._increment(key=key, window_seconds=policy.window_seconds) for key in keys]
         except redis.RedisError as exc:
             logger.warning(
                 "redis_rate_limit_unavailable policy=%s reason=%s",
@@ -58,8 +57,15 @@ class RedisRateLimiter:
             self._fallback_limiter.enforce(request=request, policy=policy, user=user, email=email)
             return
 
-        if current_count > policy.limit:
-            retry_after = max(1, ttl_seconds if ttl_seconds > 0 else policy.window_seconds)
+        retry_after = max(
+            (
+                max(1, ttl_seconds if ttl_seconds > 0 else policy.window_seconds)
+                for current_count, ttl_seconds in counters
+                if current_count > policy.limit
+            ),
+            default=0,
+        )
+        if retry_after:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded. Please try again later.",
@@ -77,16 +83,32 @@ class RedisRateLimiter:
         return current_count, ttl_seconds
 
 
-def _build_subject(request: Request, user: User | None) -> str:
+def _build_subjects(request: Request, user: User | None, email: str | None) -> list[str]:
     if user is not None:
-        return f"user:{user.id}"
+        return [f"user:{user.id}"]
+
+    subjects: list[str] = []
+    normalized_email = _normalize_email(email)
+    if normalized_email:
+        subjects.append(f"email:{normalized_email}")
+
+    subjects.append(_client_subject(request))
+    return list(dict.fromkeys(subjects))
+
+
+def _client_subject(request: Request) -> str:
+    if request.client and request.client.host:
+        return f"ip:{request.client.host}"
 
     forwarded_for = request.headers.get("x-forwarded-for", "")
     client_ip = forwarded_for.split(",")[0].strip()
     if client_ip:
         return f"ip:{client_ip}"
 
-    if request.client and request.client.host:
-        return f"ip:{request.client.host}"
-
     return "ip:unknown"
+
+
+def _normalize_email(email: str | None) -> str:
+    if not isinstance(email, str):
+        return ""
+    return email.strip().lower()

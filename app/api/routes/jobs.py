@@ -56,7 +56,7 @@ def analyze_job(
     )
     if not is_trusted_user and len(payload.description) > settings.max_job_description_chars:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"Job description must be {settings.max_job_description_chars} characters or fewer."
             ),

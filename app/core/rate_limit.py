@@ -43,40 +43,64 @@ class InMemoryRateLimiter:
         if user is not None and settings.is_trusted_user(getattr(user, "email", None)):
             return
 
-        subject = _build_subject(request=request, user=user)
-        bucket_key = f"{policy.name}:{subject}"
+        subjects = _build_subjects(request=request, user=user, email=email)
         now = time.time()
         cutoff = now - policy.window_seconds
 
         with self._lock:
-            bucket = self._events[bucket_key]
-            while bucket and bucket[0] <= cutoff:
-                bucket.popleft()
+            retry_after: int | None = None
+            buckets: list[Deque[float]] = []
+            for subject in subjects:
+                bucket = self._events[f"{policy.name}:{subject}"]
+                while bucket and bucket[0] <= cutoff:
+                    bucket.popleft()
+                buckets.append(bucket)
+                if len(bucket) >= policy.limit:
+                    retry_after = max(
+                        retry_after or 0,
+                        max(1, int(bucket[0] + policy.window_seconds - now)),
+                    )
 
-            if len(bucket) >= policy.limit:
-                retry_after = max(1, int(bucket[0] + policy.window_seconds - now))
+            if retry_after is not None:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="Rate limit exceeded. Please try again later.",
                     headers={"Retry-After": str(retry_after)},
                 )
 
-            bucket.append(now)
+            for bucket in buckets:
+                bucket.append(now)
 
 
-def _build_subject(request: Request, user: User | None) -> str:
+def _build_subjects(request: Request, user: User | None, email: str | None) -> list[str]:
     if user is not None:
-        return f"user:{user.id}"
+        return [f"user:{user.id}"]
+
+    subjects: list[str] = []
+    normalized_email = _normalize_email(email)
+    if normalized_email:
+        subjects.append(f"email:{normalized_email}")
+
+    subjects.append(_client_subject(request))
+    return list(dict.fromkeys(subjects))
+
+
+def _client_subject(request: Request) -> str:
+    if request.client and request.client.host:
+        return f"ip:{request.client.host}"
 
     forwarded_for = request.headers.get("x-forwarded-for", "")
     client_ip = forwarded_for.split(",")[0].strip()
     if client_ip:
         return f"ip:{client_ip}"
 
-    if request.client and request.client.host:
-        return f"ip:{request.client.host}"
-
     return "ip:unknown"
+
+
+def _normalize_email(email: str | None) -> str:
+    if not isinstance(email, str):
+        return ""
+    return email.strip().lower()
 
 
 _limiter: InMemoryRateLimiter | RedisRateLimiter | None = None

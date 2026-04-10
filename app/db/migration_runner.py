@@ -75,6 +75,9 @@ def ensure_database_schema() -> None:
         existing_tables = set(inspector.get_table_names())
 
         if "alembic_version" not in existing_tables and APP_TABLES.issubset(existing_tables):
+            # Older local databases can already contain the app tables without an Alembic
+            # version row. Stamping the known baseline keeps startup from replaying the
+            # initial schema creation against a database that is already populated.
             logger.info("db_migrations_stamp baseline=%s", BASELINE_REVISION)
             command.stamp(config, BASELINE_REVISION)
 

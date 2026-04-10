@@ -1,66 +1,48 @@
 # Test Suite
 
-All tests for JOBPI are organized in this directory.
+This directory contains the backend pytest suite and a small benchmark smoke script.
 
-## Test Files
+## What Lives Here
 
-- `test_improvements.py` - Validates email, password, pagination improvements and API health
-- `test_cv_summary_isolation.py` - CV summary isolation tests  
-- `test_dspy_configure.py` - DSPy configuration tests
-- `test_job_delete.py` - Job deletion tests
+- `conftest.py`: shared fixtures and test helpers
+- `test_*.py`: backend unit and integration-style tests
+- `benchmark.py`: local benchmark smoke script used in CI as a lightweight regression check
 
-## Running Tests
+## Running the Backend Tests
 
-### Run all tests
+The pytest suite does not require a separately running API server. It imports the application directly.
+
 ```bash
-# Using pytest
-pytest
+pytest -q
+pytest --cov=app --cov-report=term-missing -q
+```
 
-# Using make
+To run a single file or test:
+
+```bash
+pytest tests/test_job_delete.py -q
+pytest tests/test_job_delete.py::test_delete_job_removes_owned_job_only -q
+```
+
+## Running Through Docker
+
+If you are already using the Docker stack, you can run pytest inside the backend container:
+
+```bash
 make test
-
-# Using Docker
-make bash
-pytest
 ```
 
-### Run specific test file
-```bash
-pytest tests/test_improvements.py -v
-```
+## Frontend Checks
 
-### Run specific test function
-```bash
-pytest tests/test_improvements.py::test_email_validation -v
-```
-
-### Run with coverage
-```bash
-pytest --cov=app tests/
-```
-
-## Test Requirements
-
-Tests require the backend API to be running:
+Frontend tests live in `frontend/` and are run separately:
 
 ```bash
-# Start backend
-make up
-
-# In another terminal, run tests
-pytest
+cd frontend
+npm run test
+npm run build
 ```
 
-Or run the validation script directly:
-```bash
-python tests/test_improvements.py
-```
+## Notes
 
-## Configuration
-
-Pytest is configured in `pytest.ini` at the project root:
-- Test discovery: `tests/test_*.py`
-- Verbose output by default
-- Short traceback format
-
-Common imports are available in `conftest.py`.
+- Pytest configuration lives in the root `pytest.ini`.
+- Local temporary cache directories may appear during test runs; they are reproducible artifacts and not part of the source tree.

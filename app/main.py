@@ -32,7 +32,12 @@ RESPONSE_WARNING_BYTES = 5 * 1024 * 1024
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    ensure_database_schema()
+    try:
+        ensure_database_schema()
+    except Exception:
+        logger.exception("startup_database_initialization_failed")
+        if get_settings().app_env == "production":
+            raise
     yield
 
 
@@ -108,9 +113,9 @@ def _http_error_code(request: Request, exc: HTTPException) -> str:
         return "ERR_NOT_FOUND"
     if exc.status_code == status.HTTP_409_CONFLICT:
         return "ERR_CONFLICT"
-    if exc.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE:
+    if exc.status_code == status.HTTP_413_CONTENT_TOO_LARGE:
         return "ERR_PAYLOAD_TOO_LARGE"
-    if exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+    if exc.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT:
         return "ERR_VALIDATION"
     if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
         return "ERR_RATE_LIMIT"
@@ -232,7 +237,7 @@ def create_app() -> FastAPI:
         first_error = exc.errors()[0] if exc.errors() else {}
         message = str(first_error.get("msg") or "Request validation failed.")
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=_error_payload(request, "ERR_VALIDATION", message),
         )
 

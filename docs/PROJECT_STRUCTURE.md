@@ -1,217 +1,71 @@
-# 📁 Project Structure
+# Project Structure
 
-JOBPI is organized into clear, logical directories for better maintainability.
+This guide reflects the current repository layout. It is meant to help maintainers find the canonical source for runtime code, deployment config, tests, and docs without guessing.
 
-```
+## Top Level
+
+```text
 JOBPI/
-├── .config/                    # Configuration & Docker setup
-│   ├── docker/                 # Docker resources
-│   │   ├── docker-compose.yml  # Main container orchestration
-│   │   ├── Dockerfile          # Backend image
-│   │   ├── Dockerfile.frontend # Frontend image
-│   │   └── nginx.conf          # Nginx configuration
-│   ├── .env.docker             # Docker environment template
-│   └── .dockerignore           # Files to exclude from Docker build
-│
-├── .scripts/                   # Helper scripts
-│   ├── docker-up.bat           # Windows Docker helper
-│   └── docker_helper.py        # Cross-platform Docker helper
-│
-├── .github/                    # GitHub workflows (CI/CD)
-│   └── workflows/
-│
-├── app/                        # Backend source code
-│   ├── api/                    # REST endpoints
-│   │   ├── routes/
-│   │   │   ├── auth.py
-│   │   │   ├── cvs.py
-│   │   │   ├── jobs.py
-│   │   │   └── matches.py
-│   ├── core/                   # Core functionality
-│   │   ├── ai.py              # AI service integration
-│   │   ├── config.py          # Configuration
-│   │   ├── rate_limit.py      # Rate limiting
-│   │   ├── security.py        # Auth/security
-│   │   ├── settings.py        # App settings
-│   │   └── validation.py      # Input validation
-│   ├── db/                     # Database layer
-│   │   ├── crud.py            # CRUD operations
-│   │   ├── database.py        # DB connection
-│   │   └── init_db.py         # Schema bootstrap
-│   ├── dependencies/           # Request dependencies
-│   │   └── auth.py            # Auth dependency
-│   ├── models/                 # Data models
-│   │   └── entities.py        # SQLModel entities
-│   ├── schemas/                # Pydantic schemas
-│   │   ├── auth.py
-│   │   ├── cv.py
-│   │   ├── job.py
-│   │   ├── match.py
-│   ├── services/               # Business logic
-│   │   ├── cv_analyzer.py
-│   │   ├── cv_library_service.py
-│   │   ├── cv_library_summary_service.py
-│   │   ├── job_analyzer.py
-│   │   ├── job_preprocessing.py
-│   │   ├── pdf_extractor.py
-│   │   ├── cover_letter_service.py
-│   │   └── response_language.py
-│   └── main.py                # FastAPI app entry point
-│
-├── frontend/                   # Frontend source code (React + Vite)
-│   ├── src/
-│   │   ├── components/        # React components
-│   │   ├── context/           # React context
-│   │   ├── pages/             # Page components
-│   │   ├── services/          # API client
-│   │   ├── types/             # TypeScript types
-│   │   ├── i18n/              # Internationalization
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   └── index.css
-│   ├── public/                # Static assets
-│   ├── Vite config and package.json
-│   └── nginx.conf             # Nginx server config (see .config/docker/)
-│
-├── docs/                       # Documentation
-│   ├── API_REFERENCE.md       # API endpoint docs
-│   ├── ARCHITECTURE.md        # System architecture
-│   ├── DEPLOYMENT.md          # Production deployment
-│   ├── ENVIRONMENT.md         # Environment variables
-│   ├── PROJECT_CONTEXT.md     # Project overview
-│   ├── DOCKER.md              # Docker detailed guide
-│   └── DOCKER_QUICKSTART.md   # Quick Docker setup
-│
-├── tests/                      # Test suite
-│   ├── __init__.py             # Test package init
-│   ├── conftest.py             # Pytest configuration
-│   ├── README.md               # Test documentation
-│   ├── test_cv_summary_isolation.py
-│   ├── test_dspy_configure.py
-│   ├── test_job_delete.py
-│   └── test_improvements.py    # Integration tests for improvements
-│
-├── design-system/              # Design assets & guidelines
-├── api/                        # Vercel serverless API (if deployed)
-├── .env.example                # Environment template (root)
-├── .gitignore                  # Git ignore patterns
-├── .dockerignore               # Docker ignore patterns (root - backward compat)
-├── requirements.txt            # Python dependencies
-├── pytest.ini                  # Pytest configuration
-├── README.md                   # Main project README
-├── Makefile                    # Top-level make commands
-├── [old docker files]          # Removed (now in .config/docker/)
-└── [other files]
+|-- .config/         Configuration templates and Docker resources
+|-- .scripts/        Local helper scripts
+|-- api/             Vercel Python entrypoint
+|-- app/             Backend FastAPI application
+|-- docs/            Canonical project documentation
+|-- frontend/        React + Vite frontend
+|-- tests/           Backend test suite
+|-- design-system/   Design references and guidance assets
+|-- README.md        Primary onboarding document
+|-- PROJECT_CONTEXT.md
+|-- Makefile
+|-- alembic.ini
+|-- vercel.json
 ```
 
----
+## Backend
 
-## 📂 Directory Purposes
+`app/` contains the production backend code.
 
-### Core Directories
+- `app/main.py`: FastAPI app creation, middleware, exception handling, startup lifecycle
+- `app/api/routes/`: HTTP routes for auth, CVs, jobs, and matches
+- `app/core/`: settings, logging, security, validation, AI helpers, and rate limiting
+- `app/db/`: engine setup, CRUD helpers, migration runner, and Alembic migrations
+- `app/dependencies/`: FastAPI dependencies such as current-user resolution
+- `app/models/`: SQLModel entities
+- `app/schemas/`: request and response models
+- `app/services/`: business workflows for uploads, analysis, matching, and cover letters
 
-| Directory | Purpose |
-|-----------|---------|
-| **.config/** | All configuration files (Docker, environment, etc.) |
-| **.scripts/** | Helper scripts for development and deployment |
-| **.github/** | GitHub-specific workflows and CI/CD |
-| **app/** | Backend FastAPI application |
-| **frontend/** | Frontend React/Vite application |
-| **docs/** | Project documentation |
-| **tests/** | Test suite |
+## Frontend
 
-### Backend Structure (app/)
+`frontend/` contains the user-facing web app.
 
-- **api/routes/** - HTTP endpoint definitions
-- **core/** - Core services (AI, config, security, rate limiting)
-- **db/** - Database layer (CRUD, schema, connection)
-- **dependencies/** - FastAPI request dependencies
-- **models/** - SQLModel ORM entities
-- **schemas/** - Pydantic request/response models
-- **services/** - Business logic (CV analysis, job matching, cover letters)
+- `frontend/src/pages/`: route-level screens
+- `frontend/src/components/`: shared UI components
+- `frontend/src/context/`: auth, language, theme, and toast state
+- `frontend/src/services/api.ts`: typed API client and auth token wiring
+- `frontend/src/types/`: shared frontend types
+- `frontend/src/i18n/`: translations
+- `frontend/public/`: static assets
 
-### Frontend Structure (frontend/)
+Build output such as `frontend/dist/` and dependency installs such as `frontend/node_modules/` are local artifacts and should not be treated as source.
 
-- **src/components/** - Reusable React components
-- **src/context/** - React Context for state management
-- **src/pages/** - Page-level components
-- **src/services/** - API client and utilities
-- **src/types/** - TypeScript type definitions
-- **src/i18n/** - Multi-language support
+## Configuration and Deployment
 
-### Configuration Structure (.config/)
+- `.config/docker/`: Docker Compose, backend/frontend container images, and nginx config
+- `.config/.env.docker`: Docker-oriented environment template
+- `vercel.json`: root Vercel routing for the backend deployment
+- `frontend/vercel.json`: frontend-specific Vercel config for the SPA
+- `api/index.py`: Vercel adapter that exposes the FastAPI app
+- `alembic.ini`: Alembic configuration used by the backend migration runner
 
-- **docker/** - All Docker-related files
-- **.env.docker** - Docker environment template
-- **.dockerignore** - Files excluded from Docker builds
+## Tests and Docs
 
----
+- `tests/`: backend pytest suite, fixtures, and benchmark smoke script
+- `tests/README.md`: how to run the test suite locally
+- `docs/`: canonical architecture, API, environment, deployment, Docker, and health-check docs
+- Root files such as `API.md`, `ARCHITECTURE.md`, and `CONTEXT.md`: short signposts that point to the canonical documentation under `docs/`
 
-## 🚀 Quick Commands
+## Maintenance Notes
 
-### Using Make
-
-```bash
-make up              # Start services
-make down            # Stop services
-make logs-be         # View backend logs
-make bash            # Shell into backend
-```
-
-### Using Python Helper
-
-```bash
-python .scripts/docker_helper.py up
-python .scripts/docker_helper.py logs-backend
-python .scripts/docker_helper.py bash
-```
-
-### Using Windows Batch
-
-```powershell
-.scripts\docker-up.bat up
-.scripts\docker-up.bat logs
-.scripts\docker-up.bat bash
-```
-
-### Using Docker Directly
-
-```bash
-docker compose -f .config/docker/docker-compose.yml up
-docker compose -f .config/docker/docker-compose.yml logs -f
-```
-
----
-
-## 📖 Documentation Map
-
-- **README.md** - Start here for overview
-- **DOCKER_QUICKSTART.md** - 5-minute Docker setup
-- **DOCKER.md** - Complete Docker guide (40+ commands)
-- **ARCHITECTURE.md** - System design and flows
-- **API_REFERENCE.md** - REST API endpoints
-- **DEPLOYMENT.md** - Production deployment
-- **ENVIRONMENT.md** - All configuration variables
-- **PROJECT_CONTEXT.md** - Project details
-
----
-
-## 🔄 Backward Compatibility
-
-The root directory maintains copies of Docker files for backward compatibility:
-- `docker-compose.yml` (root) → references `.config/docker/docker-compose.yml`
-- `Dockerfile` (root)  → copy in `.config/docker/`
-- `Dockerfile.frontend` (root) → copy in `.config/docker/`
-
-This allows existing scripts and workflows to continue working while the organized structure is available for new setups.
-
----
-
-## 💡 Best Practices
-
-1. **Development**: Use `make up` or `.scripts/docker_helper.py up`
-2. **Configuration**: All Docker config is in `.config/docker/`
-3. **Environment**: Copy `.config/.env.docker` to `.env` and configure
-4. **Scripts**: Use helpers in `.scripts/` instead of running raw docker commands
-5. **Documentation**: Check `docs/` for guides and references
-
+- Treat `app/main.py`, `api/index.py`, `vercel.json`, env handling, auth code, and rate limiting as runtime-critical.
+- Avoid deleting files just because they look unused; confirm imports, scripts, and deployment references first.
+- Local cache folders, coverage outputs, SQLite scratch databases, and test/build artifacts are workspace hygiene items, not source files.
