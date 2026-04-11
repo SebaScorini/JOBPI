@@ -239,7 +239,7 @@ export function JobDetailsPage() {
       const updated = await apiService.updateJobStatus(Number(jobId), status, payloadDate);
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
-      showToast('Job status updated.', 'success');
+      showToast(t('jobDetails.statusUpdatedSuccess'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedStatus');
       setError(message);
@@ -257,7 +257,7 @@ export function JobDetailsPage() {
       const updated = await apiService.updateJobNotes(Number(jobId), notesDraft.trim() || null);
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
-      showToast('Notes saved.', 'success');
+      showToast(t('jobDetails.notesSavedSuccess'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedNotes');
       setError(message);
@@ -278,7 +278,7 @@ export function JobDetailsPage() {
       const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setCoverLetter(result.generated_cover_letter);
       setActiveTab('cover');
-      showToast('Cover letter generated.', 'success');
+      showToast(t('jobDetails.coverLetterGeneratedSuccess'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedCoverLetter');
       setError(message);
@@ -317,7 +317,7 @@ export function JobDetailsPage() {
     setError(null);
     try {
       await apiService.deleteJob(Number(jobId));
-      showToast('Job deleted.', 'success');
+      showToast(t('jobs.deletedSuccess'), 'success');
       navigate('/jobs');
     } catch (err: any) {
       const message = err.message || t('jobs.failedDelete');
@@ -778,7 +778,7 @@ export function JobDetailsPage() {
 
                       {additionalMissingKeywords.length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Keywords to add</p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{t('jobDetails.keywordsToAdd')}</p>
                           <div className="flex flex-wrap gap-2">
                             {additionalMissingKeywords.map((keyword) => (
                               <span key={keyword} className="rounded-full border border-amber-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-950/40 dark:text-amber-200 break-words">
@@ -884,7 +884,7 @@ export function JobDetailsPage() {
 
         <aside className="hidden 2xl:flex 2xl:flex-col gap-4 sticky top-[84px] h-fit">
           <div className="glass-card p-4 rounded-2xl">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Insights</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">{t('jobDetails.insights')}</h3>
             <div className="space-y-3 text-sm">
               <div className="rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2">
                 <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">{t('jobDetails.recommendedCv')}</p>

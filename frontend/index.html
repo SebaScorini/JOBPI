@@ -4,33 +4,45 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="index,follow" />
     <meta
       name="description"
-      content="JOBPI helps you analyze CVs, evaluate job posts, track applications, and match your profile to roles so you can apply faster and make smarter career moves."
+      content="JOBPI is an AI resume tool and AI job application assistant for ATS resume optimization, CV analysis, job matching, cover letter generation, and application tracking."
     />
-    <meta name="keywords" content="JOBPI, CV analysis, job tracker, resume matcher, job applications" />
+    <meta
+      name="keywords"
+      content="AI resume tool, AI CV analyzer, AI job application assistant, resume optimizer AI, ATS resume optimizer, AI cover letter generator, job matching AI, resume matcher AI, job search AI tool, AI job tracker"
+    />
     <meta name="author" content="JOBPI" />
     <meta name="theme-color" content="#0B1220" />
+    <link rel="canonical" href="https://jobpi-app.vercel.app/" />
 
-    <meta property="og:title" content="JOBPI | AI Career Assistant" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <meta property="og:title" content="AI Resume Tool & ATS Resume Optimizer | JOBPI" />
     <meta
       property="og:description"
-      content="Analyze CVs, compare job posts, and track applications in one place with JOBPI to make faster, smarter job decisions."
+      content="Use JOBPI to analyze resumes with AI, optimize for ATS, match CVs to jobs, generate cover letters, and track job applications."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="" />
-    <meta property="og:image" content="" />
+    <meta property="og:url" content="https://jobpi-app.vercel.app/" />
+    <meta property="og:image" content="https://jobpi-app.vercel.app/favicon.svg" />
     <meta property="og:site_name" content="JOBPI" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="JOBPI | AI Career Assistant" />
+    <meta name="twitter:title" content="AI Resume Tool & ATS Resume Optimizer | JOBPI" />
     <meta
       name="twitter:description"
-      content="Analyze CVs, compare job posts, and track applications in one place with JOBPI to make faster, smarter job decisions."
+      content="AI CV analyzer, resume matcher AI, cover letter generator, and AI job tracker for smarter applications."
     />
-    <meta name="twitter:image" content="" />
+    <meta name="twitter:image" content="https://jobpi-app.vercel.app/favicon.svg" />
 
-    <title>Home | JOBPI</title>
+    <title>AI Resume Tool & ATS Resume Optimizer | JOBPI</title>
 
     <script id="jobpi-schema" type="application/ld+json"></script>
     <script>
@@ -45,48 +57,6 @@
               ? 'dark'
               : 'light';
         document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
-
-        var origin = window.location.origin.replace(/\/$/, '');
-        var homeUrl = origin + '/';
-        var imageUrl = origin + '/favicon.svg';
-
-        function upsertMeta(attribute, key, value) {
-          var selector = 'meta[' + attribute + '="' + key + '"]';
-          var tag = document.querySelector(selector);
-          if (!tag) {
-            tag = document.createElement('meta');
-            tag.setAttribute(attribute, key);
-            document.head.appendChild(tag);
-          }
-          tag.setAttribute('content', value);
-        }
-
-        var canonical = document.querySelector('link[rel="canonical"]');
-        if (!canonical) {
-          canonical = document.createElement('link');
-          canonical.setAttribute('rel', 'canonical');
-          document.head.appendChild(canonical);
-        }
-        canonical.setAttribute('href', homeUrl);
-
-        upsertMeta('property', 'og:url', homeUrl);
-        upsertMeta('property', 'og:image', imageUrl);
-        upsertMeta('name', 'twitter:image', imageUrl);
-
-        var schema = document.getElementById('jobpi-schema');
-        if (schema) {
-          schema.textContent = JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'SoftwareApplication',
-            name: 'JOBPI',
-            applicationCategory: 'BusinessApplication',
-            operatingSystem: 'Web',
-            url: homeUrl,
-            description:
-              'JOBPI helps you analyze CVs, evaluate job posts, track applications, and match your profile to roles so you can apply faster and make smarter career moves.',
-            image: imageUrl,
-          });
-        }
       })();
     </script>
   </head>

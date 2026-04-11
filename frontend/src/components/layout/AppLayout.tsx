@@ -26,7 +26,6 @@ export function AppLayout() {
 
   const handleLogout = () => {
     logout();
-    window.location.assign('/');
   };
 
   const navItems = [

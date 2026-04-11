@@ -168,8 +168,11 @@ export function CVLibraryPage() {
       await loadCVs();
       showToast(
         result.summary.failed === 0
-          ? 'CV upload complete.'
-          : `Upload finished: ${result.summary.succeeded} succeeded, ${result.summary.failed} failed.`,
+          ? t('library.uploadComplete')
+          : t('library.uploadFinishedSummary', {
+              succeeded: result.summary.succeeded,
+              failed: result.summary.failed,
+            }),
         result.summary.failed === 0 ? 'success' : 'warning',
       );
 
@@ -211,7 +214,7 @@ export function CVLibraryPage() {
           has_more: current.offset + current.limit < Math.max(0, current.total - 1),
         }));
       }
-      showToast('CV deleted.', 'success');
+      showToast(t('library.deletedSuccess'), 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : t('library.failedDelete');
       showToast(message, 'error');
@@ -265,8 +268,13 @@ export function CVLibraryPage() {
       }
       showToast(
         result.failed > 0
-          ? `${result.deleted} deleted, ${result.failed} failed.`
-          : `${result.deleted} CVs deleted.`,
+          ? t('library.bulkDeleteSummaryWithFailures', {
+              deleted: result.deleted,
+              failed: result.failed,
+            })
+          : t('library.bulkDeleteSummarySuccess', {
+              deleted: result.deleted,
+            }),
         result.failed > 0 ? 'warning' : 'success',
       );
     } catch (err) {
@@ -326,8 +334,13 @@ export function CVLibraryPage() {
       setBulkTagInput('');
       showToast(
         result.failed > 0
-          ? `${result.updated} updated, ${result.failed} failed.`
-          : `${result.updated} CVs updated.`,
+          ? t('library.bulkTagSummaryWithFailures', {
+              updated: result.updated,
+              failed: result.failed,
+            })
+          : t('library.bulkTagSummarySuccess', {
+              updated: result.updated,
+            }),
         result.failed > 0 ? 'warning' : 'success',
       );
     } catch (err) {
@@ -350,7 +363,7 @@ export function CVLibraryPage() {
       const updatedCv = await apiService.updateCVTags(cvId, tags);
       setCvs((prev) => prev.map((cv) => (cv.id === cvId ? updatedCv : cv)));
       setTagInputs((prev) => ({ ...prev, [cvId]: updatedCv.tags.join(', ') }));
-      showToast('Tags updated.', 'success');
+      showToast(t('library.tagsUpdated'), 'success');
 
       if (activeTagFilter && !updatedCv.tags.includes(activeTagFilter)) {
         setActiveTagFilter('');
@@ -586,10 +599,10 @@ export function CVLibraryPage() {
                     <div className="h-12 w-12 rounded-full bg-brand-primary/10 flex items-center justify-center mb-3">
                       <UploadCloud size={20} className="text-brand-primary" />
                     </div>
-                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">No CVs yet</h3>
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">{t('library.noCvsYet')}</h3>
                     <p className="text-xs text-slate-500 mb-4 max-w-[180px]">{t('library.emptyLibrary')}</p>
                     <button onClick={handleUploadClick} className="btn-primary !py-1.5 px-4 text-xs">
-                      Upload your first CV
+                      {t('library.uploadFirstCv')}
                     </button>
                   </>
                 ) : (

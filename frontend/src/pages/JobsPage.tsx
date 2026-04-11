@@ -80,7 +80,7 @@ export function JobsPage() {
           has_more: current.offset + current.limit < Math.max(0, current.total - 1),
         }));
       }
-      showToast('Job deleted.', 'success');
+      showToast(t('jobs.deletedSuccess'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobs.failedDelete');
       setError(message);

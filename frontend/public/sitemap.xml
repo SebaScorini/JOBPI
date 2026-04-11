@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://jobpi.app/</loc>
+    <loc>https://jobpi-app.vercel.app/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://jobpi.app/login</loc>
+    <loc>https://jobpi-app.vercel.app/login</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://jobpi.app/register</loc>
+    <loc>https://jobpi-app.vercel.app/register</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
