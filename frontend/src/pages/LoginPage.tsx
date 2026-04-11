@@ -100,8 +100,11 @@ export function LoginPage() {
       )}
 
       <div>
-        <label className="mb-2 block text-sm font-semibold">{t('auth.emailAddress')}</label>
+        <label htmlFor="login-email" className="mb-2 block text-sm font-semibold">
+          {t('auth.emailAddress')}
+        </label>
         <input
+          id="login-email"
           type="email"
           value={email}
           onChange={(e) => {
@@ -122,8 +125,11 @@ export function LoginPage() {
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-semibold">{t('auth.password')}</label>
+        <label htmlFor="login-password" className="mb-2 block text-sm font-semibold">
+          {t('auth.password')}
+        </label>
         <input
+          id="login-password"
           type="password"
           value={password}
           onChange={(e) => {

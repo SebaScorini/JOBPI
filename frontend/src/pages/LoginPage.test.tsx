@@ -79,7 +79,7 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText('user@example.com'), { target: { value: 'invalid-email' } });
+    fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: 'invalid-email' } });
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!);
 
     expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
@@ -97,8 +97,8 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText('user@example.com'), { target: { value: 'user@example.com' } });
-    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'ValidPass123' } });
+    fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: 'user@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ValidPass123' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() => {

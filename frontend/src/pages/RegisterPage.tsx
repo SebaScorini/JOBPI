@@ -98,8 +98,11 @@ export function RegisterPage() {
       )}
 
       <div>
-        <label className="mb-2 block text-sm font-semibold">{t('auth.emailAddress')}</label>
+        <label htmlFor="register-email" className="mb-2 block text-sm font-semibold">
+          {t('auth.emailAddress')}
+        </label>
         <input
+          id="register-email"
           type="email"
           value={email}
           onChange={(e) => {
@@ -120,8 +123,11 @@ export function RegisterPage() {
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-semibold">{t('auth.password')}</label>
+        <label htmlFor="register-password" className="mb-2 block text-sm font-semibold">
+          {t('auth.password')}
+        </label>
         <input
+          id="register-password"
           type="password"
           value={password}
           onChange={(e) => {
