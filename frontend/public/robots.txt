@@ -1,11 +1,11 @@
 User-agent: *
 Allow: /
+Allow: /login
+Allow: /register
 Disallow: /dashboard
-Disallow: /api
-Disallow: /auth
 Disallow: /jobs
 Disallow: /library
 Disallow: /matches
 Disallow: /tracker
 
-Sitemap: https://jobpi-app.vercel.app/sitemap.xml
+Sitemap: https://jobpi.app/sitemap.xml

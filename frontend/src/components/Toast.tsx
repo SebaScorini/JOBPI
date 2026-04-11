@@ -1,6 +1,5 @@
 import { AlertCircle, CheckCircle2, Info, X, AlertTriangle } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { useLanguage } from '../context/LanguageContext';
 
 const toastStyles = {
   success: {
@@ -23,7 +22,6 @@ const toastStyles = {
 
 export function ToastViewport() {
   const { toasts, dismissToast } = useToast();
-  const { t } = useLanguage();
 
   return (
     <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[100] flex flex-col items-end gap-3 sm:inset-x-auto sm:right-4 sm:w-full sm:max-w-sm">
@@ -58,7 +56,7 @@ export function ToastViewport() {
                 type="button"
                 onClick={() => dismissToast(toast.id)}
                 className="rounded-lg p-1 opacity-70 transition-opacity hover:opacity-100 shrink-0"
-                aria-label={t('common.dismissNotification')}
+                aria-label="Dismiss notification"
               >
                 <X size={16} />
               </button>

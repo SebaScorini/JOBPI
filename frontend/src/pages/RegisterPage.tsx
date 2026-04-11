@@ -112,7 +112,7 @@ export function RegisterPage() {
             }
           }}
           className={`input-field ${fieldErrors.email ? 'input-field-error' : ''}`}
-          placeholder={t('auth.emailPlaceholder')}
+          placeholder="user@example.com"
           aria-invalid={Boolean(fieldErrors.email)}
         />
         {fieldErrors.email && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.email}</p>}
@@ -134,7 +134,7 @@ export function RegisterPage() {
             }
           }}
           className={`input-field ${fieldErrors.password ? 'input-field-error' : ''}`}
-          placeholder={t('auth.createPasswordPlaceholder')}
+          placeholder="Create a password"
           aria-invalid={Boolean(fieldErrors.password)}
         />
         {fieldErrors.password && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.password}</p>}

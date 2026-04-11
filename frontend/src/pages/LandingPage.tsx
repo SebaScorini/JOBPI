@@ -23,80 +23,25 @@ export function LandingPage() {
   const { resolvedTheme, toggleDarkMode } = useAppTheme();
 
   const features = [
-    {
-      icon: BrainCircuit,
-      title: 'AI Resume Analysis & ATS Resume Optimizer',
-      desc: 'Run an AI resume tool that finds missing skills, weak phrasing, and ATS gaps so your CV is ready for modern screening systems.',
-    },
-    {
-      icon: Sparkles,
-      title: 'CV to Job Matching AI',
-      desc: 'Use a CV analyzer that compares your profile against real job requirements and explains why one version performs better.',
-    },
-    {
-      icon: Upload,
-      title: 'Multi-CV Resume Management',
-      desc: 'Upload and organize multiple CV versions by role, language, and focus area to improve application quality and speed.',
-    },
-    {
-      icon: Library,
-      title: 'AI Cover Letter Generator',
-      desc: 'Generate tailored cover letters based on your CV and target job description in seconds with actionable edits.',
-    },
-    {
-      icon: LayoutDashboard,
-      title: 'AI Job Tracker',
-      desc: 'Track each application stage in one dashboard so you never lose momentum, deadlines, or interview follow-ups.',
-    },
-    {
-      icon: Zap,
-      title: 'Fast Job Search AI Workflow',
-      desc: 'From analysis to matching and cover letter generation, JOBPI keeps your workflow lightweight and focused on outcomes.',
-    },
+    { icon: BrainCircuit, title: t('landing.features.analysisTitle'), desc: t('landing.features.analysisDesc') },
+    { icon: Library, title: t('landing.features.libraryTitle'), desc: t('landing.features.libraryDesc') },
+    { icon: Sparkles, title: t('landing.features.matchingTitle'), desc: t('landing.features.matchingDesc') },
+    { icon: Upload, title: t('landing.features.uploadsTitle'), desc: t('landing.features.uploadsDesc') },
+    { icon: LayoutDashboard, title: t('landing.features.dashboardTitle'), desc: t('landing.features.dashboardDesc') },
+    { icon: Zap, title: t('landing.features.fastTitle'), desc: t('landing.features.fastDesc') },
   ];
 
   const steps = [
-    {
-      num: 1,
-      title: 'Upload your resume portfolio',
-      desc: 'Add one or more CVs so JOBPI can compare versions for different roles and ATS expectations.',
-    },
-    {
-      num: 2,
-      title: 'Paste a target job description',
-      desc: 'JOBPI extracts required skills, responsibilities, and hidden keywords from the posting.',
-    },
-    {
-      num: 3,
-      title: 'Optimize, match, and apply',
-      desc: 'Get the best resume matcher AI recommendation, generate a cover letter, and track your application status.',
-    },
+    { num: 1, title: t('landing.steps.uploadTitle'), desc: t('landing.steps.uploadDesc') },
+    { num: 2, title: t('landing.steps.pasteTitle'), desc: t('landing.steps.pasteDesc') },
+    { num: 3, title: t('landing.steps.matchTitle'), desc: t('landing.steps.matchDesc') },
   ];
 
   const benefits = [
-    'Increase interview conversion with ATS-optimized resume improvements.',
-    'Reduce manual effort by automating CV analysis and job matching.',
-    'Improve application quality with role-specific AI recommendations.',
-    'Keep your entire job search pipeline organized in one place.',
-  ];
-
-  const faqs = [
-    {
-      q: 'What is JOBPI?',
-      a: 'JOBPI is an AI job application assistant that combines AI resume analysis, ATS resume optimization, CV-to-job matching, cover letter generation, and job tracking.',
-    },
-    {
-      q: 'How does JOBPI help with ATS optimization?',
-      a: 'Our ATS resume optimizer reviews your resume against job requirements and highlights missing keywords, weak sections, and alignment opportunities so recruiters can find your strengths faster.',
-    },
-    {
-      q: 'Can I manage multiple CV versions?',
-      a: 'Yes. JOBPI supports multi-CV management so you can keep role-specific resumes, compare fit with job descriptions, and choose the strongest version before applying.',
-    },
-    {
-      q: 'Is JOBPI only for resumes?',
-      a: 'No. JOBPI also includes an AI cover letter generator and an AI job tracker to support your full end-to-end job search workflow.',
-    },
+    t('landing.benefits.time'),
+    t('landing.benefits.choose'),
+    t('landing.benefits.callback'),
+    t('landing.benefits.organize'),
   ];
 
   if (isLoading) {
@@ -120,23 +65,6 @@ export function LandingPage() {
           </div>
           <span className="text-xl font-heading font-bold text-slate-900 dark:text-white">JOBPI</span>
         </div>
-        <nav aria-label="Primary" className="hidden items-center gap-5 text-sm font-medium text-slate-600 dark:text-slate-300 lg:flex">
-          <a href="#what-is-jobpi" className="transition-colors hover:text-brand-primary dark:hover:text-brand-secondary">
-            What is JOBPI
-          </a>
-          <a href="#features" className="transition-colors hover:text-brand-primary dark:hover:text-brand-secondary">
-            Features
-          </a>
-          <a href="#how-it-works" className="transition-colors hover:text-brand-primary dark:hover:text-brand-secondary">
-            How it works
-          </a>
-          <a href="#benefits" className="transition-colors hover:text-brand-primary dark:hover:text-brand-secondary">
-            Benefits
-          </a>
-          <a href="#faq" className="transition-colors hover:text-brand-primary dark:hover:text-brand-secondary">
-            FAQ
-          </a>
-        </nav>
         <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
           <LanguageSelector className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-brand-primary focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" />
           <button
@@ -159,29 +87,25 @@ export function LandingPage() {
       </header>
 
       <main>
-        <section id="what-is-jobpi" className="relative mx-auto max-w-7xl px-4 pb-24 pt-16 text-center sm:px-6 sm:pb-32 sm:pt-20">
+        <section className="relative mx-auto max-w-7xl px-4 pb-24 pt-16 text-center sm:px-6 sm:pb-32 sm:pt-20">
           <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-primary/10 blur-[120px] dark:bg-brand-secondary/5" />
 
           <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-sm font-medium text-brand-primary dark:border-blue-800/50 dark:bg-blue-900/30 dark:text-blue-400">
             <Sparkles size={16} />
-            <span>AI resume tool built for modern job seekers</span>
+            <span>{t('landing.badge')}</span>
           </div>
 
           <h1 className="mb-6 text-5xl font-heading font-bold leading-[1.1] tracking-tight text-slate-900 dark:text-white md:text-7xl">
-            AI Resume Tool, CV Analyzer, and Job Application Assistant in One Platform
+            {t('landing.heroTitle')}
           </h1>
 
-          <p className="mx-auto mb-6 max-w-4xl text-lg text-slate-600 dark:text-slate-400 md:text-xl">
-            JOBPI helps you optimize resumes for ATS, run AI CV analysis, match the best CV to each role, generate tailored cover letters, and track every application from one dashboard.
-          </p>
-
-          <p className="mx-auto mb-10 max-w-3xl text-base text-slate-600 dark:text-slate-400 md:text-lg">
-            If you are comparing resume AI tools, CV analyzers, and job tracking apps, JOBPI gives you the complete workflow with practical recommendations you can apply immediately.
+          <p className="mx-auto mb-10 max-w-2xl text-lg text-slate-600 dark:text-slate-400 md:text-xl">
+            {t('landing.heroSubtitle')}
           </p>
 
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link to="/register" className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-cta px-8 py-3.5 text-base font-semibold text-white shadow-[0_4px_12px_rgba(34,197,94,0.25)] transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(34,197,94,0.35)] sm:w-auto">
-              Start Free and Optimize My Resume <ArrowRight size={18} />
+              {t('landing.getStarted')} <ArrowRight size={18} />
             </Link>
             <Link to="/login" className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-8 py-3.5 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-[#151B2B] dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-[#1A2235] sm:w-auto">
               {t('landing.logIn')}
@@ -189,13 +113,11 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="features" className="border-y border-slate-200/50 bg-white/50 py-20 dark:border-slate-800/50 dark:bg-[#111726]/50 sm:py-24">
+        <section className="border-y border-slate-200/50 bg-white/50 py-20 dark:border-slate-800/50 dark:bg-[#111726]/50 sm:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-3xl font-heading font-bold text-slate-900 dark:text-white">Features for High-Performance Job Applications</h2>
-              <p className="mx-auto max-w-3xl text-slate-600 dark:text-slate-400">
-                JOBPI combines the capabilities of a resume optimizer AI, job matching AI, and AI job tracker so every application is more targeted and easier to manage.
-              </p>
+              <h2 className="mb-4 text-3xl font-heading font-bold text-slate-900 dark:text-white">{t('landing.featuresTitle')}</h2>
+              <p className="mx-auto max-w-2xl text-slate-600 dark:text-slate-400">{t('landing.featuresSubtitle')}</p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -212,10 +134,10 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="how-it-works" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24">
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-16 text-center">
-            <h2 className="mb-4 text-3xl font-heading font-bold text-slate-900 dark:text-white">How JOBPI Works</h2>
-            <p className="text-slate-600 dark:text-slate-400">Three streamlined steps to improve your resume-job fit and apply faster.</p>
+            <h2 className="mb-4 text-3xl font-heading font-bold text-slate-900 dark:text-white">{t('landing.howItWorks')}</h2>
+            <p className="text-slate-600 dark:text-slate-400">{t('landing.howItWorksSubtitle')}</p>
           </div>
 
           <div className="relative grid gap-8 md:grid-cols-3">
@@ -233,14 +155,12 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="benefits" className="bg-brand-primary py-20 text-white sm:py-24">
+        <section className="bg-brand-primary py-20 text-white sm:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <div className="grid items-center gap-12 md:grid-cols-2">
               <div>
-                <h2 className="mb-6 text-3xl font-heading font-bold md:text-4xl">Benefits of Using JOBPI</h2>
-                <p className="mb-8 text-lg leading-relaxed text-blue-100">
-                  JOBPI is built to compete with standalone resume AI tools, CV analyzers, and tracking apps by delivering one integrated workflow focused on measurable application outcomes.
-                </p>
+                <h2 className="mb-6 text-3xl font-heading font-bold md:text-4xl">{t('landing.whyTitle')}</h2>
+                <p className="mb-8 text-lg leading-relaxed text-blue-100">{t('landing.whySubtitle')}</p>
                 <ul className="space-y-4">
                   {benefits.map((benefit, idx) => (
                     <li key={idx} className="flex items-center gap-3">
@@ -277,30 +197,13 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="faq" className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-24">
-          <div className="mb-12 text-center">
-            <h2 className="mb-4 text-3xl font-heading font-bold text-slate-900 dark:text-white">FAQ</h2>
-            <p className="text-slate-600 dark:text-slate-400">Common questions about our AI CV analyzer, ATS resume optimizer, and job matching workflow.</p>
-          </div>
-          <div className="space-y-4">
-            {faqs.map((item) => (
-              <details key={item.q} className="glass-card-solid rounded-2xl p-5">
-                <summary className="cursor-pointer text-left text-lg font-semibold text-slate-900 dark:text-white">{item.q}</summary>
-                <p className="mt-3 text-slate-600 dark:text-slate-400">{item.a}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
         <section className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-24">
           <h2 className="mb-6 text-3xl font-heading font-bold text-slate-900 dark:text-white md:text-5xl">
-            Ready to Improve Your Resume-Job Match Score?
+            {t('landing.readyTitle')}
           </h2>
-          <p className="mb-10 text-xl text-slate-600 dark:text-slate-400">
-            Start using JOBPI today to optimize your resume, generate tailored cover letters, and track every application in one AI-powered workspace.
-          </p>
+          <p className="mb-10 text-xl text-slate-600 dark:text-slate-400">{t('landing.readySubtitle')}</p>
           <Link to="/register" className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-cta px-8 py-4 font-bold text-white shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl">
-            Create Your Free JOBPI Account <ArrowRight size={20} />
+            {t('landing.createFreeAccount')} <ArrowRight size={20} />
           </Link>
         </section>
       </main>
@@ -314,16 +217,7 @@ export function LandingPage() {
           <p className="text-sm text-slate-500 dark:text-slate-500">
             © {new Date().getFullYear()} JOBPI. {t('landing.footerRights')}
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <a href="#what-is-jobpi" className="text-sm font-medium text-slate-500 transition-colors hover:text-brand-primary">
-              What is JOBPI
-            </a>
-            <a href="#features" className="text-sm font-medium text-slate-500 transition-colors hover:text-brand-primary">
-              Features
-            </a>
-            <a href="#faq" className="text-sm font-medium text-slate-500 transition-colors hover:text-brand-primary">
-              FAQ
-            </a>
+          <div className="flex gap-6">
             <Link to="/login" className="text-sm font-medium text-slate-500 transition-colors hover:text-brand-primary">
               {t('landing.logIn')}
             </Link>

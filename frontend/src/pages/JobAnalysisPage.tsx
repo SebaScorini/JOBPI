@@ -52,7 +52,7 @@ export function JobAnalysisPage() {
         description: parsed.data.description,
         language: aiLanguage,
       });
-      showToast(t('jobAnalysis.analysisComplete'), 'success');
+      showToast('Analysis complete.', 'success');
       navigate(`/jobs/${response.job_id}`);
     } catch (err: any) {
       const message = err.message || t('jobAnalysis.unexpectedError');

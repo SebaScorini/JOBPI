@@ -3,56 +3,39 @@ import { apiService } from '../services/api';
 import { X, UploadCloud, Briefcase, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useAuth } from '../context/AuthContext';
 
-const ONBOARDING_DISMISSED_KEY_PREFIX = 'jobpi_onboarding_dismissed';
-const LEGACY_ONBOARDING_DISMISSED_KEY = 'jobpi_onboarding_dismissed';
+const ONBOARDING_DISMISSED_KEY = 'jobpi_onboarding_dismissed';
 
 export function OnboardingOverlay() {
   const [isVisible, setIsVisible] = useState(false);
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { user } = useAuth();
-
-  const onboardingDismissedKey = user
-    ? `${ONBOARDING_DISMISSED_KEY_PREFIX}:${user.id}`
-    : null;
 
   useEffect(() => {
     const checkOnboarding = async () => {
-      if (!onboardingDismissedKey) {
+      if (localStorage.getItem(ONBOARDING_DISMISSED_KEY)) {
         return;
       }
-
-      // Cleanup old global key now that dismissal is scoped per user.
-      localStorage.removeItem(LEGACY_ONBOARDING_DISMISSED_KEY);
-
-      if (localStorage.getItem(onboardingDismissedKey)) {
-        return;
-      }
-
       try {
         const cvs = await apiService.listCVsPage({ limit: 1 });
         if (cvs.pagination.total === 0) {
           setIsVisible(true);
         } else {
           // If they have CVs, dismiss permanently
-          localStorage.setItem(onboardingDismissedKey, 'true');
+          localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
         }
       } catch (e) {
         // Ignore API failures on overlay
       }
     };
     checkOnboarding();
-  }, [onboardingDismissedKey]);
+  }, []);
 
   if (!isVisible) return null;
 
   const handleDismiss = () => {
-    if (onboardingDismissedKey) {
-      localStorage.setItem(onboardingDismissedKey, 'true');
-    }
+    localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
     setIsVisible(false);
   };
 
@@ -88,7 +71,7 @@ export function OnboardingOverlay() {
         <button
           onClick={handleDismiss}
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          aria-label={t('onboarding.skipTutorial')}
+          aria-label="Skip onboarding"
         >
           <X size={20} />
         </button>
