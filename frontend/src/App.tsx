@@ -12,6 +12,7 @@ import { JobDetailsPage } from './pages/JobDetailsPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { LandingPage } from './pages/LandingPage';
 import { JSX, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { LanguageProvider } from './context/LanguageContext';
 import { TrackerPage } from './pages/TrackerPage';
 import { AppThemeProvider } from './context/AppThemeContext';
@@ -97,37 +98,41 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 }
 
 function AppRouter() {
+  const location = useLocation();
+
   return (
     <>
       <SeoManager />
-      <Routes>
-        {/* Public landing route */}
-        <Route path="/" element={<LandingPage />} />
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          {/* Public landing route */}
+          <Route path="/" element={<LandingPage />} />
 
-        {/* Public auth routes */}
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-        </Route>
+          {/* Public auth routes */}
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+          </Route>
 
-        {/* Protected app routes — AuthProvider is an ancestor so useAuth works */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/jobs/new" element={<JobAnalysisPage />} />
-          <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
-          <Route path="/library" element={<CVLibraryPage />} />
-          <Route path="/matches" element={<MatchesPage />} />
-          <Route path="/tracker" element={<TrackerPage />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
+          {/* Protected app routes — AuthProvider is an ancestor so useAuth works */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/jobs/new" element={<JobAnalysisPage />} />
+            <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
+            <Route path="/library" element={<CVLibraryPage />} />
+            <Route path="/matches" element={<MatchesPage />} />
+            <Route path="/tracker" element={<TrackerPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </AnimatePresence>
     </>
   );
 }

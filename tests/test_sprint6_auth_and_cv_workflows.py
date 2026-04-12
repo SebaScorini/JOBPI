@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -185,3 +186,55 @@ def test_batch_upload_allows_partial_success(client, auth_headers, monkeypatch):
     assert payload["summary"] == {"succeeded": 1, "failed": 1}
     assert payload["results"][0]["success"] is True
     assert payload["results"][1]["success"] is False
+
+
+def test_batch_upload_keeps_each_cv_summary_isolated(client, auth_headers, monkeypatch):
+    import app.services.cv_library_summary_service as cv_summary_module
+
+    raw_text_by_bytes = {
+        b"%PDF-1.4 backend": "Python FastAPI engineer\nBuilt backend services",
+        b"%PDF-1.4 frontend": "React TypeScript engineer\nBuilt frontend interfaces",
+    }
+
+    monkeypatch.setattr(
+        "app.services.cv_library_service.extract_raw_pdf_text",
+        lambda file_bytes: raw_text_by_bytes[file_bytes],
+    )
+    monkeypatch.setattr(
+        "app.services.cv_library_service.preprocess_cv_text",
+        lambda raw_text, max_chars=None: raw_text[:max_chars],
+    )
+
+    class _LeakySummaryModule:
+        def __init__(self) -> None:
+            self._first_result = None
+
+        def __call__(self, *, cv: str, max_tokens: int | None = None):
+            if self._first_result is None:
+                headline = cv.splitlines()[0].strip()
+                self._first_result = SimpleNamespace(summary=f"{headline} summary")
+            return self._first_result
+
+    def _call_summary_generator(**kwargs):
+        return kwargs["callable_"](cv=kwargs["cv"], max_tokens=kwargs["max_tokens"])
+
+    with (
+        patch.object(cv_summary_module, "configure_dspy", return_value=None),
+        patch.object(cv_summary_module, "CvLibrarySummaryModule", _LeakySummaryModule),
+        patch.object(cv_summary_module, "run_ai_call_with_timeout", side_effect=_call_summary_generator),
+    ):
+        response = client.post(
+            "/cvs/batch-upload",
+            headers=auth_headers(),
+            files=[
+                ("files", ("backend.pdf", b"%PDF-1.4 backend", "application/pdf")),
+                ("files", ("frontend.pdf", b"%PDF-1.4 frontend", "application/pdf")),
+            ],
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["summary"] == {"succeeded": 2, "failed": 0}
+    assert payload["results"][0]["cv"]["library_summary"] != payload["results"][1]["cv"]["library_summary"]
+    assert "Python" in payload["results"][0]["cv"]["library_summary"]
+    assert "React" in payload["results"][1]["cv"]["library_summary"]

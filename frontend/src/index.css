@@ -33,11 +33,11 @@
 
 @layer utilities {
   .glass-card {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    @apply dark:bg-[#151B2B]/80 dark:border-slate-800/60 dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)];
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    @apply dark:bg-[#151B2B]/70 dark:border-slate-800/70 dark:shadow-[0_8px_32px_rgb(0,0,0,0.3)];
   }
   
   .glass-card-solid {
@@ -45,15 +45,22 @@
   }
 
   .interactive-card {
-    @apply hover:border-brand-primary hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer dark:hover:border-brand-secondary;
+    @apply cursor-pointer border border-transparent 
+           hover:border-brand-primary/50 dark:hover:border-brand-secondary/50 
+           hover:shadow-lg dark:hover:shadow-brand-secondary/10;
   }
   
   .btn-primary {
-    @apply w-full rounded-xl bg-brand-cta px-6 py-3 text-sm font-semibold text-white shadow-[0_4px_6px_rgba(0,0,0,0.1)] transition-all hover:opacity-90 hover:-translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+    @apply w-full rounded-xl bg-brand-cta px-6 py-3 text-sm font-semibold text-white 
+           shadow-[0_4px_6px_rgba(0,0,0,0.1)] 
+           hover:opacity-90 
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
   }
 
   .btn-secondary {
-    @apply w-full rounded-xl bg-transparent border-2 border-brand-primary px-6 py-3 text-sm font-semibold text-brand-primary transition-all hover:bg-brand-primary/10 disabled:opacity-50 disabled:cursor-not-allowed dark:border-brand-secondary dark:text-brand-secondary dark:hover:bg-brand-secondary/10;
+    @apply w-full rounded-xl bg-transparent border-2 border-brand-primary px-6 py-3 text-sm font-semibold text-brand-primary 
+           hover:bg-brand-primary/10 
+           disabled:opacity-50 disabled:cursor-not-allowed dark:border-brand-secondary dark:text-brand-secondary dark:hover:bg-brand-secondary/10;
   }
   
   .input-field {

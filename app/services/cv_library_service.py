@@ -41,7 +41,6 @@ logger = logging.getLogger(__name__)
 class CvLibraryService:
     def __init__(self) -> None:
         self.cv_analyzer = None
-        self.library_summary_service = None
         self._analysis_cache: dict[tuple[int, int, int, str], CvAnalysisResponse] = {}
 
     def upload_cv(
@@ -389,9 +388,9 @@ class CvLibraryService:
         return self.cv_analyzer
 
     def _get_library_summary_service(self):
-        if self.library_summary_service is None:
-            self.library_summary_service = get_cv_library_summary_service()
-        return self.library_summary_service
+        # Keep CV library summary generation isolated per upload so batch
+        # processing never reuses accidental in-memory model state.
+        return get_cv_library_summary_service(fresh=True)
 
     def _analyze_pair(
         self,

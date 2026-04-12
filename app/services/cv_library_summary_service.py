@@ -232,7 +232,10 @@ def _detect_technologies(text: str) -> list[str]:
 _service: CvLibrarySummaryService | None = None
 
 
-def get_cv_library_summary_service() -> CvLibrarySummaryService:
+def get_cv_library_summary_service(*, fresh: bool = False) -> CvLibrarySummaryService:
+    if fresh:
+        return CvLibrarySummaryService()
+
     global _service
     if _service is None:
         _service = CvLibrarySummaryService()

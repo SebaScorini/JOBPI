@@ -17,6 +17,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { LanguageSelector } from '../LanguageSelector';
 import { useAppTheme } from '../../context/AppThemeContext';
 import { OnboardingOverlay } from '../OnboardingOverlay';
+import { motion, AnimatePresence } from 'framer-motion';
+import { PageTransition } from './PageTransition';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -51,11 +53,15 @@ export function AppLayout() {
       )}
 
       {/* Sidebar */}
-      <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 glass-card-solid border-r flex flex-col transform transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-      >
+      <AnimatePresence>
+        <motion.aside
+          initial={false}
+          animate={{ x: isSidebarOpen ? 0 : 'calc(-100% - 1rem)' }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className={`fixed lg:static inset-y-0 left-0 z-50 w-64 glass-card-solid border-r flex flex-col lg:!transform-none ${
+            isSidebarOpen ? '' : '-translate-x-full lg:translate-x-0'
+          }`}
+        >
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-brand-primary/10 flex items-center justify-center">
@@ -112,7 +118,8 @@ export function AppLayout() {
             {t('nav.signOut')}
           </button>
         </div>
-      </aside>
+        </motion.aside>
+      </AnimatePresence>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
@@ -138,9 +145,11 @@ export function AppLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-3 lg:p-5">
-          <div className="w-full h-full animate-in fade-in duration-300">
-            <Outlet />
+        <div className="flex-1 overflow-y-auto p-3 lg:p-5 relative">
+          <div className="w-full h-full">
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
           </div>
         </div>
       </main>
