@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { motion, Transition } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
+import { useMotionPreferences } from '../../hooks/useMotionPreferences';
 
 interface PageTransitionProps {
   children: ReactNode;
@@ -33,17 +34,17 @@ const pageTransition: Transition = {
 
 export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
   const location = useLocation();
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const { allowRichMotion } = useMotionPreferences();
 
-  const activeVariants = isMobile ? {
+  const activeVariants = allowRichMotion ? pageVariants : {
     initial: { opacity: 0 },
     in: { opacity: 1 },
     out: { opacity: 0 }
-  } : pageVariants;
+  };
 
-  const activeTransition: Transition = isMobile ? {
+  const activeTransition: Transition = allowRichMotion ? pageTransition : {
     duration: 0.2, ease: "easeOut"
-  } : pageTransition;
+  };
 
   return (
     <motion.div

@@ -19,12 +19,14 @@ import { useAppTheme } from '../../context/AppThemeContext';
 import { OnboardingOverlay } from '../OnboardingOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageTransition } from './PageTransition';
+import { useMotionPreferences } from '../../hooks/useMotionPreferences';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { resolvedTheme, toggleDarkMode } = useAppTheme();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const { allowRichMotion } = useMotionPreferences();
 
   const handleLogout = () => {
     logout();
@@ -57,7 +59,11 @@ export function AppLayout() {
         <motion.aside
           initial={false}
           animate={{ x: isSidebarOpen ? 0 : 'calc(-100% - 1rem)' }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          transition={
+            allowRichMotion
+              ? { type: 'spring', stiffness: 300, damping: 30 }
+              : { duration: 0.18, ease: 'easeOut' }
+          }
           className={`fixed lg:static inset-y-0 left-0 z-50 w-64 glass-card-solid border-r flex flex-col lg:!transform-none ${
             isSidebarOpen ? '' : '-translate-x-full lg:translate-x-0'
           }`}

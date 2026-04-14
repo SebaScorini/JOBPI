@@ -1,23 +1,48 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { JSX, Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { AppLayout } from './components/layout/AppLayout';
-import { AuthLayout } from './components/layout/AuthLayout';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { CVLibraryPage } from './pages/CVLibraryPage';
-import { JobsPage } from './pages/JobsPage';
-import { JobAnalysisPage } from './pages/JobAnalysisPage';
-import { JobDetailsPage } from './pages/JobDetailsPage';
-import { MatchesPage } from './pages/MatchesPage';
-import { LandingPage } from './pages/LandingPage';
-import { JSX, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
 import { LanguageProvider } from './context/LanguageContext';
-import { TrackerPage } from './pages/TrackerPage';
 import { AppThemeProvider } from './context/AppThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { ToastViewport } from './components/Toast';
+import { RouteFallback } from './components/RouteFallback';
+
+const AuthLayout = lazy(() =>
+  import('./components/layout/AuthLayout').then((module) => ({ default: module.AuthLayout })),
+);
+const AppLayout = lazy(() =>
+  import('./components/layout/AppLayout').then((module) => ({ default: module.AppLayout })),
+);
+const LandingPage = lazy(() =>
+  import('./pages/LandingPage').then((module) => ({ default: module.LandingPage })),
+);
+const LoginPage = lazy(() =>
+  import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })),
+);
+const RegisterPage = lazy(() =>
+  import('./pages/RegisterPage').then((module) => ({ default: module.RegisterPage })),
+);
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })),
+);
+const CVLibraryPage = lazy(() =>
+  import('./pages/CVLibraryPage').then((module) => ({ default: module.CVLibraryPage })),
+);
+const JobsPage = lazy(() =>
+  import('./pages/JobsPage').then((module) => ({ default: module.JobsPage })),
+);
+const JobAnalysisPage = lazy(() =>
+  import('./pages/JobAnalysisPage').then((module) => ({ default: module.JobAnalysisPage })),
+);
+const JobDetailsPage = lazy(() =>
+  import('./pages/JobDetailsPage').then((module) => ({ default: module.JobDetailsPage })),
+);
+const MatchesPage = lazy(() =>
+  import('./pages/MatchesPage').then((module) => ({ default: module.MatchesPage })),
+);
+const TrackerPage = lazy(() =>
+  import('./pages/TrackerPage').then((module) => ({ default: module.TrackerPage })),
+);
 
 const DEFAULT_TITLE = 'JOBPI';
 const SITE_NAME = 'JOBPI';
@@ -78,16 +103,21 @@ function SeoManager() {
   return null;
 }
 
-// ProtectedRoute must live inside AuthProvider to access context
+function LazyRoute({
+  children,
+  variant,
+}: {
+  children: JSX.Element;
+  variant: 'public' | 'auth' | 'app';
+}) {
+  return <Suspense fallback={<RouteFallback variant={variant} />}>{children}</Suspense>;
+}
+
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const { user, token, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-brand-background dark:bg-[#0B0F19] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-4 border-slate-200 dark:border-slate-800 border-t-brand-primary animate-spin" />
-      </div>
-    );
+    return <RouteFallback variant="app" />;
   }
 
   if (!user && !token) {
@@ -98,41 +128,110 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 }
 
 function AppRouter() {
-  const location = useLocation();
-
   return (
     <>
       <SeoManager />
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          {/* Public landing route */}
-          <Route path="/" element={<LandingPage />} />
-
-          {/* Public auth routes */}
-          <Route element={<AuthLayout />}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-          </Route>
-
-          {/* Protected app routes — AuthProvider is an ancestor so useAuth works */}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <LazyRoute variant="public">
+              <LandingPage />
+            </LazyRoute>
+          }
+        />
+        <Route
+          element={
+            <LazyRoute variant="auth">
+              <AuthLayout />
+            </LazyRoute>
+          }
+        >
           <Route
+            path="/login"
             element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
+              <LazyRoute variant="auth">
+                <LoginPage />
+              </LazyRoute>
             }
-          >
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/jobs" element={<JobsPage />} />
-            <Route path="/jobs/new" element={<JobAnalysisPage />} />
-            <Route path="/jobs/:jobId" element={<JobDetailsPage />} />
-            <Route path="/library" element={<CVLibraryPage />} />
-            <Route path="/matches" element={<MatchesPage />} />
-            <Route path="/tracker" element={<TrackerPage />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Route>
-        </Routes>
-      </AnimatePresence>
+          />
+          <Route
+            path="/register"
+            element={
+              <LazyRoute variant="auth">
+                <RegisterPage />
+              </LazyRoute>
+            }
+          />
+        </Route>
+        <Route
+          element={
+            <ProtectedRoute>
+              <LazyRoute variant="app">
+                <AppLayout />
+              </LazyRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route
+            path="/dashboard"
+            element={
+              <LazyRoute variant="app">
+                <DashboardPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <LazyRoute variant="app">
+                <JobsPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/jobs/new"
+            element={
+              <LazyRoute variant="app">
+                <JobAnalysisPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <LazyRoute variant="app">
+                <JobDetailsPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/library"
+            element={
+              <LazyRoute variant="app">
+                <CVLibraryPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/matches"
+            element={
+              <LazyRoute variant="app">
+                <MatchesPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/tracker"
+            element={
+              <LazyRoute variant="app">
+                <TrackerPage />
+              </LazyRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Route>
+      </Routes>
     </>
   );
 }

@@ -1,9 +1,13 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { AIResponseLanguage, UILanguage, toAIResponseLanguage, translate } from '../i18n/translations';
+import type { AIResponseLanguage, UILanguage } from '../types';
+import { getCachedTranslations, loadTranslations, toAIResponseLanguage, translate } from '../i18n/translations';
+import type { TranslationNode } from '../i18n/types';
+import { RouteFallback } from '../components/RouteFallback';
 
 interface LanguageContextValue {
   language: UILanguage;
   aiLanguage: AIResponseLanguage;
+  isReady: boolean;
   setLanguage: (language: UILanguage) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
@@ -33,6 +37,31 @@ function getInitialLanguage(): UILanguage {
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<UILanguage>(getInitialLanguage);
+  const [dictionary, setDictionary] = useState<TranslationNode | null>(() => getCachedTranslations(getInitialLanguage()));
+  const [isReady, setIsReady] = useState<boolean>(() => getCachedTranslations(getInitialLanguage()) !== null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadTranslations(language)
+      .then((loadedDictionary) => {
+        if (cancelled) {
+          return;
+        }
+
+        setDictionary(loadedDictionary);
+        setIsReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsReady(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -48,13 +77,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     () => ({
       language,
       aiLanguage: toAIResponseLanguage(language),
+      isReady,
       setLanguage: setLanguageState,
-      t: (key, params) => translate(language, key, params),
+      t: (key, params) => translate(dictionary, key, params),
     }),
-    [language],
+    [dictionary, isReady, language],
   );
 
-  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+  return (
+    <LanguageContext.Provider value={value}>
+      {isReady ? children : <RouteFallback variant="public" />}
+    </LanguageContext.Provider>
+  );
 }
 
 export function useLanguage() {
