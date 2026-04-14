@@ -33,6 +33,17 @@ const pageTransition: Transition = {
 
 export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
   const location = useLocation();
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  const activeVariants = isMobile ? {
+    initial: { opacity: 0 },
+    in: { opacity: 1 },
+    out: { opacity: 0 }
+  } : pageVariants;
+
+  const activeTransition: Transition = isMobile ? {
+    duration: 0.2, ease: "easeOut"
+  } : pageTransition;
 
   return (
     <motion.div
@@ -40,8 +51,8 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
       initial="initial"
       animate="in"
       exit="out"
-      variants={pageVariants}
-      transition={pageTransition}
+      variants={activeVariants}
+      transition={activeTransition}
       className="w-full h-full"
     >
       {children}
