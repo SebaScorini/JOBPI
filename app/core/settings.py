@@ -40,11 +40,11 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cvs_per_upload": 10,
         "max_job_description_chars": 12000,
         "max_cv_text_chars": 8000,
-        "max_output_tokens": 540,
-        "job_analysis_max_tokens": 945,
-        "job_analysis_retry_max_tokens": 608,
-        "cv_match_max_tokens": 900,
-        "cv_match_retry_max_tokens": 1024,
+        "max_output_tokens": 900,
+        "job_analysis_max_tokens": 980,
+        "job_analysis_retry_max_tokens": 700,
+        "cv_match_max_tokens": 1300,
+        "cv_match_retry_max_tokens": 1500,
         "cover_letter_max_tokens": 640,
         "job_preprocess_target_chars": 5000,
         "ai_timeout_seconds": 45,
@@ -67,11 +67,11 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cvs_per_upload": 3,
         "max_job_description_chars": 2500,
         "max_cv_text_chars": 4000,
-        "max_output_tokens": 540,
-        "job_analysis_max_tokens": 878,
-        "job_analysis_retry_max_tokens": 540,
-        "cv_match_max_tokens": 720,
-        "cv_match_retry_max_tokens": 960,
+        "max_output_tokens": 900,
+        "job_analysis_max_tokens": 900,
+        "job_analysis_retry_max_tokens": 640,
+        "cv_match_max_tokens": 1200,
+        "cv_match_retry_max_tokens": 1400,
         "cover_letter_max_tokens": 480,
         "job_preprocess_target_chars": 3500,
         "ai_timeout_seconds": 20,
@@ -179,6 +179,10 @@ class Settings(BaseModel):
     )
     sentry_dsn: str | None = Field(default_factory=lambda: _get_env_str("SENTRY_DSN") or None)
     redis_url: str | None = Field(default_factory=lambda: _get_env_str("REDIS_URL") or None)
+    supabase_url: str = Field(default_factory=lambda: _get_env_str("SUPABASE_URL"))
+    supabase_anon_key: str = Field(default_factory=lambda: _get_env_str("SUPABASE_ANON_KEY"))
+    supabase_jwt_secret: str = Field(default_factory=lambda: _get_env_str("SUPABASE_JWT_SECRET"))
+    supabase_service_role_key: str = Field(default_factory=lambda: _get_env_str("SUPABASE_SERVICE_ROLE_KEY"))
     database_url: str = Field(default_factory=lambda: _get_env_str("DATABASE_URL", _default_database_url()))
     secret_key: str = Field(
         default_factory=lambda: _get_env_str(
