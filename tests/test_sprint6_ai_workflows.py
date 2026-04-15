@@ -126,6 +126,32 @@ def test_job_analysis_rejects_oversized_description(client, auth_headers, monkey
     assert response.json()["error"]["code"] == "ERR_VALIDATION"
 
 
+def test_job_analysis_rejects_overlong_low_signal_description_for_reliable_ai(client, auth_headers, monkeypatch):
+    import app.api.routes.jobs as jobs_routes
+    import app.core.rate_limit as rate_limit_module
+
+    headers = auth_headers()
+    settings = _job_rate_limit_settings(limit=10)
+    settings.max_job_description_chars = 12000
+    settings.job_preprocess_target_chars = 500
+    monkeypatch.setattr(jobs_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(rate_limit_module, "get_settings", lambda: settings)
+
+    response = client.post(
+        "/jobs/analyze",
+        headers=headers,
+        json={
+            "title": "Backend Engineer",
+            "company": "Acme",
+            "description": "Server-side development, APIs, SQL, scalability, documentation. " * 12,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "ERR_VALIDATION"
+    assert "reliable analysis" in response.json()["error"]["message"]
+
+
 def test_job_analysis_rate_limit_returns_429(client, auth_headers, monkeypatch):
     import app.api.routes.jobs as jobs_routes
     import app.core.rate_limit as rate_limit_module

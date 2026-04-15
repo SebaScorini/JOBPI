@@ -177,6 +177,11 @@ const es: TranslationNode = {
     previewItem1: 'Habilidades y responsabilidades clave',
     previewItem2: 'Guia de preparacion de entrevistas',
     previewItem3: 'Sugerencias para mejorar tu CV',
+    longDescriptionTitle: 'Descripcion larga detectada',
+    longDescriptionBody: 'Podemos recortarla a los detalles mas importantes antes del analisis.',
+    longDescriptionPreview: 'Vista previa',
+    useImportantDetailsOnly: 'Usar solo detalles importantes',
+    compactionStats: '{original} -> {compacted} caracteres ({saved} removidos)',
   },
   jobDetails: {
     notFound: 'No se encontro el empleo',

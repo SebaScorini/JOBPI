@@ -177,6 +177,11 @@ const en: TranslationNode = {
     previewItem1: 'Key skills and responsibilities',
     previewItem2: 'Preparation and interview guidance',
     previewItem3: 'Resume improvement suggestions',
+    longDescriptionTitle: 'Long description detected',
+    longDescriptionBody: 'We can trim this down to the most important details before analysis.',
+    longDescriptionPreview: 'Preview',
+    useImportantDetailsOnly: 'Use important details only',
+    compactionStats: '{original} -> {compacted} characters ({saved} removed)',
   },
   jobDetails: {
     notFound: 'Job Not Found',

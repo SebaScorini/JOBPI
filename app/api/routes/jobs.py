@@ -27,6 +27,14 @@ from app.services.job_analyzer import get_job_analyzer_service
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+def _job_description_limit_message(limit: int) -> str:
+    return (
+        f"Job description is too long for a reliable analysis. Keep it under {limit} characters and "
+        "paste only the most important details: responsibilities, required skills, tools/stack, seniority, "
+        "and must-have qualifications."
+    )
+
+
 @router.post("/analyze", response_model=JobRead)
 def analyze_job(
     request: Request,
@@ -54,6 +62,15 @@ def analyze_job(
             window_seconds=settings.job_analyze_window_seconds,
         ),
     )
+    analysis_input_limit = min(
+        getattr(settings, "job_preprocess_target_chars", settings.max_job_description_chars),
+        settings.max_job_description_chars,
+    )
+    if not is_trusted_user and len(payload.description) > analysis_input_limit:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_job_description_limit_message(analysis_input_limit),
+        )
     if not is_trusted_user and len(payload.description) > settings.max_job_description_chars:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -3,7 +3,9 @@ import { z } from 'zod';
 export const MAX_PDF_SIZE_MB = 5;
 export const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 export const MAX_CVS_PER_UPLOAD = 10;
-export const MAX_JOB_DESCRIPTION_CHARS = 12000;
+export const MAX_JOB_DESCRIPTION_CHARS = 5000;
+export const JOB_DESCRIPTION_IMPORTANT_INFO_HINT =
+  'Keep only the important parts: responsibilities, required skills, tools/stack, seniority, and must-have qualifications.';
 
 export const loginSchema = z.object({
   email: z.string().trim().min(1, 'Email is required.').email('Enter a valid email address.'),
@@ -38,7 +40,10 @@ export const jobAnalysisSchema = z.object({
     .string()
     .trim()
     .min(1, 'Job description is required.')
-    .max(MAX_JOB_DESCRIPTION_CHARS, `Job description must be ${MAX_JOB_DESCRIPTION_CHARS} characters or fewer.`),
+    .max(
+      MAX_JOB_DESCRIPTION_CHARS,
+      `Job description is too long for a reliable analysis. Keep it under ${MAX_JOB_DESCRIPTION_CHARS} characters and paste only the most important details.`,
+    ),
 });
 
 export function validateUploadFiles(files: File[]) {

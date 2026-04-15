@@ -154,7 +154,7 @@ export function DashboardPage() {
               </motion.div>
             </section>
 
-            <motion.section variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl min-h-[360px] flex flex-col">
+            <motion.section variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl min-h-[360px] flex flex-col overflow-hidden">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-heading font-bold text-slate-900 dark:text-white">{t('dashboard.recentJobs')}</h2>
                 <Link to="/jobs" className="text-sm font-semibold text-brand-primary hover:text-brand-secondary flex items-center gap-1">
@@ -177,15 +177,15 @@ export function DashboardPage() {
                   </MotionLink>
                 </div>
               ) : (
-                <motion.div variants={motionListVariants} className="grid gap-3 overflow-y-auto pr-1 max-h-[320px]">
+                <motion.div variants={motionListVariants} className="grid gap-3 overflow-y-auto overflow-x-hidden pr-1 max-h-[320px]">
                   {recentJobs.map((job) => (
                     <MotionLink
                       key={job.job_id}
                       variants={motionItemVariants}
-                      whileHover={allowRichMotion ? { scale: 1.015, y: -2 } : undefined}
+                      whileHover={allowRichMotion ? { y: -2, zIndex: 10 } : undefined}
                       whileTap={allowRichMotion ? { scale: 0.98 } : undefined}
                       to={`/jobs/${job.job_id}`}
-                      className="glass-card p-4 rounded-xl flex items-center justify-between group shadow-sm hover:shadow-md transition-shadow"
+                      className="glass-card relative z-0 p-4 rounded-xl flex items-center justify-between group shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="min-w-0">
                         <h3 className="font-semibold text-base text-slate-900 dark:text-white group-hover:text-brand-primary transition-colors break-words">

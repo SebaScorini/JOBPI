@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Loader2, Zap } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-import { jobAnalysisSchema, MAX_JOB_DESCRIPTION_CHARS } from '../utils/validation';
+import {
+  jobAnalysisSchema,
+  JOB_DESCRIPTION_IMPORTANT_INFO_HINT,
+  MAX_JOB_DESCRIPTION_CHARS,
+} from '../utils/validation';
+import { buildImportantJobDetailsPreview } from '../utils/jobDescription';
 import { useToast } from '../context/ToastContext';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 
@@ -22,6 +27,10 @@ export function JobAnalysisPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<JobAnalysisFieldErrors>({});
+  const compactedPreview = useMemo(
+    () => buildImportantJobDetailsPreview(description, MAX_JOB_DESCRIPTION_CHARS),
+    [description],
+  );
 
   const navigate = useNavigate();
 
@@ -152,7 +161,50 @@ export function JobAnalysisPage() {
               {fieldErrors.description && (
                 <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.description}</p>
               )}
+              {!fieldErrors.description && (
+                <p className="mt-2 text-xs text-slate-500">
+                  {JOB_DESCRIPTION_IMPORTANT_INFO_HINT}
+                </p>
+              )}
             </div>
+
+            {compactedPreview.changed && description.length > MAX_JOB_DESCRIPTION_CHARS && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-1">
+                    <p className="font-semibold">{t('jobAnalysis.longDescriptionTitle')}</p>
+                    <p>
+                      {t('jobAnalysis.longDescriptionBody')}
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      {t('jobAnalysis.compactionStats', {
+                        original: compactedPreview.originalChars,
+                        compacted: compactedPreview.compactedChars,
+                        saved: compactedPreview.savedChars,
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDescription(compactedPreview.compactedText);
+                      setFieldErrors((current) => ({ ...current, description: undefined }));
+                    }}
+                    className="rounded-xl bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
+                  >
+                    {t('jobAnalysis.useImportantDetailsOnly')}
+                  </button>
+                </div>
+                <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-700">
+                    {t('jobAnalysis.longDescriptionPreview')}
+                  </p>
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-slate-700">
+                    {compactedPreview.compactedText}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             <div className="border-t border-slate-200 pt-4 dark:border-slate-800">
               <button
