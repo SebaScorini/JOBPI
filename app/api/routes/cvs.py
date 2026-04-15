@@ -14,6 +14,7 @@ from app.schemas.cv import (
     BulkActionResponse,
     CVBatchUploadResponse,
     CVBulkDeleteRequest,
+    CVDownloadResponse,
     CVBulkTagRequest,
     CVDetailRead,
     CVListResponse,
@@ -236,6 +237,16 @@ def get_cv(
     current_user: User = Depends(get_current_user),
 ) -> CVDetailRead:
     return get_cv_library_service().get_cv(session, current_user, cv_id)
+
+
+@router.get("/{cv_id}/download", response_model=CVDownloadResponse)
+def download_cv(
+    cv_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> CVDownloadResponse:
+    url = get_cv_library_service().get_cv_download_url(session, current_user, cv_id)
+    return CVDownloadResponse(url=url)
 
 
 @router.patch("/{cv_id}/tags", response_model=CVRead)

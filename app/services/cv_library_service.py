@@ -27,12 +27,23 @@ from app.services.job_preprocessing import CONTEXT_BUILDER_VERSION
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 from app.services.response_language import (
     localized_add_evidence,
+    localized_add_exact_keyword_match,
+    localized_add_metric,
+    localized_add_project_example,
     localized_match_fallback,
     localized_match_prefix,
     localized_move_strength_earlier,
+    localized_quantify_strength,
     localized_reorder_keyword,
     localized_reorder_strength,
+    localized_surface_keyword,
+    localized_tailor_summary,
     normalize_language,
+)
+from app.services.supabase_storage import (
+    SupabaseStorageError,
+    build_cv_storage_path,
+    get_supabase_storage_service,
 )
 
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
@@ -43,6 +54,7 @@ class CvLibraryService:
     def __init__(self) -> None:
         self.cv_analyzer = None
         self._analysis_cache: dict[tuple[str, int, int, int, str], CvAnalysisResponse] = {}
+        self.storage_service = get_supabase_storage_service()
 
     def upload_cv(
         self,
@@ -77,7 +89,9 @@ class CvLibraryService:
                 )
             else:
                 logger.info("ai_cache_reuse operation=cv_library_summary source=db cv_id=%s", existing.id)
-            return CVRead.model_validate(existing)
+            if not getattr(existing, "storage_path", None):
+                self._store_original_pdf(session=session, user=user, cv=existing, file_bytes=file_bytes)
+            return self._serialize_cv(session, existing)
 
         logger.info("ai_call operation=cv_library_summary reason=new_cv")
         library_summary = self._build_library_summary(cleaned_text)
@@ -93,7 +107,8 @@ class CvLibraryService:
             library_summary=library_summary,
             tags=[],
         )
-        return CVRead.model_validate(created)
+        self._store_original_pdf(session=session, user=user, cv=created, file_bytes=file_bytes)
+        return self._serialize_cv(session, created)
 
     def list_cvs(self, session: Session, user: User, limit: int = 20, offset: int = 0) -> tuple[list[CVRead], int]:
         """Get paginated list of user's CVs.
@@ -129,6 +144,30 @@ class CvLibraryService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
         return self._serialize_cv_detail(cv)
+
+    def get_cv_download_url(self, session: Session, user: User, cv_id: int) -> str:
+        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        if cv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
+        if not cv.storage_path:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No file stored for this CV",
+            )
+        try:
+            return self.storage_service.create_signed_download_url(path=cv.storage_path, expires_in=60)
+        except SupabaseStorageError as exc:
+            logger.warning(
+                "cv_signed_url_failed cv_id=%s user_id=%s storage_path=%s",
+                cv.id,
+                cv.user_id,
+                cv.storage_path,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Could not generate a download link right now.",
+            ) from exc
 
     def delete_cv(self, session: Session, user: User, cv_id: int) -> None:
         cv = crud.get_cv_for_user(session, user.id, cv_id)
@@ -478,6 +517,9 @@ class CvLibraryService:
             missing_skills=list(match.missing_skills or []),
             likely_fit_level=match.fit_level,
             resume_improvements=explanation["suggested_improvements"],
+            ats_improvements=[],
+            recruiter_improvements=[],
+            rewritten_bullets=[],
             interview_focus=[],
             next_steps=[],
         )
@@ -770,6 +812,7 @@ class CvLibraryService:
             display_name=cv.display_name,
             summary=cv.summary,
             library_summary=self._ensure_library_summary(session, cv),
+            has_file=bool(getattr(cv, "storage_path", None)),
             is_favorite=bool(cv.is_favorite),
             tags=list(cv.tags or []),
             created_at=cv.created_at,
@@ -782,12 +825,29 @@ class CvLibraryService:
             display_name=cv.display_name,
             summary=cv.summary,
             library_summary=self._ensure_library_summary(None, cv),
+            has_file=bool(getattr(cv, "storage_path", None)),
             is_favorite=bool(cv.is_favorite),
             tags=list(cv.tags or []),
             created_at=cv.created_at,
             raw_text=cv.raw_text,
             clean_text=cv.clean_text,
         )
+
+    def _store_original_pdf(self, *, session: Session, user: User, cv: object, file_bytes: bytes) -> None:
+        if cv.id is None:
+            return
+        storage_path = build_cv_storage_path(user_id=user.id, cv_id=cv.id)
+        try:
+            self.storage_service.upload_cv_pdf(path=storage_path, file_bytes=file_bytes)
+            crud.update_cv_storage_path(session, cv, storage_path)
+        except SupabaseStorageError:
+            logger.warning(
+                "cv_storage_upload_failed cv_id=%s user_id=%s storage_path=%s",
+                cv.id,
+                user.id,
+                storage_path,
+                exc_info=True,
+            )
 
     def _normalize_tags(self, tags: list[str]) -> list[str]:
         normalized: list[str] = []
@@ -846,9 +906,9 @@ def _build_match_explanation(
     improvement_suggestions: list[str],
     language: AIResponseLanguage = "english",
 ) -> dict[str, object]:
-    clean_strengths = _clean_items(strengths, limit=4)
-    clean_missing = _clean_items(missing_skills, limit=4)
-    clean_improvements = _clean_items(improvement_suggestions, limit=3)
+    clean_strengths = _clean_items(strengths, limit=5)
+    clean_missing = _clean_items(missing_skills, limit=5)
+    clean_improvements = _clean_items(improvement_suggestions, limit=5)
     improvement_payload = _build_improvement_payload(
         strengths=clean_strengths,
         missing_skills=clean_missing,
@@ -859,7 +919,16 @@ def _build_match_explanation(
     why_this_cv = _normalize_sentence(fit_summary, fallback=localized_match_fallback(language))
     if clean_strengths:
         why_this_cv = _normalize_sentence(
-            f"{why_this_cv.rstrip('.')} {localized_match_prefix(language)}: {', '.join(clean_strengths[:2])}.",
+            f"{why_this_cv.rstrip('.')} {localized_match_prefix(language)}: {', '.join(clean_strengths[:3])}.",
+            fallback=why_this_cv,
+        )
+    if clean_missing:
+        if language == "spanish":
+            gap_clause = f"Principales brechas: {', '.join(clean_missing[:2])}."
+        else:
+            gap_clause = f"Main gaps: {', '.join(clean_missing[:2])}."
+        why_this_cv = _normalize_sentence(
+            f"{why_this_cv.rstrip('.')} {gap_clause}",
             fallback=why_this_cv,
         )
 
@@ -907,16 +976,38 @@ def _build_improvement_payload(
     missing_keywords = _clean_keywords(missing_skills, limit=6)
 
     if not suggested_improvements:
-        suggested_improvements = [
-            _normalize_sentence(localized_add_evidence(language, keyword), fallback="")
-            for keyword in missing_keywords[:2]
-        ]
-        suggested_improvements = [item for item in suggested_improvements if item]
+        generated_improvements: list[str] = []
+        for missing_skill in missing_skills[:2]:
+            topic = _improvement_topic(missing_skill)
+            generated_improvements.append(
+                _normalize_sentence(localized_add_project_example(language, topic), fallback="")
+            )
+            generated_improvements.append(
+                _normalize_sentence(localized_add_metric(language, topic), fallback="")
+            )
+
+        for keyword in missing_keywords[:1]:
+            generated_improvements.append(
+                _normalize_sentence(localized_surface_keyword(language, keyword), fallback="")
+            )
+            generated_improvements.append(
+                _normalize_sentence(localized_add_exact_keyword_match(language, keyword), fallback="")
+            )
+            generated_improvements.append(
+                _normalize_sentence(localized_add_evidence(language, keyword), fallback="")
+            )
+
         if strengths:
-            suggested_improvements.append(
+            generated_improvements.append(
+                _normalize_sentence(localized_tailor_summary(language, strengths[0]), fallback="")
+            )
+            generated_improvements.append(
+                _normalize_sentence(localized_quantify_strength(language, strengths[0]), fallback="")
+            )
+            generated_improvements.append(
                 _normalize_sentence(localized_move_strength_earlier(language, strengths[0]), fallback="")
             )
-        suggested_improvements = _clean_items(suggested_improvements, limit=3)
+        suggested_improvements = _clean_items(generated_improvements, limit=6)
 
     reorder_suggestions = _build_reorder_suggestions(strengths, missing_keywords, language)
 
@@ -948,6 +1039,27 @@ def _normalize_keyword(value: str) -> str:
     return keyword
 
 
+def _improvement_topic(value: str) -> str:
+    keyword = _normalize_keyword(value)
+    if not keyword:
+        return ""
+
+    prefixes = (
+        "limited evidence of ",
+        "no explicit ",
+        "no clear ",
+        "lack of ",
+        "missing evidence of ",
+        "clear evidence of ",
+    )
+    for prefix in prefixes:
+        if keyword.startswith(prefix):
+            keyword = keyword[len(prefix):]
+            break
+
+    return keyword.strip(" .")
+
+
 def _build_reorder_suggestions(
     strengths: list[str],
     missing_keywords: list[str],
@@ -963,7 +1075,7 @@ def _build_reorder_suggestions(
             _normalize_sentence(localized_reorder_keyword(language, missing_keywords[0]), fallback="")
         )
 
-    return [suggestion for suggestion in suggestions if suggestion][:2]
+    return [suggestion for suggestion in suggestions if suggestion][:3]
 
 
 _service: CvLibraryService | None = None

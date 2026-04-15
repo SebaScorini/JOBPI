@@ -20,7 +20,7 @@ run_ai_call_with_timeout = run_ai_call_with_circuit_breaker
 
 MAX_LIBRARY_SUMMARY_CHARS = 180
 MAX_LIBRARY_CONTEXT_CHARS = 650
-SUMMARY_MAX_TOKENS = 372
+SUMMARY_MAX_TOKENS = 400
 logger = logging.getLogger(__name__)
 ROLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Backend-focused profile", re.compile(r"\b(backend|python|fastapi|django|flask|api|microservices?)\b", re.IGNORECASE)),
