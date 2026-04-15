@@ -1,13 +1,18 @@
 import hashlib
-from datetime import timezone
+import logging
+from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, update
+from sqlalchemy import func, update
 from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import load_only
 from sqlmodel import Session, select
 
 from app.models import CV, CVJobMatch, JobAnalysis, User
+from app.services.supabase_storage import SupabaseStorageError, get_supabase_storage_service
+
+
+logger = logging.getLogger(__name__)
 
 
 def _is_postgres_session(session: Session) -> bool:
@@ -21,6 +26,7 @@ CV_LIST_COLUMNS = (
     CV.display_name,
     CV.summary,
     CV.library_summary,
+    CV.storage_path,
     CV.is_favorite,
     CV.tags,
     CV.created_at,
@@ -71,12 +77,73 @@ def create_user(session: Session, email: str, hashed_password: str) -> User:
 
 
 def get_user_by_email(session: Session, email: str) -> User | None:
-    statement = select(User).where(User.email == email.lower().strip())
+    statement = select(User).where(User.email == email.lower().strip(), User.deleted_at.is_(None))
     return session.exec(statement).first()
 
 
 def get_user_by_id(session: Session, user_id: int) -> User | None:
-    return session.get(User, user_id)
+    statement = select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    return session.exec(statement).first()
+
+
+def get_user_by_supabase_id(session: Session, supabase_user_id: str) -> User | None:
+    statement = select(User).where(User.supabase_user_id == supabase_user_id, User.deleted_at.is_(None))
+    return session.exec(statement).first()
+
+
+def get_or_create_user_by_supabase_id(
+    session: Session,
+    *,
+    supabase_user_id: str,
+    email: str | None = None,
+) -> User | None:
+    """Resolve a local user from a Supabase Auth UUID.
+
+    Lookup order:
+    1. Match by ``supabase_user_id`` (already linked).
+    2. Match by ``email`` and link the account (existing user migrating).
+    3. Create a new local profile (new Supabase Auth user).
+
+    Returns None only if email is unavailable and no linked user exists.
+    """
+    # 1. Direct lookup by Supabase UUID
+    user = get_user_by_supabase_id(session, supabase_user_id)
+    if user is not None:
+        return user
+
+    # 2. Match by email and link
+    if email:
+        user = get_user_by_email(session, email)
+        if user is not None:
+            user.supabase_user_id = supabase_user_id
+            session.add(user)
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                # Race condition: another request linked first — re-fetch
+                return get_user_by_supabase_id(session, supabase_user_id)
+            session.refresh(user)
+            return user
+
+    # 3. Auto-create a new local profile
+    if not email:
+        return None
+
+    user = User(
+        email=email.lower().strip(),
+        hashed_password="supabase-managed",  # Not used — auth handled by Supabase
+        supabase_user_id=supabase_user_id,
+    )
+    session.add(user)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        # Email or supabase_user_id collision — re-fetch
+        return get_user_by_supabase_id(session, supabase_user_id) or get_user_by_email(session, email)
+    session.refresh(user)
+    return user
 
 
 def create_cv(
@@ -111,6 +178,14 @@ def create_cv(
     return cv
 
 
+def update_cv_storage_path(session: Session, cv: CV, storage_path: str | None) -> CV:
+    cv.storage_path = storage_path
+    session.add(cv)
+    session.commit()
+    session.refresh(cv)
+    return cv
+
+
 def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: int = 0) -> tuple[list[CV], int]:
     """Get paginated CVs for user.
     
@@ -128,14 +203,14 @@ def get_cvs_for_user(session: Session, user_id: int, limit: int = 20, offset: in
     offset = max(0, offset)
     
     # Get total count
-    count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id)
+    count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id, CV.deleted_at.is_(None))
     total = int(session.exec(count_statement).one())
     
     # Get paginated results
     statement = (
         select(CV)
         .options(load_only(*CV_LIST_COLUMNS))
-        .where(CV.user_id == user_id)
+        .where(CV.user_id == user_id, CV.deleted_at.is_(None))
         .order_by(CV.is_favorite.desc(), CV.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -158,8 +233,8 @@ def get_filtered_cvs_for_user(
     normalized_search = search.strip().lower()
     normalized_tags = [tag.strip().lower() for tag in (tags or []) if tag.strip()]
 
-    statement = select(CV).options(load_only(*CV_LIST_COLUMNS)).where(CV.user_id == user_id)
-    count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id)
+    statement = select(CV).options(load_only(*CV_LIST_COLUMNS)).where(CV.user_id == user_id, CV.deleted_at.is_(None))
+    count_statement = select(func.count()).select_from(CV).where(CV.user_id == user_id, CV.deleted_at.is_(None))
 
     if normalized_search:
         search_clause = func.lower(CV.display_name).contains(normalized_search)
@@ -187,7 +262,7 @@ def get_filtered_cvs_for_user(
 
 
 def get_cv_for_user(session: Session, user_id: int, cv_id: int) -> CV | None:
-    statement = select(CV).where(CV.id == cv_id, CV.user_id == user_id)
+    statement = select(CV).where(CV.id == cv_id, CV.user_id == user_id, CV.deleted_at.is_(None))
     return session.exec(statement).first()
 
 
@@ -198,13 +273,15 @@ def get_cv_for_user_by_clean_text(session: Session, user_id: int, clean_text: st
             CV.user_id == user_id,
             _postgres_sha256_expr(CV.clean_text) == clean_text_hash,
             CV.clean_text == clean_text,
+            CV.deleted_at.is_(None),
         )
     else:
-        statement = select(CV).where(CV.user_id == user_id, CV.clean_text == clean_text)
+        statement = select(CV).where(CV.user_id == user_id, CV.clean_text == clean_text, CV.deleted_at.is_(None))
     return session.exec(statement).first()
 
 
 def delete_cv(session: Session, cv: CV) -> None:
+    """Soft-delete a single CV."""
     delete_multiple_cvs(session, [cv])
 
 
@@ -212,7 +289,7 @@ def get_cvs_for_user_by_ids(session: Session, user_id: int, cv_ids: list[int]) -
     normalized_ids = [cv_id for cv_id in cv_ids if cv_id > 0]
     if not normalized_ids:
         return []
-    statement = select(CV).where(CV.user_id == user_id, CV.id.in_(normalized_ids))
+    statement = select(CV).where(CV.user_id == user_id, CV.id.in_(normalized_ids), CV.deleted_at.is_(None))
     return list(session.exec(statement).all())
 
 
@@ -248,12 +325,15 @@ def update_multiple_cv_tags(session: Session, cvs: list[CV], tags: list[str]) ->
 
 
 def delete_multiple_cvs(session: Session, cvs: list[CV]) -> int:
+    """Soft-delete multiple CVs by setting deleted_at."""
     grouped_cv_ids = _group_cv_ids_by_user(cvs)
     if not grouped_cv_ids:
         return 0
 
+    now = datetime.now(timezone.utc)
     try:
         for user_id, cv_ids in grouped_cv_ids.items():
+            # Clear cover letter references
             session.exec(
                 update(JobAnalysis)
                 .where(
@@ -266,22 +346,46 @@ def delete_multiple_cvs(session: Session, cvs: list[CV]) -> int:
                     generated_cover_letter=None,
                 )
             )
+            # Soft-delete related matches
             session.exec(
-                delete(CVJobMatch).where(
+                update(CVJobMatch)
+                .where(
                     CVJobMatch.user_id == user_id,
                     CVJobMatch.cv_id.in_(cv_ids),
+                    CVJobMatch.deleted_at.is_(None),
                 )
+                .values(deleted_at=now)
             )
+            # Soft-delete the CVs
             session.exec(
-                delete(CV).where(
+                update(CV)
+                .where(
                     CV.user_id == user_id,
                     CV.id.in_(cv_ids),
+                    CV.deleted_at.is_(None),
                 )
+                .values(deleted_at=now)
             )
         session.commit()
     except IntegrityError:
         session.rollback()
         raise
+
+    storage_service = get_supabase_storage_service()
+    for cv in cvs:
+        storage_path = getattr(cv, "storage_path", None)
+        if not storage_path:
+            continue
+        try:
+            storage_service.delete_cv_pdf(path=storage_path)
+        except SupabaseStorageError:
+            logger.warning(
+                "cv_storage_delete_failed cv_id=%s user_id=%s storage_path=%s",
+                cv.id,
+                cv.user_id,
+                storage_path,
+                exc_info=True,
+            )
 
     return sum(len(cv_ids) for cv_ids in grouped_cv_ids.values())
 
@@ -338,6 +442,7 @@ def get_matching_job_analysis(
             JobAnalysis.company == company,
             _postgres_sha256_expr(JobAnalysis.clean_description) == clean_description_hash,
             JobAnalysis.clean_description == clean_description,
+            JobAnalysis.deleted_at.is_(None),
         )
     else:
         statement = select(JobAnalysis).where(
@@ -345,6 +450,7 @@ def get_matching_job_analysis(
             JobAnalysis.title == title,
             JobAnalysis.company == company,
             JobAnalysis.clean_description == clean_description,
+            JobAnalysis.deleted_at.is_(None),
         )
     return session.exec(statement).first()
 
@@ -359,8 +465,8 @@ def get_jobs_for_user(
 ) -> tuple[list[JobAnalysis], int]:
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    count_statement = select(func.count()).select_from(JobAnalysis).where(JobAnalysis.user_id == user_id)
-    statement = select(JobAnalysis).options(load_only(*JOB_LIST_COLUMNS)).where(JobAnalysis.user_id == user_id)
+    count_statement = select(func.count()).select_from(JobAnalysis).where(JobAnalysis.user_id == user_id, JobAnalysis.deleted_at.is_(None))
+    statement = select(JobAnalysis).options(load_only(*JOB_LIST_COLUMNS)).where(JobAnalysis.user_id == user_id, JobAnalysis.deleted_at.is_(None))
     if is_saved is not None:
         count_statement = count_statement.where(JobAnalysis.is_saved == is_saved)
         statement = statement.where(JobAnalysis.is_saved == is_saved)
@@ -370,22 +476,28 @@ def get_jobs_for_user(
 
 
 def get_job_for_user(session: Session, user_id: int, job_id: int) -> JobAnalysis | None:
-    statement = select(JobAnalysis).where(JobAnalysis.id == job_id, JobAnalysis.user_id == user_id)
+    statement = select(JobAnalysis).where(JobAnalysis.id == job_id, JobAnalysis.user_id == user_id, JobAnalysis.deleted_at.is_(None))
     return session.exec(statement).first()
 
 
 def get_job_by_id(session: Session, job_id: int) -> JobAnalysis | None:
-    return session.get(JobAnalysis, job_id)
+    statement = select(JobAnalysis).where(JobAnalysis.id == job_id, JobAnalysis.deleted_at.is_(None))
+    return session.exec(statement).first()
 
 
 def delete_job(session: Session, job: JobAnalysis) -> None:
-    # Remove dependent matches first so the job delete stays valid across DB backends.
-    statement = select(CVJobMatch).where(CVJobMatch.job_id == job.id, CVJobMatch.user_id == job.user_id)
-    matches = session.exec(statement).all()
+    """Soft-delete a job and its dependent matches."""
+    now = datetime.now(timezone.utc)
     try:
-        for match in matches:
-            session.delete(match)
-        session.delete(job)
+        # Soft-delete dependent matches
+        session.exec(
+            update(CVJobMatch)
+            .where(CVJobMatch.job_id == job.id, CVJobMatch.user_id == job.user_id, CVJobMatch.deleted_at.is_(None))
+            .values(deleted_at=now)
+        )
+        # Soft-delete the job
+        job.deleted_at = now
+        session.add(job)
         session.commit()
     except IntegrityError:
         session.rollback()
@@ -529,7 +641,7 @@ def clear_recommendations_for_job(session: Session, user_id: int, job_id: int) -
     # Toggle off recommended flag before setting a new winner
     session.exec(
         update(CVJobMatch)
-        .where(CVJobMatch.user_id == user_id, CVJobMatch.job_id == job_id)
+        .where(CVJobMatch.user_id == user_id, CVJobMatch.job_id == job_id, CVJobMatch.deleted_at.is_(None))
         .values(recommended=False)
     )
     session.commit()
@@ -546,7 +658,11 @@ def set_recommended_match(session: Session, match: CVJobMatch) -> CVJobMatch:
 def replace_recommended_match(session: Session, match: CVJobMatch) -> CVJobMatch:
     session.exec(
         update(CVJobMatch)
-        .where(CVJobMatch.user_id == match.user_id, CVJobMatch.job_id == match.job_id)
+        .where(
+            CVJobMatch.user_id == match.user_id,
+            CVJobMatch.job_id == match.job_id,
+            CVJobMatch.deleted_at.is_(None),
+        )
         .values(recommended=False)
     )
     session.exec(
@@ -555,6 +671,7 @@ def replace_recommended_match(session: Session, match: CVJobMatch) -> CVJobMatch
             CVJobMatch.id == match.id,
             CVJobMatch.user_id == match.user_id,
             CVJobMatch.job_id == match.job_id,
+            CVJobMatch.deleted_at.is_(None),
         )
         .values(recommended=True)
     )
@@ -568,6 +685,7 @@ def get_match_for_user_by_cv_and_job(session: Session, user_id: int, cv_id: int,
         CVJobMatch.user_id == user_id,
         CVJobMatch.cv_id == cv_id,
         CVJobMatch.job_id == job_id,
+        CVJobMatch.deleted_at.is_(None),
     )
     return session.exec(statement).first()
 
@@ -581,11 +699,11 @@ def get_matches_for_user(
 ) -> tuple[list[CVJobMatch], int]:
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    count_statement = select(func.count()).select_from(CVJobMatch).where(CVJobMatch.user_id == user_id)
+    count_statement = select(func.count()).select_from(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.deleted_at.is_(None))
     total = int(session.exec(count_statement).one())
     statement = (
         select(CVJobMatch)
-        .where(CVJobMatch.user_id == user_id)
+        .where(CVJobMatch.user_id == user_id, CVJobMatch.deleted_at.is_(None))
         .order_by(CVJobMatch.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -594,7 +712,7 @@ def get_matches_for_user(
 
 
 def get_match_for_user(session: Session, user_id: int, match_id: int) -> CVJobMatch | None:
-    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.id == match_id)
+    statement = select(CVJobMatch).where(CVJobMatch.user_id == user_id, CVJobMatch.id == match_id, CVJobMatch.deleted_at.is_(None))
     return session.exec(statement).first()
 
 
@@ -602,5 +720,6 @@ def get_matches_for_job(session: Session, user_id: int, job_id: int) -> list[CVJ
     statement = select(CVJobMatch).where(
         CVJobMatch.user_id == user_id,
         CVJobMatch.job_id == job_id,
+        CVJobMatch.deleted_at.is_(None),
     )
     return list(session.exec(statement).all())

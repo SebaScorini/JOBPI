@@ -12,6 +12,9 @@ class CvAnalysisResponse(BaseModel):
     missing_skills: list[str]
     likely_fit_level: str
     resume_improvements: list[str]
+    ats_improvements: list[str]
+    recruiter_improvements: list[str]
+    rewritten_bullets: list[str]
     interview_focus: list[str]
     next_steps: list[str]
 
@@ -24,9 +27,14 @@ class CVRead(BaseModel):
     display_name: str
     summary: str
     library_summary: str
+    has_file: bool = False
     is_favorite: bool = False
     tags: list[str]
     created_at: datetime
+
+
+class CVDownloadResponse(BaseModel):
+    url: str
 
 
 class CVDetailRead(CVRead):
