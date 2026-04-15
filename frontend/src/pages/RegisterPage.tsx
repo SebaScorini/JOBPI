@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ApiError, apiService } from '../services/api';
-import { UserPlus, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { UserPlus, Loader2, CheckCircle2, Circle, MailCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { getPasswordRequirementState, registerSchema } from '../utils/validation';
 import { useToast } from '../context/ToastContext';
@@ -17,10 +17,11 @@ export function RegisterPage() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<RegisterFieldErrors>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
 
+  const { register } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
-  const navigate = useNavigate();
   const passwordRequirements = getPasswordRequirementState(password);
   const passwordRequirementItems = [
     { key: 'minLength', label: t('auth.passwordRequirementMinLength'), met: passwordRequirements.minLength },
@@ -28,28 +29,6 @@ export function RegisterPage() {
     { key: 'lowercase', label: t('auth.passwordRequirementLowercase'), met: passwordRequirements.lowercase },
     { key: 'digit', label: t('auth.passwordRequirementNumber'), met: passwordRequirements.digit },
   ];
-
-  const applyBackendFieldErrors = (apiError: ApiError) => {
-    const nextErrors: RegisterFieldErrors = {};
-
-    if (apiError.status === 409 && apiError.message.toLowerCase().includes('email')) {
-      nextErrors.email = t('auth.emailAlreadyExists');
-    }
-
-    for (const detail of apiError.details ?? []) {
-      const fieldName = detail.loc?.[detail.loc.length - 1];
-      if ((fieldName === 'email' || fieldName === 'password') && detail.msg) {
-        nextErrors[fieldName] = detail.msg;
-      }
-    }
-
-    if (Object.keys(nextErrors).length > 0) {
-      setFieldErrors(nextErrors);
-      return true;
-    }
-
-    return false;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,22 +51,48 @@ export function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await apiService.register(parsed.data.email, parsed.data.password);
+      await register(parsed.data.email, parsed.data.password);
+      setRegistrationComplete(true);
       showToast(t('auth.accountCreated'), 'success');
-      navigate('/login');
     } catch (err: any) {
-      if (err instanceof ApiError && applyBackendFieldErrors(err)) {
-        setError('');
-        return;
-      }
+      const message = err?.message || t('auth.registrationFailed');
 
-      const message = err.message || t('auth.registrationFailed');
-      setError(message);
-      showToast(message, 'error');
+      if (message.toLowerCase().includes('already registered') || message.toLowerCase().includes('already been registered')) {
+        setFieldErrors({ email: t('auth.emailAlreadyExists') });
+      } else {
+        setError(message);
+        showToast(message, 'error');
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Show confirmation screen after successful registration
+  if (registrationComplete) {
+    return (
+      <div className="space-y-6 text-center animate-in fade-in zoom-in-95 duration-300">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60">
+          <MailCheck size={32} className="text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+          {t('auth.checkYourEmail') || 'Check your email'}
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {t('auth.confirmationEmailSent') || `We've sent a confirmation link to `}
+          <strong className="text-slate-700 dark:text-slate-200">{email}</strong>.
+          {' '}
+          {t('auth.clickToVerify') || 'Click the link to verify your account and sign in.'}
+        </p>
+        <Link
+          to="/login"
+          className="btn-primary mt-4 inline-flex items-center justify-center gap-2"
+        >
+          {t('auth.backToLogin') || 'Back to Sign In'}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in zoom-in-95 duration-300">

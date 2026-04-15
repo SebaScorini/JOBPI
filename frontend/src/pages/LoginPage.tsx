@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ApiError, apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, Loader2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -24,33 +23,6 @@ export function LoginPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const applyBackendFieldErrors = (apiError: ApiError) => {
-    const nextErrors: LoginFieldErrors = {};
-
-    if (apiError.status === 401) {
-      nextErrors.email = t('auth.invalidCredentials');
-      nextErrors.password = t('auth.invalidCredentials');
-    }
-
-    if (apiError.status === 403) {
-      nextErrors.email = t('auth.inactiveAccount');
-    }
-
-    for (const detail of apiError.details ?? []) {
-      const fieldName = detail.loc?.[detail.loc.length - 1];
-      if ((fieldName === 'email' || fieldName === 'password') && detail.msg) {
-        nextErrors[fieldName] = detail.msg;
-      }
-    }
-
-    if (Object.keys(nextErrors).length > 0) {
-      setFieldErrors(nextErrors);
-      return true;
-    }
-
-    return false;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -72,20 +44,24 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      const tokenData = await apiService.login(parsed.data.email, parsed.data.password);
-      const user = await apiService.getMe(tokenData.access_token);
-      login(tokenData.access_token, user);
+      await login(parsed.data.email, parsed.data.password);
       showToast(t('auth.loginSuccess'), 'success');
       navigate('/dashboard', { replace: true });
     } catch (err: any) {
-      if (err instanceof ApiError && applyBackendFieldErrors(err)) {
-        setError(err.status === 401 ? t('auth.invalidCredentialsHint') : '');
-        return;
-      }
+      const message = err?.message || t('auth.loginFailed');
 
-      const message = err.message || t('auth.loginFailed');
-      setError(message);
-      showToast(message, 'error');
+      if (message.toLowerCase().includes('invalid')) {
+        setFieldErrors({
+          email: t('auth.invalidCredentials'),
+          password: t('auth.invalidCredentials'),
+        });
+        setError(t('auth.invalidCredentialsHint'));
+      } else if (message.toLowerCase().includes('email not confirmed')) {
+        setError(t('auth.emailNotConfirmed') || 'Please verify your email before signing in.');
+      } else {
+        setError(message);
+        showToast(message, 'error');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -153,6 +129,12 @@ export function LoginPage() {
         {isLoading ? <Loader2 size={18} className="animate-spin" /> : <LogIn size={18} />}
         {isLoading ? t('auth.signingIn') : t('auth.signIn')}
       </button>
+
+      <div className="mt-4 text-center">
+        <Link to="/forgot-password" className="text-sm text-brand-primary hover:underline">
+          {t('auth.forgotPassword') || 'Forgot your password?'}
+        </Link>
+      </div>
 
       <p className="mt-6 text-center text-sm font-medium text-slate-500">
         {t('auth.noAccount')}{' '}

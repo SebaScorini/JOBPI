@@ -22,6 +22,12 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('./pages/RegisterPage').then((module) => ({ default: module.RegisterPage })),
 );
+const ForgotPasswordPage = lazy(() =>
+  import('./pages/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import('./pages/ResetPasswordPage').then((module) => ({ default: module.ResetPasswordPage })),
+);
 const DashboardPage = lazy(() =>
   import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })),
 );
@@ -60,6 +66,8 @@ function getRouteTitle(pathname: string): string {
     const jobId = pathname.split('/').filter(Boolean).pop();
     return jobId ? `Job ${jobId} | ${SITE_NAME}` : `Job Details | ${SITE_NAME}`;
   }
+  if (pathname === '/forgot-password') return `Forgot Password | ${SITE_NAME}`;
+  if (pathname === '/reset-password') return `Reset Password | ${SITE_NAME}`;
   if (pathname === '/matches') return `Matches | ${SITE_NAME}`;
   return DEFAULT_TITLE;
 }
@@ -114,13 +122,13 @@ function LazyRoute({
 }
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
-  const { user, token, isLoading } = useAuth();
+  const { session, isLoading } = useAuth();
 
   if (isLoading) {
     return <RouteFallback variant="app" />;
   }
 
-  if (!user && !token) {
+  if (!session) {
     return <Navigate to="/login" replace />;
   }
 
@@ -160,6 +168,22 @@ function AppRouter() {
             element={
               <LazyRoute variant="auth">
                 <RegisterPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <LazyRoute variant="auth">
+                <ForgotPasswordPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <LazyRoute variant="auth">
+                <ResetPasswordPage />
               </LazyRoute>
             }
           />

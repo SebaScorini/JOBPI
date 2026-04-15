@@ -8,8 +8,6 @@ import { LoginPage } from './LoginPage';
 const navigateMock = vi.fn();
 const loginMock = vi.fn();
 const showToastMock = vi.fn();
-const loginApiMock = vi.fn();
-const getMeMock = vi.fn();
 const translateMock = vi.fn((key: string) => {
   const dictionary: Record<string, string> = {
     'auth.emailAddress': 'Email Address',
@@ -53,22 +51,11 @@ vi.mock('../context/ToastContext', () => ({
   }),
 }));
 
-vi.mock('../services/api', () => ({
-  ApiError: class ApiError extends Error {},
-  apiService: {
-    login: (...args: unknown[]) => loginApiMock(...args),
-    getMe: (...args: unknown[]) => getMeMock(...args),
-  },
-}));
-
-
 describe('LoginPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     loginMock.mockReset();
     showToastMock.mockReset();
-    loginApiMock.mockReset();
-    getMeMock.mockReset();
     translateMock.mockClear();
   });
 
@@ -84,12 +71,11 @@ describe('LoginPage', () => {
 
     expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
     expect(screen.getByText('Password is required.')).toBeInTheDocument();
-    expect(loginApiMock).not.toHaveBeenCalled();
+    expect(loginMock).not.toHaveBeenCalled();
   });
 
   it('submits valid credentials and redirects to the dashboard', async () => {
-    loginApiMock.mockResolvedValue({ access_token: 'token-123' });
-    getMeMock.mockResolvedValue({ id: 1, email: 'user@example.com', is_active: true, created_at: '2026-01-01' });
+    loginMock.mockResolvedValue(undefined);
 
     render(
       <MemoryRouter>
@@ -102,9 +88,7 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() => {
-      expect(loginApiMock).toHaveBeenCalledWith('user@example.com', 'ValidPass123');
-      expect(getMeMock).toHaveBeenCalledWith('token-123');
-      expect(loginMock).toHaveBeenCalled();
+      expect(loginMock).toHaveBeenCalledWith('user@example.com', 'ValidPass123');
       expect(showToastMock).toHaveBeenCalledWith('Signed in successfully.', 'success');
       expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true });
     });
