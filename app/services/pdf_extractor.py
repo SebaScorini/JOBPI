@@ -39,14 +39,10 @@ def extract_raw_pdf_text(file_bytes: bytes) -> str:
 
     extraction_start = time.perf_counter()
     try:
-        from pypdf import PdfReader
-
-        reader = PdfReader(BytesIO(file_bytes))
-        pages = [(page.extract_text() or "") for page in reader.pages]
-        raw = "\n".join(pages)
-    except ImportError as exc:
-        raise ValueError("PDF support is not installed on the server.") from exc
+        raw = _extract_with_available_pdf_backend(file_bytes)
     except Exception as exc:
+        if isinstance(exc, ValueError):
+            raise
         raise ValueError("Failed to read PDF content.") from exc
     finally:
         logger.info(
@@ -78,22 +74,45 @@ def _validate_magic_bytes(data: bytes) -> None:
         raise ValueError("Uploaded file is not a valid PDF.")
 
 
+def _extract_with_available_pdf_backend(file_bytes: bytes) -> str:
+    pypdf_import_error: Exception | None = None
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(BytesIO(file_bytes))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except ImportError as exc:
+        pypdf_import_error = exc
+
+    try:
+        import fitz
+
+        with fitz.open(stream=file_bytes, filetype="pdf") as document:
+            return "\n".join(page.get_text("text") or "" for page in document)
+    except ImportError as exc:
+        if pypdf_import_error is not None:
+            raise ValueError("PDF support is not installed on the server.") from pypdf_import_error
+        raise ValueError("PDF support is not installed on the server.") from exc
+
+
 def _preprocess_cv(raw: str, max_chars: int | None = None) -> str:
     normalized = re.sub(r"\r\n?", "\n", raw)
+    normalized = re.sub(r"(?<=\w)-\n(?=\w)", "-", normalized)
     normalized = re.sub(r"[ \t]+", " ", normalized)
 
     lines: list[str] = []
     for line in normalized.split("\n"):
         stripped = line.strip()
-        # Drop contact noise and very short lines
         cleaned = _CONTACT_RE.sub("", stripped).strip()
-        if len(cleaned) < 5:
-            continue
-        if _SHORT_LINE_RE.match(cleaned):
-            continue
-        if _FILLER_LINE_RE.search(cleaned):
-            continue
-        lines.append(cleaned)
+        if cleaned:
+            lines.append(cleaned)
+
+    lines = _merge_wrapped_lines(lines)
+    lines = [
+        line
+        for line in lines
+        if len(line) >= 5 and not _SHORT_LINE_RE.match(line) and not _FILLER_LINE_RE.search(line)
+    ]
 
     # Remove duplicate consecutive lines
     deduped: list[str] = []
@@ -182,3 +201,30 @@ def _truncate_cv(text: str, max_chars: int | None = None) -> str:
     if cutoff < int(max_cv_chars * 0.6):
         cutoff = max_cv_chars
     return excerpt[:cutoff].strip()
+
+
+def _merge_wrapped_lines(lines: list[str]) -> list[str]:
+    merged: list[str] = []
+
+    for line in lines:
+        if (
+            merged
+            and _looks_like_wrapped_continuation(previous=merged[-1], current=line)
+        ):
+            merged[-1] = f"{merged[-1].rstrip()} {line.lstrip()}".strip()
+        else:
+            merged.append(line)
+
+    return merged
+
+
+def _looks_like_wrapped_continuation(*, previous: str, current: str) -> bool:
+    if not previous or not current:
+        return False
+    if previous.endswith((".", ":", ";", "!", "?")):
+        return False
+    if previous.lstrip().startswith("•") and current.lstrip().startswith("•"):
+        return False
+    if current.lstrip().startswith(("•", "-", "*")):
+        return False
+    return current[:1].islower() or previous.endswith(("and", "or", "/", "with", "using"))

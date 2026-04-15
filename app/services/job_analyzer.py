@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
-from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_circuit_breaker
+from app.core.ai import (
+    build_ai_failure_http_exception,
+    dspy_lm_override,
+    looks_like_ai_auth_error,
+    run_ai_call_with_circuit_breaker,
+)
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models import User
@@ -25,7 +29,7 @@ from app.schemas.job import (
     JobRead,
     JobStatus,
 )
-from app.services.job_preprocessing import clean_description
+from app.services.job_preprocessing import build_context_fingerprint, build_job_excerpt, clean_description
 from app.services.response_language import language_instruction, normalize_language
 
 
@@ -51,45 +55,52 @@ logger = logging.getLogger(__name__)
 
 
 class LeanJobAnalysisSignature(dspy.Signature):
-    """Return concise, role-specific job guidance only.
+    """Extract only the most decision-useful guidance from this job posting.
 
-    Keep only actionable content for requirements, CV improvements, prep, and gaps.
-    Exclude filler, repeated ideas, generic claims, obvious statements, and irrelevant tech.
+    Base every field on explicit evidence in the posting or a very strong role-level inference.
+    Prefer the concrete requirements, responsibilities, tools, seniority, and outcomes that will
+    help a candidate prepare. Do not pad, repeat, or copy long fragments from the posting.
     """
 
-    title: str = dspy.InputField(desc="Job title")
-    company: str = dspy.InputField(desc="Company name")
-    desc: str = dspy.InputField(desc="Cleaned job text")
-    response_language: str = dspy.InputField(desc="Output language")
-    summary: str = dspy.OutputField(desc="1-2 actionable sentences. No intro, filler, or copied JD text.")
-    seniority: str = dspy.OutputField(desc="One label")
-    role_type: str = dspy.OutputField(desc="One role family")
+    title: str = dspy.InputField(desc="Job title for role framing")
+    company: str = dspy.InputField(desc="Company name for context only")
+    desc: str = dspy.InputField(desc="Cleaned, high-signal job excerpt with requirements and responsibilities")
+    response_language: str = dspy.InputField(desc="Language for every output field")
+    summary: str = dspy.OutputField(
+        desc="1-2 concise sentences explaining what the role most needs and what success likely looks like. Grounded only in the posting."
+    )
+    seniority: str = dspy.OutputField(
+        desc="Single label such as junior, mid, senior, lead, or unknown. Use unknown if the level is not reasonably clear."
+    )
+    role_type: str = dspy.OutputField(
+        desc="Single short role family such as backend, full-stack, frontend, data, devops, mobile, qa, product, or generalist."
+    )
     req_skills: list[str] = dspy.OutputField(
-        desc="Max 5 required skills from the posting. Short phrases only."
+        desc="Max 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short phrases only."
     )
     nice_skills: list[str] = dspy.OutputField(
-        desc="Max 5 optional skills explicitly hinted in the posting."
+        desc="Max 5 preferred or bonus skills that are helpful but not clearly mandatory. Only include items supported by the posting."
     )
     responsibilities: list[str] = dspy.OutputField(
-        desc="Max 5 core tasks rewritten as concise items; do not copy lines verbatim."
+        desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and avoid near-verbatim copying."
     )
     prep: list[str] = dspy.OutputField(
-        desc="Max 5 preparation actions for this role. Actionable and specific."
+        desc="Max 5 concrete preparation actions for applying or interviewing well for this specific role. Tie each action to the role's actual requirements."
     )
     learn: list[str] = dspy.OutputField(
-        desc="Max 5 learning actions tied to missing requirements in this posting."
+        desc="Max 5 focused learning priorities that would close common gaps for this exact posting. Keep them specific and practical."
     )
     gaps: list[str] = dspy.OutputField(
-        desc="Max 5 concrete skill gaps for this job. No vague or generic advice."
+        desc="Max 5 concrete candidate gaps suggested by the posting's expectations. Mention only requirements that appear important for fit."
     )
     resume: list[str] = dspy.OutputField(
-        desc="Max 5 CV improvements for this job. Each item must be directly actionable."
+        desc="Max 5 resume improvements that would better align a CV to this role. Each item must be directly actionable and role-specific."
     )
     interview: list[str] = dspy.OutputField(
-        desc="Max 5 interview focus points for this role. Short explanations only."
+        desc="Max 5 interview focus points the candidate should prepare for, based on the role's scope, tools, and expected outcomes."
     )
     projects: list[str] = dspy.OutputField(
-        desc="Max 5 portfolio project ideas that increase fit for this exact role."
+        desc="Max 5 portfolio or project ideas that would increase fit for this exact role. Make them realistic, specific, and relevant to the posting."
     )
 
 
@@ -155,6 +166,11 @@ class JobAnalyzerService:
         cleaned_description = clean_description(payload.description)
         selected_language = normalize_language(payload.language)
         cache_key = _build_cache_key(payload.title, payload.company, cleaned_description, selected_language)
+        retry_description_limit = min(
+            self.retry_description_chars,
+            max(600, int(len(cleaned_description) * 0.75)),
+        )
+        retry_description = build_job_excerpt(cleaned_description, max_chars=retry_description_limit)
 
         if session is not None and user is not None and not payload.regenerate:
             stored = crud.get_matching_job_analysis(
@@ -165,14 +181,14 @@ class JobAnalyzerService:
                 clean_description=cleaned_description,
             )
             if stored is not None and _analysis_language(stored.analysis_result) == selected_language:
-                logger.info("ai_cache_reuse operation=job_analysis source=db job_id=%s", stored.id)
+                logger.info("ai_cache operation=job_analysis cache_status=hit source=db job_id=%s", stored.id)
                 response = JobAnalysisPayload(**stored.analysis_result)
                 self._cache[cache_key] = response.model_copy(deep=True)
                 return self._serialize_job(stored)
 
         cached = None if payload.regenerate else self._cache.get(cache_key)
         if cached is not None:
-            logger.info("ai_cache_reuse operation=job_analysis source=memory")
+            logger.info("ai_cache operation=job_analysis cache_status=hit source=memory")
             if session is not None and user is not None:
                 stored = crud.create_job_analysis(
                     session,
@@ -198,6 +214,7 @@ class JobAnalyzerService:
         response: JobAnalysisPayload | None = None
         try:
             analyzer = self._get_analyzer()
+            logger.info("ai_cache operation=job_analysis cache_status=miss source=none")
             logger.info(
                 "ai_call operation=job_analysis title=%s company=%s regenerate=%s",
                 payload.title,
@@ -211,17 +228,19 @@ class JobAnalyzerService:
                 logger=logger,
                 callable_=analyzer,
                 lm_max_tokens=self.max_tokens,
-                title=payload.title,
-                company=payload.company,
-                description=cleaned_description,
-                response_language=language_instruction(selected_language),
-                max_tokens=self.max_tokens,
+                retry_lm_max_tokens=self.retry_max_tokens,
+                attempt_kwargs_builder=lambda attempt: {
+                    "title": payload.title,
+                    "company": payload.company,
+                    "description": cleaned_description if attempt == 0 else retry_description,
+                    "response_language": language_instruction(selected_language),
+                    "max_tokens": self.max_tokens if attempt == 0 else self.retry_max_tokens,
+                },
             )
             response = self._build_payload_from_result(result)
         except HTTPException as exc:
-            retry_description = cleaned_description[:self.retry_description_chars]
             logger.warning(
-                "ai_fallback operation=job_analysis reason=http_%s",
+                "ai_fallback operation=job_analysis fallback=true reason=http_%s",
                 exc.status_code,
             )
             response = self._build_fallback_analysis_payload(
@@ -231,11 +250,14 @@ class JobAnalyzerService:
                 language=selected_language,
             )
         except Exception as exc:
-            logger.warning("ai_fallback operation=job_analysis reason=exception", exc_info=exc)
+            if looks_like_ai_auth_error(exc):
+                logger.warning("ai_fallback operation=job_analysis fallback=true reason=auth")
+            else:
+                logger.warning("ai_fallback operation=job_analysis fallback=true reason=exception", exc_info=exc)
             response = self._build_fallback_analysis_payload(
                 title=payload.title,
                 company=payload.company,
-                cleaned_description=cleaned_description,
+                cleaned_description=retry_description,
                 language=selected_language,
             )
 
@@ -402,14 +424,14 @@ class JobAnalyzerService:
         language: AIResponseLanguage,
     ) -> JobAnalysisPayload:
         text = cleaned_description.lower()
-        extracted_skills = [skill for skill in SKILL_HINTS if re.search(rf"\\b{re.escape(skill)}\\b", text)]
+        extracted_skills = [skill for skill in SKILL_HINTS if re.search(rf"\b{re.escape(skill)}\b", text)]
 
         sentence_candidates = [
             line.strip(" -")
-            for line in re.split(r"[\\n\\.]+", cleaned_description)
+            for line in re.split(r"[\n\.]+", cleaned_description)
             if line.strip()
         ]
-        actionable = [s for s in sentence_candidates if any(k in s.lower() for k in ("build", "develop", "design", "manage", "api", "service"))]
+        actionable = [s for s in sentence_candidates if _looks_actionable_fallback_sentence(s)]
 
         summary = (
             f"Fallback analysis for {title} at {company}: extracted key role requirements from the description."
@@ -544,13 +566,28 @@ def _truncate_summary_segment(text: str, limit: int) -> str:
 
 
 def _build_cache_key(title: str, company: str, description: str, language: AIResponseLanguage) -> str:
-    payload = f"{title.strip().lower()}|{company.strip().lower()}|{description.strip().lower()}|{language}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return build_context_fingerprint("job_analysis", title, company, description, language)
 
 
 def _analysis_language(analysis_result: dict) -> AIResponseLanguage:
     language = analysis_result.get("_language") if isinstance(analysis_result, dict) else None
     return normalize_language(language)
+
+
+def _looks_actionable_fallback_sentence(value: str) -> bool:
+    lowered = value.lower().strip()
+    if not lowered:
+        return False
+    if lowered.startswith(("team structure", "ideal profile", "soft skills", "education")):
+        return False
+    return bool(
+        re.search(
+            r"\b(develop|design|build|maintain|integrate|optimize|participate|collaborate|implement|review|scale)\b",
+            lowered,
+        )
+        or re.search(r"\bapi(s)?\b", lowered)
+        or re.search(r"\bservices?\b", lowered)
+    )
 
 
 _service: JobAnalyzerService | None = None

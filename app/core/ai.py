@@ -1,6 +1,7 @@
 from concurrent.futures import Executor, TimeoutError as FuturesTimeoutError
 from contextlib import contextmanager
 import logging
+import time
 from typing import Any, Callable
 
 from app.core.runtime import configure_runtime_environment
@@ -12,6 +13,7 @@ from fastapi import HTTPException, status
 
 from app.core.circuit_breaker import AICircuitBreaker
 from app.core.config import get_settings, normalize_dspy_model
+from app.services.job_preprocessing import estimate_payload_tokens
 
 
 AI_TIMEOUT_DETAIL = "AI request timed out. Please try again."
@@ -48,21 +50,60 @@ def run_ai_call_with_timeout(
     logger: logging.Logger,
     callable_: Callable[..., Any],
     lm_max_tokens: int | None = None,
+    retry_count: int = 0,
     **kwargs,
 ) -> Any:
+    estimated_input_chars = _estimate_payload_chars(kwargs)
+    estimated_input_tokens = estimate_payload_tokens(kwargs)
+    effective_max_tokens = clamp_lm_max_tokens(lm_max_tokens) if lm_max_tokens is not None else None
+    start = time.perf_counter()
+    logger.info(
+        "ai_call_start operation=%s retry_count=%s max_tokens=%s estimated_input_chars=%s estimated_input_tokens=%s",
+        operation,
+        retry_count,
+        effective_max_tokens,
+        estimated_input_chars,
+        estimated_input_tokens,
+    )
     future = executor.submit(callable_, **kwargs)
     try:
         result = future.result(timeout=timeout_seconds)
+        latency_ms = (time.perf_counter() - start) * 1000
+        usage = _extract_usage_metrics(result)
+        logger.info(
+            "ai_call_complete operation=%s retry_count=%s max_tokens=%s latency_ms=%.1f estimated_input_chars=%s estimated_input_tokens=%s provider_input_tokens=%s provider_output_tokens=%s provider_total_tokens=%s",
+            operation,
+            retry_count,
+            effective_max_tokens,
+            latency_ms,
+            estimated_input_chars,
+            estimated_input_tokens,
+            usage["input_tokens"],
+            usage["output_tokens"],
+            usage["total_tokens"],
+        )
         if lm_max_tokens is not None and _is_likely_truncated_result(result):
             logger.warning(
-                "ai_output_truncated operation=%s max_tokens=%s",
+                "ai_output_truncated operation=%s retry_count=%s max_tokens=%s latency_ms=%.1f",
                 operation,
-                clamp_lm_max_tokens(lm_max_tokens),
+                retry_count,
+                effective_max_tokens,
+                latency_ms,
             )
         return result
     except FuturesTimeoutError as exc:
         future.cancel()
-        logger.warning("ai_timeout operation=%s timeout_seconds=%s", operation, timeout_seconds)
+        latency_ms = (time.perf_counter() - start) * 1000
+        logger.warning(
+            "ai_timeout operation=%s retry_count=%s timeout_seconds=%s latency_ms=%.1f max_tokens=%s estimated_input_chars=%s estimated_input_tokens=%s",
+            operation,
+            retry_count,
+            timeout_seconds,
+            latency_ms,
+            effective_max_tokens,
+            estimated_input_chars,
+            estimated_input_tokens,
+        )
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=AI_TIMEOUT_DETAIL,
@@ -77,8 +118,17 @@ def run_ai_call_with_circuit_breaker(
     logger: logging.Logger,
     callable_: Callable[..., Any],
     lm_max_tokens: int | None = None,
+    retry_lm_max_tokens: int | None = None,
+    attempt_kwargs_builder: Callable[[int], dict[str, Any]] | None = None,
     **kwargs,
 ) -> Any:
+    def _token_budget_for_attempt(attempt: int) -> int | None:
+        if lm_max_tokens is None:
+            return None
+        if attempt > 0 and retry_lm_max_tokens is not None:
+            return clamp_lm_max_tokens(retry_lm_max_tokens)
+        return clamp_lm_max_tokens(lm_max_tokens)
+
     return _ai_circuit_breaker.call(
         operation=operation,
         logger=logger,
@@ -88,11 +138,23 @@ def run_ai_call_with_circuit_breaker(
             operation=operation,
             logger=logger,
             callable_=callable_,
-            lm_max_tokens=lm_max_tokens,
-            **kwargs,
+            lm_max_tokens=_token_budget_for_attempt(0),
+            retry_count=0,
+            **(attempt_kwargs_builder(0) if attempt_kwargs_builder is not None else kwargs),
+        ),
+        callable_with_attempt=lambda attempt: run_ai_call_with_timeout(
+            executor=executor,
+            timeout_seconds=timeout_seconds,
+            operation=operation,
+            logger=logger,
+            callable_=callable_,
+            lm_max_tokens=_token_budget_for_attempt(attempt),
+            retry_count=attempt,
+            **(attempt_kwargs_builder(attempt) if attempt_kwargs_builder is not None else kwargs),
         ),
         retryable=_is_retryable_ai_exception,
         token_budget=clamp_lm_max_tokens(lm_max_tokens) if lm_max_tokens is not None else None,
+        token_budget_for_attempt=_token_budget_for_attempt,
     )
 
 
@@ -104,6 +166,11 @@ def build_ai_failure_http_exception(
     default_detail: str,
 ) -> HTTPException:
     logger.exception("ai_call_failed operation=%s", operation, exc_info=exc)
+    if looks_like_ai_auth_error(exc):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI analysis is not configured.",
+        )
     if _looks_like_provider_unavailable(exc):
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -137,6 +204,8 @@ def _looks_like_provider_unavailable(exc: BaseException | None) -> bool:
 
 
 def _is_retryable_ai_exception(exc: Exception) -> bool:
+    if looks_like_ai_auth_error(exc):
+        return False
     if isinstance(exc, HTTPException):
         return exc.status_code in {
             status.HTTP_502_BAD_GATEWAY,
@@ -144,6 +213,28 @@ def _is_retryable_ai_exception(exc: Exception) -> bool:
             status.HTTP_504_GATEWAY_TIMEOUT,
         }
     return _looks_like_provider_unavailable(exc)
+
+
+def looks_like_ai_auth_error(exc: BaseException | None) -> bool:
+    current = exc
+    while current is not None:
+        message = f"{type(current).__name__}: {current}".lower()
+        if any(
+            token in message
+            for token in (
+                "authenticationerror",
+                "unauthorized",
+                "401",
+                "invalid api key",
+                "api key",
+                "user not found",
+                "incorrect api key",
+                "auth",
+            )
+        ):
+            return True
+        current = current.__cause__
+    return False
 
 
 def _is_likely_truncated_result(value: object) -> bool:
@@ -193,3 +284,86 @@ def _has_truncation_text(value: object) -> bool:
         return False
     lowered = value.lower()
     return "truncat" in lowered or "max token" in lowered or "max_tokens" in lowered
+
+
+def _estimate_payload_chars(payload: dict[str, object]) -> int:
+    return len(_stringify_payload(payload))
+
+
+def _stringify_payload(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return "\n".join(f"{key}: {_stringify_payload(item)}" for key, item in value.items())
+    if isinstance(value, (list, tuple, set)):
+        return "\n".join(_stringify_payload(item) for item in value)
+    return str(value)
+
+
+def _extract_usage_metrics(value: object) -> dict[str, int | None]:
+    usage = _find_usage_payload(value, depth=0, seen=set())
+    if not usage:
+        return {"input_tokens": None, "output_tokens": None, "total_tokens": None}
+
+    input_tokens = _coerce_usage_int(
+        usage.get("input_tokens")
+        or usage.get("prompt_tokens")
+        or usage.get("promptTokens")
+        or usage.get("cache_read_input_tokens")
+    )
+    output_tokens = _coerce_usage_int(
+        usage.get("output_tokens")
+        or usage.get("completion_tokens")
+        or usage.get("completionTokens")
+    )
+    total_tokens = _coerce_usage_int(usage.get("total_tokens") or usage.get("totalTokens"))
+
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _find_usage_payload(value: object, *, depth: int, seen: set[int]) -> dict[str, object] | None:
+    if depth > 5:
+        return None
+
+    value_id = id(value)
+    if value_id in seen:
+        return None
+    seen.add(value_id)
+
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if str(key).lower() == "usage" and isinstance(item, dict):
+                return item
+            nested = _find_usage_payload(item, depth=depth + 1, seen=seen)
+            if nested is not None:
+                return nested
+        return None
+
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            nested = _find_usage_payload(item, depth=depth + 1, seen=seen)
+            if nested is not None:
+                return nested
+        return None
+
+    if hasattr(value, "__dict__"):
+        return _find_usage_payload(vars(value), depth=depth + 1, seen=seen)
+
+    return None
+
+
+def _coerce_usage_int(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None

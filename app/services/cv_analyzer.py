@@ -10,18 +10,19 @@ configure_runtime_environment()
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
+from app.core.ai import dspy_lm_override, looks_like_ai_auth_error, run_ai_call_with_circuit_breaker
 from app.core.config import configure_dspy, get_settings
 from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
 from app.services.job_analyzer import _normalize_list, _normalize_text
+from app.services.job_preprocessing import build_cv_excerpt, build_job_excerpt
 from app.services.response_language import language_instruction, normalize_language
 
 
 MAX_LIST_ITEMS = 4
 MAX_ITEM_CHARS = 60
 MAX_SUMMARY_CHARS = 280
-MATCH_EXPLANATION_MAX_TOKENS = 3000
+DEFAULT_CV_MATCH_MAX_TOKENS = 720
 logger = logging.getLogger(__name__)
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
 MATCH_KEYWORDS: list[tuple[str, str]] = [
@@ -43,24 +44,39 @@ MATCH_KEYWORDS: list[tuple[str, str]] = [
 
 
 class CvFitSignature(dspy.Signature):
-    """Return concise CV-vs-job fit insights only.
+    """Compare CV evidence against job requirements and return high-signal fit guidance.
 
-    Include only actionable, role-specific content.
-    Exclude filler, generic advice, repeated ideas, and irrelevant technologies.
+    Use only information supported by the provided CV excerpt and job excerpt. Prefer explicit
+    matches, specific missing evidence, and concrete improvements over generic career advice.
+    Do not invent experience, inflate fit, or mention irrelevant technologies.
     """
 
-    title: str = dspy.InputField(desc="Job title")
-    job: str = dspy.InputField(desc="Key job text")
-    cv: str = dspy.InputField(desc="Key CV text")
-    response_language: str = dspy.InputField(desc="Output language")
+    title: str = dspy.InputField(desc="Job title for role framing")
+    job: str = dspy.InputField(desc="Pruned job excerpt emphasizing requirements, responsibilities, and tools")
+    cv: str = dspy.InputField(desc="Pruned CV excerpt emphasizing summary, skills, recent experience, and metrics")
+    response_language: str = dspy.InputField(desc="Language for every output field")
 
-    fit_summary: str = dspy.OutputField(desc="1-2 short fit sentences. No fluff or generic claims.")
-    strengths: list[str] = dspy.OutputField(desc="Max 4 concrete strengths relevant to this job.")
-    missing_skills: list[str] = dspy.OutputField(desc="Max 4 concrete gaps that reduce fit.")
-    likely_fit_level: str = dspy.OutputField(desc="Strong, Moderate, or Weak")
-    resume_improvements: list[str] = dspy.OutputField(desc="Max 4 targeted CV fixes for this job.")
-    interview_focus: list[str] = dspy.OutputField(desc="Max 4 interview focus points for this role.")
-    next_steps: list[str] = dspy.OutputField(desc="Max 4 direct next steps. Actionable only.")
+    fit_summary: str = dspy.OutputField(
+        desc="1-2 concise sentences on overall fit, grounded in the strongest aligned evidence and the most important missing evidence."
+    )
+    strengths: list[str] = dspy.OutputField(
+        desc="Max 4 role-relevant strengths clearly supported by the CV. Each item should connect candidate evidence to a job need."
+    )
+    missing_skills: list[str] = dspy.OutputField(
+        desc="Max 4 concrete missing skills or missing evidence that materially reduce fit. Prefer important gaps over minor extras."
+    )
+    likely_fit_level: str = dspy.OutputField(
+        desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
+    )
+    resume_improvements: list[str] = dspy.OutputField(
+        desc="Max 4 targeted CV edits that would better demonstrate fit for this role. Focus on evidence, phrasing, ordering, and quantified impact."
+    )
+    interview_focus: list[str] = dspy.OutputField(
+        desc="Max 4 interview topics the candidate should prepare, based on matched strengths or high-priority gaps in this role."
+    )
+    next_steps: list[str] = dspy.OutputField(
+        desc="Max 4 immediate, actionable next steps to improve application quality for this exact job."
+    )
 
 
 class CvFitModule(dspy.Module):
@@ -98,6 +114,7 @@ class CvAnalyzerService:
         settings = get_settings()
         self.analyzer: CvFitModule | None = None
         self.timeout_seconds = settings.ai_timeout_seconds
+        self.max_tokens = getattr(settings, "cv_match_max_tokens", DEFAULT_CV_MATCH_MAX_TOKENS)
         self._executor = ThreadPoolExecutor(max_workers=4)
 
     def _get_analyzer(self) -> CvFitModule:
@@ -120,6 +137,8 @@ class CvAnalyzerService:
         language: AIResponseLanguage = "english",
     ) -> CvAnalysisResponse:
         selected_language = normalize_language(language)
+        job_excerpt = build_job_excerpt(job_description)
+        cv_excerpt = build_cv_excerpt(cv_text, job_description=job_excerpt)
         dspy_start = time.perf_counter()
         try:
             result = run_ai_call_with_circuit_breaker(
@@ -128,16 +147,16 @@ class CvAnalyzerService:
                 operation="cv_match_analysis",
                 logger=logger,
                 callable_=self._get_analyzer(),
-                lm_max_tokens=MATCH_EXPLANATION_MAX_TOKENS,
+                lm_max_tokens=self.max_tokens,
                 job_title=job_title,
-                job_description=job_description,
-                cv_text=cv_text,
+                job_description=job_excerpt,
+                cv_text=cv_excerpt,
                 response_language=language_instruction(selected_language),
-                max_tokens=MATCH_EXPLANATION_MAX_TOKENS,
+                max_tokens=self.max_tokens,
             )
         except HTTPException as exc:
             logger.warning(
-                "ai_fallback operation=cv_match_analysis reason=http_%s",
+                "ai_fallback operation=cv_match_analysis fallback=true reason=http_%s",
                 exc.status_code,
             )
             return self._build_fallback_analysis(
@@ -147,7 +166,10 @@ class CvAnalyzerService:
                 language=selected_language,
             )
         except Exception as exc:
-            logger.warning("ai_fallback operation=cv_match_analysis reason=exception", exc_info=exc)
+            if looks_like_ai_auth_error(exc):
+                logger.warning("ai_fallback operation=cv_match_analysis fallback=true reason=auth")
+            else:
+                logger.warning("ai_fallback operation=cv_match_analysis fallback=true reason=exception", exc_info=exc)
             return self._build_fallback_analysis(
                 job_title=job_title,
                 job_description=job_description,

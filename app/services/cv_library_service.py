@@ -23,6 +23,7 @@ from app.services.cv_library_summary_service import (
     get_cv_library_summary_service,
     _heuristic_library_summary,
 )
+from app.services.job_preprocessing import CONTEXT_BUILDER_VERSION
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 from app.services.response_language import (
     localized_add_evidence,
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 class CvLibraryService:
     def __init__(self) -> None:
         self.cv_analyzer = None
-        self._analysis_cache: dict[tuple[int, int, int, str], CvAnalysisResponse] = {}
+        self._analysis_cache: dict[tuple[str, int, int, int, str], CvAnalysisResponse] = {}
 
     def upload_cv(
         self,
@@ -402,7 +403,7 @@ class CvLibraryService:
         cv_text: str,
         language: AIResponseLanguage = "english",
     ) -> CvAnalysisResponse:
-        cache_key = (user_id, job_id, cv_id, language)
+        cache_key = (CONTEXT_BUILDER_VERSION, user_id, job_id, cv_id, language)
         cached = self._analysis_cache.get(cache_key)
         if cached is not None:
             return cached.model_copy(deep=True)

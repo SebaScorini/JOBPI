@@ -43,6 +43,8 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_output_tokens": 540,
         "job_analysis_max_tokens": 945,
         "job_analysis_retry_max_tokens": 608,
+        "cv_match_max_tokens": 900,
+        "cover_letter_max_tokens": 640,
         "job_preprocess_target_chars": 5000,
         "ai_timeout_seconds": 45,
     },
@@ -67,6 +69,8 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_output_tokens": 540,
         "job_analysis_max_tokens": 878,
         "job_analysis_retry_max_tokens": 540,
+        "cv_match_max_tokens": 720,
+        "cover_letter_max_tokens": 480,
         "job_preprocess_target_chars": 3500,
         "ai_timeout_seconds": 20,
     },
@@ -268,6 +272,18 @@ class Settings(BaseModel):
             int(_env_default("job_analysis_retry_max_tokens")),
         )
     )
+    cv_match_max_tokens: int = Field(
+        default_factory=lambda: _get_env_int(
+            "CV_MATCH_MAX_TOKENS",
+            int(_env_default("cv_match_max_tokens")),
+        )
+    )
+    cover_letter_max_tokens: int = Field(
+        default_factory=lambda: _get_env_int(
+            "COVER_LETTER_MAX_TOKENS",
+            int(_env_default("cover_letter_max_tokens")),
+        )
+    )
     job_preprocess_target_chars: int = Field(
         default_factory=lambda: _get_env_int(
             "JOB_PREPROCESS_TARGET_CHARS",
@@ -331,6 +347,8 @@ class Settings(BaseModel):
             self.job_analysis_max_tokens,
             max(100, self.job_analysis_retry_max_tokens),
         )
+        self.cv_match_max_tokens = min(4000, max(100, self.cv_match_max_tokens))
+        self.cover_letter_max_tokens = min(4000, max(100, self.cover_letter_max_tokens))
         self.job_preprocess_target_chars = min(
             self.max_job_description_chars,
             max(500, self.job_preprocess_target_chars),

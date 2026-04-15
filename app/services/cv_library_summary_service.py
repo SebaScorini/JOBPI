@@ -9,7 +9,7 @@ configure_runtime_environment()
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
+from app.core.ai import dspy_lm_override, looks_like_ai_auth_error, run_ai_call_with_circuit_breaker
 from app.core.config import configure_dspy, get_settings
 from app.services.job_analyzer import _normalize_text
 
@@ -68,15 +68,16 @@ TECH_KEYWORDS = [
 
 
 class CvLibrarySummarySignature(dspy.Signature):
-    """Generate a compact CV card summary.
+    """Generate a compact, high-signal summary for a CV library card.
 
-    Include only role/seniority (if clear) and key technologies from the CV.
-    No filler, generic claims, or invented details.
+    Infer only what is clearly supported by the CV excerpt. Prefer role focus, seniority when
+    obvious, and the most representative technologies or domains. Avoid filler, fragments,
+    buzzwords, and invented claims.
     """
 
-    cv: str = dspy.InputField(desc="Clean CV excerpt")
+    cv: str = dspy.InputField(desc="Compact CV excerpt with representative profile, experience, and technology lines")
     summary: str = dspy.OutputField(
-        desc="1-2 short sentences max. Mention profile + key technologies only if evidenced."
+        desc="1-2 short complete sentences. Mention role focus, seniority only if clear, and 2-4 representative technologies or domains only when evidenced."
     )
 
 
@@ -129,8 +130,11 @@ class CvLibrarySummaryService:
                 return summary
         except HTTPException:
             logger.warning("cv_library_summary_fallback reason=timeout_or_http")
-        except Exception:
-            logger.exception("cv_library_summary_fallback reason=unexpected_error")
+        except Exception as exc:
+            if looks_like_ai_auth_error(exc):
+                logger.warning("cv_library_summary_fallback reason=auth")
+            else:
+                logger.exception("cv_library_summary_fallback reason=unexpected_error")
 
         logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_fallback")
         return _heuristic_library_summary(clean_text)
@@ -159,12 +163,15 @@ def _prepare_cv_context(clean_text: str) -> str:
         if lowered in seen:
             continue
         seen.add(lowered)
+        next_count = char_count + len(line) + (1 if parts else 0)
+        if next_count > MAX_LIBRARY_CONTEXT_CHARS:
+            break
         parts.append(line)
-        char_count += len(line) + 1
-        if len(parts) >= 10 or char_count >= MAX_LIBRARY_CONTEXT_CHARS:
+        char_count = next_count
+        if len(parts) >= 10:
             break
 
-    return "\n".join(parts)[:MAX_LIBRARY_CONTEXT_CHARS].strip()
+    return "\n".join(parts).strip()
 
 
 def _normalize_library_summary(value: object) -> str:

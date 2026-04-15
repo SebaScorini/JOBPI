@@ -73,6 +73,8 @@ scratch/
 .codex/
 skills-lock.json
 
+
 .vercel/
 .env*.local
 .github/prompts/plan-jobpi.prompt.md
+SKILLS_USAGE_DECISION_GUIDE.md
