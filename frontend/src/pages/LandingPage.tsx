@@ -42,7 +42,7 @@ const scaleUpVariant: Variants = {
 };
 
 export function LandingPage() {
-  const { user, token, isLoading } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const { t } = useLanguage();
   const { resolvedTheme, toggleDarkMode } = useAppTheme();
   const { allowRichMotion } = useMotionPreferences();
@@ -98,7 +98,7 @@ export function LandingPage() {
     );
   }
 
-  if (user || token) {
+  if (user || session) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -11,6 +11,7 @@ import {
 import { buildImportantJobDetailsPreview } from '../utils/jobDescription';
 import { useToast } from '../context/ToastContext';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { JobAnalysisLoadingExperience } from '../components/JobAnalysisLoadingExperience';
 
 interface JobAnalysisFieldErrors {
   title?: string;
@@ -88,144 +89,148 @@ export function JobAnalysisPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="glass-card rounded-[2rem] p-6 md:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 font-medium text-rose-600">
-                {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label htmlFor="title" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {t('jobAnalysis.jobTitle')}
-                </label>
-                <input
-                  id="title"
-                  type="text"
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    if (fieldErrors.title) {
-                      setFieldErrors((current) => ({ ...current, title: undefined }));
-                    }
-                  }}
-                  className={`input-field ${fieldErrors.title ? 'input-field-error' : ''}`}
-                  placeholder={t('jobAnalysis.titlePlaceholder')}
-                />
-                {fieldErrors.title && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.title}</p>}
-              </div>
-              <div>
-                <label htmlFor="company" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {t('jobAnalysis.company')}
-                </label>
-                <input
-                  id="company"
-                  type="text"
-                  value={company}
-                  onChange={(e) => {
-                    setCompany(e.target.value);
-                    if (fieldErrors.company) {
-                      setFieldErrors((current) => ({ ...current, company: undefined }));
-                    }
-                  }}
-                  className={`input-field ${fieldErrors.company ? 'input-field-error' : ''}`}
-                  placeholder={t('jobAnalysis.companyPlaceholder')}
-                />
-                {fieldErrors.company && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.company}</p>}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label htmlFor="description" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {t('jobAnalysis.description')}
-                </label>
-                <span className="text-xs text-slate-500">
-                  {description.length}/{MAX_JOB_DESCRIPTION_CHARS}
-                </span>
-              </div>
-              <textarea
-                id="description"
-                rows={12}
-                value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value);
-                  if (fieldErrors.description) {
-                    setFieldErrors((current) => ({ ...current, description: undefined }));
-                  }
-                }}
-                className={`input-field resize-none leading-relaxed ${fieldErrors.description ? 'input-field-error' : ''}`}
-                placeholder={t('jobAnalysis.descriptionPlaceholder')}
-              />
-              {fieldErrors.description && (
-                <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.description}</p>
+          {isLoading ? (
+            <JobAnalysisLoadingExperience company={company} title={title} t={t} />
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 font-medium text-rose-600">
+                  {error}
+                </div>
               )}
-              {!fieldErrors.description && (
-                <p className="mt-2 text-xs text-slate-500">
-                  {JOB_DESCRIPTION_IMPORTANT_INFO_HINT}
-                </p>
-              )}
-            </div>
 
-            {compactedPreview.changed && description.length > MAX_JOB_DESCRIPTION_CHARS && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-1">
-                    <p className="font-semibold">{t('jobAnalysis.longDescriptionTitle')}</p>
-                    <p>
-                      {t('jobAnalysis.longDescriptionBody')}
-                    </p>
-                    <p className="text-xs text-amber-800">
-                      {t('jobAnalysis.compactionStats', {
-                        original: compactedPreview.originalChars,
-                        compacted: compactedPreview.compactedChars,
-                        saved: compactedPreview.savedChars,
-                      })}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDescription(compactedPreview.compactedText);
-                      setFieldErrors((current) => ({ ...current, description: undefined }));
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label htmlFor="title" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {t('jobAnalysis.jobTitle')}
+                  </label>
+                  <input
+                    id="title"
+                    type="text"
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (fieldErrors.title) {
+                        setFieldErrors((current) => ({ ...current, title: undefined }));
+                      }
                     }}
-                    className="rounded-xl bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
-                  >
-                    {t('jobAnalysis.useImportantDetailsOnly')}
-                  </button>
+                    className={`input-field ${fieldErrors.title ? 'input-field-error' : ''}`}
+                    placeholder={t('jobAnalysis.titlePlaceholder')}
+                  />
+                  {fieldErrors.title && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.title}</p>}
                 </div>
-                <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-700">
-                    {t('jobAnalysis.longDescriptionPreview')}
-                  </p>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-slate-700">
-                    {compactedPreview.compactedText}
-                  </pre>
+                <div>
+                  <label htmlFor="company" className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {t('jobAnalysis.company')}
+                  </label>
+                  <input
+                    id="company"
+                    type="text"
+                    value={company}
+                    onChange={(e) => {
+                      setCompany(e.target.value);
+                      if (fieldErrors.company) {
+                        setFieldErrors((current) => ({ ...current, company: undefined }));
+                      }
+                    }}
+                    className={`input-field ${fieldErrors.company ? 'input-field-error' : ''}`}
+                    placeholder={t('jobAnalysis.companyPlaceholder')}
+                  />
+                  {fieldErrors.company && <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.company}</p>}
                 </div>
               </div>
-            )}
 
-            <div className="border-t border-slate-200 pt-4 dark:border-slate-800">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="btn-primary ml-auto flex w-full items-center justify-center gap-2 px-8 text-base md:w-auto"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={20} className="animate-spin" />
-                    {t('jobAnalysis.decoding')}
-                  </>
-                ) : (
-                  <>
-                    <Zap size={20} />
-                    {t('jobAnalysis.extractInsights')}
-                  </>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label htmlFor="description" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {t('jobAnalysis.description')}
+                  </label>
+                  <span className="text-xs text-slate-500">
+                    {description.length}/{MAX_JOB_DESCRIPTION_CHARS}
+                  </span>
+                </div>
+                <textarea
+                  id="description"
+                  rows={12}
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    if (fieldErrors.description) {
+                      setFieldErrors((current) => ({ ...current, description: undefined }));
+                    }
+                  }}
+                  className={`input-field resize-none leading-relaxed ${fieldErrors.description ? 'input-field-error' : ''}`}
+                  placeholder={t('jobAnalysis.descriptionPlaceholder')}
+                />
+                {fieldErrors.description && (
+                  <p className="mt-2 text-xs font-medium text-rose-600">{fieldErrors.description}</p>
                 )}
-              </button>
-            </div>
-          </form>
+                {!fieldErrors.description && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {JOB_DESCRIPTION_IMPORTANT_INFO_HINT}
+                  </p>
+                )}
+              </div>
+
+              {compactedPreview.changed && description.length > MAX_JOB_DESCRIPTION_CHARS && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <p className="font-semibold">{t('jobAnalysis.longDescriptionTitle')}</p>
+                      <p>
+                        {t('jobAnalysis.longDescriptionBody')}
+                      </p>
+                      <p className="text-xs text-amber-800">
+                        {t('jobAnalysis.compactionStats', {
+                          original: compactedPreview.originalChars,
+                          compacted: compactedPreview.compactedChars,
+                          saved: compactedPreview.savedChars,
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDescription(compactedPreview.compactedText);
+                        setFieldErrors((current) => ({ ...current, description: undefined }));
+                      }}
+                      className="rounded-xl bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
+                    >
+                      {t('jobAnalysis.useImportantDetailsOnly')}
+                    </button>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-700">
+                      {t('jobAnalysis.longDescriptionPreview')}
+                    </p>
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-slate-700">
+                      {compactedPreview.compactedText}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-slate-200 pt-4 dark:border-slate-800">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn-primary ml-auto flex w-full items-center justify-center gap-2 px-8 text-base md:w-auto"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      {t('jobAnalysis.decoding')}
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={20} />
+                      {t('jobAnalysis.extractInsights')}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         <aside className="glass-card rounded-3xl p-5">
