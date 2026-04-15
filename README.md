@@ -2,33 +2,30 @@
 
 AI-powered job application assistant for CV optimization, role matching, and application tracking.
 
+# JOBPI
+
+AI-powered job application assistant for CV optimization, role matching, and application tracking.
+
 ## Overview
 
 JOBPI helps users analyze job descriptions, manage a personal CV library, compare CVs against a role, generate cover letters, and track applications in one workflow. The backend handles authentication, persistence, and AI-assisted analysis; the frontend provides the dashboard and job-management experience.
 
 ## Tech Stack
 
-Backend: FastAPI, SQLModel, PostgreSQL on Supabase, SQLite fallback for local development, DSPy, OpenRouter.
+Backend: FastAPI, SQLModel, PostgreSQL on Supabase, Supabase Auth & Storage, SQLite fallback for local development, DSPy, OpenRouter.
 
-Frontend: React, TypeScript, Vite, Tailwind CSS, React Router.
+Frontend: React, TypeScript, Vite, Tailwind CSS, Framer Motion, React Router.
 
 ## Features
 
-- JWT authentication
-- Single and batch CV upload
+- Supabase Authentication (JWT-based)
+- Single and batch CV upload with Supabase Storage
 - CV summaries, tags, and favorite CV support
-- Job description analysis
+- Job description analysis with modern motion UI
 - CV-to-job matching and comparison
 - Tailored cover letter generation
-- Job tracking with status, notes, and saved/bookmarked jobs
+- Job tracking with soft-delete and audit support
 - Job-detail copy actions for high-signal analysis sections
-- English/Spanish UI support
-
-## Quick Start
-
-### Option 1: Docker (Recommended)
-
-The easiest way to run the full stack with PostgreSQL:
 
 ```bash
 # Copy environment template
