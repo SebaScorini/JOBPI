@@ -20,9 +20,21 @@ class User(SQLModel, table=True):
     email: str = Field(sa_column=Column(String(255), unique=True, index=True, nullable=False))
     hashed_password: str = Field(sa_column=Column(String(255), nullable=False))
     is_active: bool = Field(sa_column=Column(Boolean, nullable=False, default=True), default=True)
+    supabase_user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(36), unique=True, index=True, nullable=True),
+    )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now),
         default_factory=utc_now,
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=True, default=utc_now, onupdate=utc_now),
+        default_factory=utc_now,
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
 
     cvs: List["CV"] = Relationship(back_populates="user")
@@ -41,11 +53,23 @@ class CV(SQLModel, table=True):
     clean_text: str = Field(sa_column=Column(Text, nullable=False))
     summary: str = Field(sa_column=Column(Text, nullable=False))
     library_summary: str = Field(sa_column=Column(Text, nullable=False, default=""))
+    storage_path: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(500), nullable=True),
+    )
     is_favorite: bool = Field(sa_column=Column(Boolean, nullable=False, default=False), default=False)
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=True, default=utc_now, onupdate=utc_now),
+        default_factory=utc_now,
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
 
     user: Optional[User] = Relationship(back_populates="cvs")
@@ -85,6 +109,14 @@ class JobAnalysis(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
     )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=True, default=utc_now, onupdate=utc_now),
+        default_factory=utc_now,
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
 
     user: Optional[User] = Relationship(back_populates="jobs")
     matches: List["CVJobMatch"] = Relationship(back_populates="job")
@@ -106,6 +138,14 @@ class CVJobMatch(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=True, default=utc_now, onupdate=utc_now),
+        default_factory=utc_now,
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
 
     user: Optional[User] = Relationship(back_populates="matches")
