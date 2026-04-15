@@ -11,9 +11,9 @@ import {
   PaginatedResult,
   PaginationMeta,
   StoredCV,
-  TokenResponse,
   User,
 } from '../types';
+import { supabase } from '../lib/supabase';
 
 function resolveApiBaseUrl(): string {
   const apiBaseUrl = import.meta.env.VITE_API_URL?.trim();
@@ -41,7 +41,6 @@ function resolveApiBaseUrl(): string {
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
-const TOKEN_STORAGE_KEY = 'jobpi_token';
 const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
   ERR_RATE_LIMIT: "You're moving fast! Please wait a moment before trying again.",
   ERR_AI_TIMEOUT: 'Our AI is taking longer than expected. Please try again in a minute.',
@@ -105,9 +104,14 @@ interface BackendCVRead {
   display_name: string;
   summary: string;
   library_summary: string;
+  has_file?: boolean;
   is_favorite?: boolean;
   tags: string[];
   created_at: string;
+}
+
+interface DownloadUrlResponse {
+  url: string;
 }
 
 interface BackendCVListResponse {
@@ -214,24 +218,19 @@ export class ApiError extends Error {
   }
 }
 
-function getStoredToken(): string | null {
-  return sessionStorage.getItem(TOKEN_STORAGE_KEY);
+async function getSupabaseToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }
 
-function storeToken(token: string): void {
-  sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
-}
-
-function clearStoredToken(): void {
-  sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-}
-
-function buildHeaders(options: ApiRequestOptions): HeadersInit {
+async function buildHeaders(options: ApiRequestOptions): Promise<HeadersInit> {
   const headers = new Headers(options.headers ?? {});
-  const token = options.token ?? getStoredToken();
 
-  if (options.auth && token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  if (options.auth) {
+    const token = options.token ?? await getSupabaseToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
 
   return headers;
@@ -240,9 +239,10 @@ function buildHeaders(options: ApiRequestOptions): HeadersInit {
 async function request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { auth = false, token, headers, ...init } = options;
   try {
+    const builtHeaders = await buildHeaders({ ...init, auth, token, headers });
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: buildHeaders({ ...init, auth, token, headers }),
+      headers: builtHeaders,
     });
 
     return await parseResponse<T>(response);
@@ -315,6 +315,7 @@ function mapCV(cv: BackendCVRead): StoredCV {
     name: cv.display_name,
     summary: cv.summary,
     library_summary: cv.library_summary || cv.summary,
+    has_file: Boolean(cv.has_file),
     is_favorite: Boolean(cv.is_favorite),
     tags: cv.tags ?? [],
     created_at: cv.created_at,
@@ -402,6 +403,9 @@ function mapCvResult(match: BackendMatchRead): CvAnalysisResponse {
     missing_skills: match.result?.missing_skills ?? match.missing_skills ?? [],
     likely_fit_level: match.result?.likely_fit_level ?? match.fit_level ?? 'Unknown',
     resume_improvements: match.result?.resume_improvements ?? [],
+    ats_improvements: match.result?.ats_improvements ?? [],
+    recruiter_improvements: match.result?.recruiter_improvements ?? [],
+    rewritten_bullets: match.result?.rewritten_bullets ?? [],
     interview_focus: match.result?.interview_focus ?? [],
     next_steps: match.result?.next_steps ?? [],
   };
@@ -454,35 +458,15 @@ function mapMatch(match: BackendMatchRead): CVJobMatch {
   };
 }
 
+// Legacy authStorage shim — kept for backward compat during migration.
+// Supabase handles token storage internally via localStorage.
 export const authStorage = {
-  getToken: getStoredToken,
-  setToken: storeToken,
-  clearToken: clearStoredToken,
+  getToken: () => null,
+  setToken: (_token: string) => {},
+  clearToken: () => {},
 };
 
 export const apiService = {
-  async register(email: string, password: string): Promise<User> {
-    const user = await request<BackendUser>('/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    return mapUser(user);
-  },
-
-  async login(username: string, password: string): Promise<TokenResponse> {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    return request<TokenResponse>('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData,
-    });
-  },
-
   async getMe(token?: string): Promise<User> {
     const user = await request<BackendUser>('/auth/me', {
       auth: true,
@@ -623,6 +607,11 @@ export const apiService = {
   async getCV(cvId: number): Promise<StoredCV> {
     const cv = await request<BackendCVRead>(`/cvs/${cvId}`, { auth: true });
     return mapCV(cv);
+  },
+
+  async downloadCV(cvId: number): Promise<string> {
+    const response = await request<DownloadUrlResponse>(`/cvs/${cvId}/download`, { auth: true });
+    return response.url;
   },
 
   async updateCVTags(cvId: number, tags: string[]): Promise<StoredCV> {

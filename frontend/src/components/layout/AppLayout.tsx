@@ -28,8 +28,8 @@ export function AppLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const { allowRichMotion } = useMotionPreferences();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     window.location.assign('/');
   };
 

@@ -115,6 +115,7 @@ export function JobDetailsPage() {
   } as const;
 
   const matchSuggestions = dedupeItems(matchResult?.suggested_improvements ?? matchResult?.improvement_suggestions ?? []);
+  const matchNextSteps = dedupeItems(matchResult?.result?.next_steps ?? []);
   const matchMissingKeywords = dedupeItems(matchResult?.missing_keywords ?? []);
   const matchReorderSuggestions = matchResult?.reorder_suggestions ?? [];
   const displayMissingSkills = dedupeItems(
@@ -584,6 +585,7 @@ export function JobDetailsPage() {
                 <JobDetailsImprovementsPanel
                   matchResult={matchResult}
                   matchSuggestions={matchSuggestions}
+                  matchNextSteps={matchNextSteps}
                   additionalMissingKeywords={additionalMissingKeywords}
                   matchReorderSuggestions={matchReorderSuggestions}
                   setActiveTab={setActiveTab}

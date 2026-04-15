@@ -13,6 +13,7 @@ import {
   Tag,
   Search,
   Star,
+  Download,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -42,6 +43,7 @@ export function CVLibraryPage() {
   const [tagInputs, setTagInputs] = useState<Record<number, string>>({});
   const [savingTagCvId, setSavingTagCvId] = useState<number | null>(null);
   const [togglingFavoriteCvId, setTogglingFavoriteCvId] = useState<number | null>(null);
+  const [downloadingCvId, setDownloadingCvId] = useState<number | null>(null);
   const [activeTagFilter, setActiveTagFilter] = useState<string>('');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -386,6 +388,19 @@ export function CVLibraryPage() {
     }
   };
 
+  const handleDownload = async (cvId: number) => {
+    setDownloadingCvId(cvId);
+    try {
+      const url = await apiService.downloadCV(cvId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('library.failedDownload');
+      showToast(message, 'error');
+    } finally {
+      setDownloadingCvId(null);
+    }
+  };
+
   const availableTags = Array.from(new Set(cvs.flatMap((cv) => cv.tags))).sort((a, b) =>
     a.localeCompare(b),
   );
@@ -657,6 +672,18 @@ export function CVLibraryPage() {
                     >
                       {togglingFavoriteCvId === cv.id ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} className={cv.is_favorite ? 'fill-current' : ''} />}
                     </button>
+                    {cv.has_file && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(cv.id)}
+                        disabled={downloadingCvId === cv.id}
+                        className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                        aria-label={t('library.downloadAction')}
+                        title={t('library.downloadAction')}
+                      >
+                        {downloadingCvId === cv.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -722,6 +749,21 @@ export function CVLibraryPage() {
                   <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Calendar size={12} /> {new Date(activeCv.created_at).toLocaleDateString(language)}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {activeCv.has_file && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(activeCv.id)}
+                      disabled={downloadingCvId === activeCv.id}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      {downloadingCvId === activeCv.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                      {t('library.downloadAction')}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleToggleFavorite(activeCv.id)}

@@ -53,6 +53,9 @@ export interface CvAnalysisResponse {
   missing_skills: string[];
   likely_fit_level: 'Strong' | 'Moderate' | 'Weak' | string;
   resume_improvements: string[];
+  ats_improvements: string[];
+  recruiter_improvements: string[];
+  rewritten_bullets: string[];
   interview_focus: string[];
   next_steps: string[];
 }
@@ -64,6 +67,7 @@ export interface StoredCV {
   name: string;
   summary: string;
   library_summary: string;
+  has_file: boolean;
   is_favorite: boolean;
   tags: string[];
   created_at: string;
