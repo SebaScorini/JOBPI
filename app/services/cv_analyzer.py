@@ -23,6 +23,7 @@ MAX_LIST_ITEMS = 4
 MAX_ITEM_CHARS = 60
 MAX_SUMMARY_CHARS = 280
 DEFAULT_CV_MATCH_MAX_TOKENS = 720
+CV_MATCH_RETRY_MIN_EXCERPT_CHARS = 900
 logger = logging.getLogger(__name__)
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
 MATCH_KEYWORDS: list[tuple[str, str]] = [
@@ -57,25 +58,25 @@ class CvFitSignature(dspy.Signature):
     response_language: str = dspy.InputField(desc="Language for every output field")
 
     fit_summary: str = dspy.OutputField(
-        desc="1-2 concise sentences on overall fit, grounded in the strongest aligned evidence and the most important missing evidence."
+        desc="Exactly 1 short sentence, max 28 words, on overall fit using the strongest match and biggest gap."
     )
     strengths: list[str] = dspy.OutputField(
-        desc="Max 4 role-relevant strengths clearly supported by the CV. Each item should connect candidate evidence to a job need."
+        desc="Max 3 short items, 2-8 words each, with only role-relevant strengths clearly supported by the CV."
     )
     missing_skills: list[str] = dspy.OutputField(
-        desc="Max 4 concrete missing skills or missing evidence that materially reduce fit. Prefer important gaps over minor extras."
+        desc="Max 3 short items, 2-8 words each, naming the most important missing skills or missing evidence."
     )
     likely_fit_level: str = dspy.OutputField(
         desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
     )
     resume_improvements: list[str] = dspy.OutputField(
-        desc="Max 4 targeted CV edits that would better demonstrate fit for this role. Focus on evidence, phrasing, ordering, and quantified impact."
+        desc="Max 3 short action items, 3-10 words each, for CV edits that would show fit better."
     )
     interview_focus: list[str] = dspy.OutputField(
-        desc="Max 4 interview topics the candidate should prepare, based on matched strengths or high-priority gaps in this role."
+        desc="Max 3 short prep topics, 2-8 words each, based on the strongest match areas or biggest gaps."
     )
     next_steps: list[str] = dspy.OutputField(
-        desc="Max 4 immediate, actionable next steps to improve application quality for this exact job."
+        desc="Max 3 immediate next steps, 3-10 words each, to improve this exact application."
     )
 
 
@@ -115,6 +116,7 @@ class CvAnalyzerService:
         self.analyzer: CvFitModule | None = None
         self.timeout_seconds = settings.ai_timeout_seconds
         self.max_tokens = getattr(settings, "cv_match_max_tokens", DEFAULT_CV_MATCH_MAX_TOKENS)
+        self.retry_max_tokens = getattr(settings, "cv_match_retry_max_tokens", self.max_tokens)
         self._executor = ThreadPoolExecutor(max_workers=4)
 
     def _get_analyzer(self) -> CvFitModule:
@@ -139,6 +141,21 @@ class CvAnalyzerService:
         selected_language = normalize_language(language)
         job_excerpt = build_job_excerpt(job_description)
         cv_excerpt = build_cv_excerpt(cv_text, job_description=job_excerpt)
+        retry_job_excerpt = build_job_excerpt(
+            job_description,
+            max_chars=min(
+                len(job_excerpt),
+                max(CV_MATCH_RETRY_MIN_EXCERPT_CHARS, int(len(job_excerpt) * 0.75)),
+            ),
+        )
+        retry_cv_excerpt = build_cv_excerpt(
+            cv_text,
+            job_description=retry_job_excerpt,
+            max_chars=min(
+                len(cv_excerpt),
+                max(CV_MATCH_RETRY_MIN_EXCERPT_CHARS, int(len(cv_excerpt) * 0.75)),
+            ),
+        )
         dspy_start = time.perf_counter()
         try:
             result = run_ai_call_with_circuit_breaker(
@@ -148,11 +165,14 @@ class CvAnalyzerService:
                 logger=logger,
                 callable_=self._get_analyzer(),
                 lm_max_tokens=self.max_tokens,
-                job_title=job_title,
-                job_description=job_excerpt,
-                cv_text=cv_excerpt,
-                response_language=language_instruction(selected_language),
-                max_tokens=self.max_tokens,
+                retry_lm_max_tokens=self.retry_max_tokens,
+                attempt_kwargs_builder=lambda attempt: {
+                    "job_title": job_title,
+                    "job_description": job_excerpt if attempt == 0 else retry_job_excerpt,
+                    "cv_text": cv_excerpt if attempt == 0 else retry_cv_excerpt,
+                    "response_language": language_instruction(selected_language),
+                    "max_tokens": self.max_tokens if attempt == 0 else self.retry_max_tokens,
+                },
             )
         except HTTPException as exc:
             logger.warning(

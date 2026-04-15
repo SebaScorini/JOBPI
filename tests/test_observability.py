@@ -43,3 +43,4 @@ def test_development_cover_letter_defaults():
     assert settings.cover_letter_window_seconds == 600
     assert settings.cover_letter_max_tokens == 640
     assert settings.cv_match_max_tokens == 900
+    assert settings.cv_match_retry_max_tokens >= settings.cv_match_max_tokens

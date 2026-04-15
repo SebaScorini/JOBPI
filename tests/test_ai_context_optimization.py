@@ -333,6 +333,64 @@ def test_cv_analyzer_uses_pruned_job_and_cv_context():
     assert "Chess club" not in str(captured["cv_text"])
 
 
+def test_cv_analysis_retry_uses_retry_budget_and_smaller_context(monkeypatch):
+    monkeypatch.setattr(
+        ai_module,
+        "_ai_circuit_breaker",
+        AICircuitBreaker(
+            config=CircuitBreakerConfig(max_retries=1, initial_backoff_ms=0, max_backoff_ms=0),
+            sleep_func=lambda _seconds: None,
+        ),
+    )
+
+    calls: list[dict[str, object]] = []
+
+    class FlakyCvAnalyzer:
+        def __call__(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise HTTPException(status_code=503, detail="temporary failure")
+            return SimpleNamespace(
+                fit_summary="Strong fit for the role.",
+                strengths=["Python APIs", "Testing"],
+                missing_skills=["Docker"],
+                likely_fit_level="Strong",
+                resume_improvements=["Move API wins higher."],
+                interview_focus=["System design"],
+                next_steps=["Practice SQL"],
+            )
+
+    service = CvAnalyzerService()
+    service.analyzer = FlakyCvAnalyzer()
+    service.max_tokens = 720
+    service.retry_max_tokens = 960
+
+    job_description = "REQUIREMENTS:\n" + "\n".join(
+        f"Requirement {index}: Python FastAPI SQL PostgreSQL backend APIs, testing, observability, and collaboration."
+        for index in range(18)
+    )
+    cv_text = "EXPERIENCE\n" + "\n".join(
+        f"Project {index}: Built Python FastAPI APIs, improved latency by 20%, and owned SQL delivery for production systems."
+        for index in range(18)
+    )
+
+    try:
+        result = service.analyze(
+            job_title="Backend Engineer",
+            job_description=job_description,
+            cv_text=cv_text,
+        )
+    finally:
+        service._executor.shutdown(wait=False, cancel_futures=True)
+
+    assert len(calls) == 2
+    assert calls[0]["max_tokens"] == 720
+    assert calls[1]["max_tokens"] == 960
+    assert len(str(calls[1]["job_description"])) < len(str(calls[0]["job_description"]))
+    assert len(str(calls[1]["cv_text"])) < len(str(calls[0]["cv_text"]))
+    assert result.fit_summary == "Strong fit for the role."
+
+
 def test_cover_letter_generation_uses_pruned_context_and_cached_summary(monkeypatch):
     captured: dict[str, object] = {}
 
