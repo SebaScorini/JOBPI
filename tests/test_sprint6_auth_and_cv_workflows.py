@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.db import crud
 from app.core.security import create_access_token
 from app.core.rate_limit import InMemoryRateLimiter
 
@@ -75,6 +76,29 @@ def test_expired_token_returns_401(client, create_user):
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "ERR_UNAUTHORIZED"
+
+
+def test_supabase_token_auto_creates_and_authenticates_local_user(client, test_db, monkeypatch):
+    import app.dependencies.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "is_supabase_token", lambda _token: True)
+    monkeypatch.setattr(
+        auth_module,
+        "verify_supabase_token",
+        lambda _token: {"sub": "11111111-1111-1111-1111-111111111111", "email": "supa@example.com"},
+    )
+
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": "Bearer supabase-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "supa@example.com"
+
+    created_user = crud.get_user_by_email(test_db, "supa@example.com")
+    assert created_user is not None
+    assert created_user.supabase_user_id == "11111111-1111-1111-1111-111111111111"
 
 
 def test_login_rate_limit_returns_429(client, create_user, monkeypatch):

@@ -275,6 +275,66 @@ Education: Bachelor’s degree in Computer Science or related field preferred.""
     assert not any(item.lower().startswith("team structure") for item in payload.responsibilities)
 
 
+def test_job_analysis_fallback_extracts_retool_data_and_governance_signals():
+    description = """
+    RESPONSIBILITIES
+    Partner closely with Product and Engineering to design, build, and deploy Retool applications that automate operational workflows and support key business functions.
+    Translate business requirements into scalable internal tools that improve efficiency, reduce manual processes, and enhance data visibility across teams.
+    Build and maintain integrations between Retool and internal systems (APIs, databases, and third-party platforms).
+    Collaborate with stakeholders across operations, compliance, and technology to identify high-impact automation opportunities and deliver solutions quickly.
+    Ensure applications follow established SDLC, security, and governance standards, particularly in a regulated banking environment.
+
+    QUALIFICATIONS
+    4+ years of experience as a software engineer or similar experience building software projects.
+    Proven experience managing data migration or data modernization projects.
+    Must have strong SQL skills.
+    Must have JavaScript skills.
+    Understanding of data modeling concepts, batch and streaming transformation processes, data governance frameworks (Apache Ranger, Immuta, Unity Catalog),
+    data quality frameworks (great expectations), monitoring and observability platforms (datadog), cloud providers (AWS, GCP), data platforms and frameworks
+    (Apache Spark, Databricks, Presto, EMR).
+    Databricks certification.
+    Experience with tools like Jira, Confluence, Notion.
+    Experience working in regulated or enterprise environments with strict data governance.
+    """
+
+    service = JobAnalyzerService()
+    try:
+        payload = service._build_fallback_analysis_payload(
+            title="Full Stack Engineer",
+            company="Parser",
+            cleaned_description=description,
+            language="english",
+        )
+    finally:
+        service._executor.shutdown(wait=False, cancel_futures=True)
+
+    required_skills = " ".join(payload.required_skills)
+    all_text = " ".join(
+        [
+            payload.summary,
+            *payload.required_skills,
+            *payload.nice_to_have_skills,
+            *payload.how_to_prepare,
+            *payload.learning_path,
+            *payload.missing_skills,
+            *payload.resume_tips,
+            *payload.interview_tips,
+            *payload.portfolio_project_ideas,
+        ]
+    ).lower()
+
+    assert payload.seniority == "mid"
+    assert payload.role_type in {"data", "operations", "generalist"}
+    assert "Retool" in required_skills
+    assert "SQL" in required_skills
+    assert "JavaScript" in required_skills
+    assert "databricks" in all_text
+    assert "governance" in all_text or "regulated" in all_text
+    assert any("operational workflows" in item.lower() for item in payload.responsibilities)
+    assert len(payload.resume_tips) >= 3
+    assert len(payload.interview_tips) >= 3
+
+
 def test_cv_analyzer_uses_pruned_job_and_cv_context():
     captured: dict[str, object] = {}
 

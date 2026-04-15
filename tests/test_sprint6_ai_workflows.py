@@ -36,6 +36,9 @@ class _StubCvAnalyzer:
                 missing_skills=["Docker"],
                 likely_fit_level="strong",
                 resume_improvements=["Move API wins higher."],
+                ats_improvements=["Use Docker wording where truthful."],
+                recruiter_improvements=["Quantify API delivery impact."],
+                rewritten_bullets=["Built Python APIs that improved delivery speed by 30% across core workflows."],
                 interview_focus=["System design"],
                 next_steps=["Practice SQL"],
             )
@@ -46,6 +49,9 @@ class _StubCvAnalyzer:
             missing_skills=["FastAPI", "Testing"],
             likely_fit_level="medium",
             resume_improvements=["Add backend evidence."],
+            ats_improvements=["Add FastAPI wording in relevant experience."],
+            recruiter_improvements=["Show ownership and measurable delivery outcomes."],
+            rewritten_bullets=["Supported Python backend work and improved reliability for internal tools."],
             interview_focus=["Explain projects"],
             next_steps=["Practice API work"],
         )

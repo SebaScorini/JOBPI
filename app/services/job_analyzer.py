@@ -34,22 +34,43 @@ from app.services.response_language import language_instruction, normalize_langu
 
 
 MAX_LIST_ITEMS = 5
-MAX_ITEM_CHARS = 80
-MAX_SUMMARY_CHARS = 240
+MAX_ITEM_CHARS = 140
+MAX_SUMMARY_CHARS = 280
 JOB_ANALYSIS_RETRY_DESCRIPTION_CHARS = 5000
-SKILL_HINTS = [
-    "python",
-    "fastapi",
-    "sql",
-    "postgresql",
-    "aws",
-    "docker",
-    "kubernetes",
-    "typescript",
-    "react",
-    "node",
-    "api",
-    "backend",
+SKILL_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
+    ("Retool", ("retool",)),
+    ("SQL", ("sql", "postgresql", "mysql", "presto")),
+    ("JavaScript", ("javascript", "js ")),
+    ("TypeScript", ("typescript",)),
+    ("Python", ("python",)),
+    ("React", ("react",)),
+    ("Node.js", ("node.js", "nodejs", " node ")),
+    ("APIs", (" api", "apis", "restful api", "rest api")),
+    ("Data migration", ("data migration", "migrate data", "migration project")),
+    ("Data modernization", ("data modernization", "modernization")),
+    ("Data modeling", ("data modeling", "data model")),
+    ("Batch processing", ("batch",)),
+    ("Streaming pipelines", ("streaming",)),
+    ("Data governance", ("data governance", "apache ranger", "immuta", "unity catalog")),
+    ("Data quality", ("great expectations", "data quality")),
+    ("Datadog", ("datadog",)),
+    ("AWS", ("aws",)),
+    ("GCP", ("gcp", "google cloud")),
+    ("Apache Spark", ("apache spark", " spark ")),
+    ("Databricks", ("databricks",)),
+    ("EMR", ("emr",)),
+    ("Jira", ("jira",)),
+    ("Confluence", ("confluence",)),
+    ("Notion", ("notion",)),
+    ("Compliance", ("compliance", "regulated", "regulatory", "banking environment")),
+]
+ROLE_TYPE_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
+    ("data", ("databricks", "spark", "data migration", "data modernization", "data engineering")),
+    ("full-stack", ("full stack", "front-end and back-end", "frontend and backend")),
+    ("frontend", ("frontend", "front-end", "ui", "ux")),
+    ("backend", ("backend", "back-end", "api", "services")),
+    ("analytics", ("analytics", "business intelligence", "data visibility")),
+    ("operations", ("operational workflow", "operations", "automation")),
 ]
 logger = logging.getLogger(__name__)
 
@@ -59,7 +80,8 @@ class LeanJobAnalysisSignature(dspy.Signature):
 
     Base every field on explicit evidence in the posting or a very strong role-level inference.
     Prefer the concrete requirements, responsibilities, tools, seniority, and outcomes that will
-    help a candidate prepare. Do not pad, repeat, or copy long fragments from the posting.
+    help a candidate prepare. Be specific, but do not pad, repeat, generalize, or copy long
+    fragments from the posting. Prefer sharp, useful synthesis over longer text.
     """
 
     title: str = dspy.InputField(desc="Job title for role framing")
@@ -76,13 +98,13 @@ class LeanJobAnalysisSignature(dspy.Signature):
         desc="Single short role family such as backend, full-stack, frontend, data, devops, mobile, qa, product, or generalist."
     )
     req_skills: list[str] = dspy.OutputField(
-        desc="Max 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short phrases only."
+        desc="Max 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short, high-signal phrases only."
     )
     nice_skills: list[str] = dspy.OutputField(
         desc="Max 5 preferred or bonus skills that are helpful but not clearly mandatory. Only include items supported by the posting."
     )
     responsibilities: list[str] = dspy.OutputField(
-        desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and avoid near-verbatim copying."
+        desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and avoid generic filler."
     )
     prep: list[str] = dspy.OutputField(
         desc="Max 5 concrete preparation actions for applying or interviewing well for this specific role. Tie each action to the role's actual requirements."
@@ -424,7 +446,7 @@ class JobAnalyzerService:
         language: AIResponseLanguage,
     ) -> JobAnalysisPayload:
         text = cleaned_description.lower()
-        extracted_skills = [skill for skill in SKILL_HINTS if re.search(rf"\b{re.escape(skill)}\b", text)]
+        extracted_skills = _extract_fallback_skills(cleaned_description)
 
         sentence_candidates = [
             line.strip(" -")
@@ -432,48 +454,44 @@ class JobAnalyzerService:
             if line.strip()
         ]
         actionable = [s for s in sentence_candidates if _looks_actionable_fallback_sentence(s)]
+        seniority = _infer_fallback_seniority(text)
+        role_type = _infer_fallback_role_type(text)
 
-        summary = (
-            f"Fallback analysis for {title} at {company}: extracted key role requirements from the description."
-            if language == "english"
-            else f"Analisis alternativo para {title} en {company}: se extrajeron requisitos clave del puesto."
+        summary = _build_fallback_summary(
+            title=title,
+            company=company,
+            cleaned_description=cleaned_description,
+            extracted_skills=extracted_skills,
+            seniority=seniority,
+            role_type=role_type,
+            language=language,
         )
 
-        responsibilities = _normalize_list(actionable[:MAX_LIST_ITEMS])
+        responsibilities = _normalize_list(_rewrite_fallback_responsibilities(actionable[:MAX_LIST_ITEMS]))
         if not responsibilities:
-            responsibilities = _normalize_list(sentence_candidates[:MAX_LIST_ITEMS])
+            responsibilities = _normalize_list(_rewrite_fallback_responsibilities(sentence_candidates[:MAX_LIST_ITEMS]))
 
         required_skills = _normalize_list(extracted_skills[:MAX_LIST_ITEMS])
         if not required_skills:
-            required_skills = ["Communication", "Problem solving"] if language == "english" else ["Comunicacion", "Resolucion de problemas"]
-
-        prep = (
-            [
-                "Map your experience to each required skill.",
-                "Prepare two measurable impact examples.",
-                "Review architecture and API design decisions.",
-            ]
-            if language == "english"
-            else [
-                "Relaciona tu experiencia con cada habilidad requerida.",
-                "Prepara dos ejemplos con impacto medible.",
-                "Repasa decisiones de arquitectura y diseno de APIs.",
-            ]
-        )
+            required_skills = (
+                ["Communication", "Problem solving"]
+                if language == "english"
+                else ["Comunicacion", "Resolucion de problemas"]
+            )
 
         return JobAnalysisPayload(
             summary=summary,
-            seniority="mid",
-            role_type="generalist",
+            seniority=seniority,
+            role_type=role_type,
             required_skills=required_skills,
-            nice_to_have_skills=[],
+            nice_to_have_skills=_build_fallback_nice_to_have(cleaned_description, required_skills, language),
             responsibilities=responsibilities,
-            how_to_prepare=_normalize_list(prep),
-            learning_path=[],
-            missing_skills=[],
-            resume_tips=_normalize_list(prep[:2]),
-            interview_tips=_normalize_list(prep[1:]),
-            portfolio_project_ideas=[],
+            how_to_prepare=_build_fallback_prepare(required_skills, responsibilities, language),
+            learning_path=_build_fallback_learning_path(cleaned_description, language),
+            missing_skills=_build_fallback_missing_skills(cleaned_description, required_skills, language),
+            resume_tips=_build_fallback_resume_tips(required_skills, responsibilities, language),
+            interview_tips=_build_fallback_interview_tips(required_skills, responsibilities, language),
+            portfolio_project_ideas=_build_fallback_projects(required_skills, responsibilities, language),
         )
 
 
@@ -585,9 +603,301 @@ def _looks_actionable_fallback_sentence(value: str) -> bool:
             r"\b(develop|design|build|maintain|integrate|optimize|participate|collaborate|implement|review|scale)\b",
             lowered,
         )
+        or re.search(r"\b(translate|ensure|improve|contribute|deliver|support|automate|identify)\b", lowered)
         or re.search(r"\bapi(s)?\b", lowered)
         or re.search(r"\bservices?\b", lowered)
     )
+
+
+def _extract_fallback_skills(cleaned_description: str) -> list[str]:
+    lowered = f" {cleaned_description.lower()} "
+    matches: list[str] = []
+    for label, patterns in SKILL_PATTERNS:
+        if any(pattern in lowered for pattern in patterns):
+            matches.append(label)
+        if len(matches) >= MAX_LIST_ITEMS + 3:
+            break
+    return matches
+
+
+def _infer_fallback_seniority(text: str) -> str:
+    if re.search(r"\b(lead|principal|staff|architect)\b", text):
+        return "lead"
+    if re.search(r"\b(senior|5\+ years|6\+ years|7\+ years|8\+ years)\b", text):
+        return "senior"
+    if re.search(r"\b(4\+ years|mid|intermediate)\b", text):
+        return "mid"
+    if re.search(r"\b(junior|entry level|1\+ years|2\+ years)\b", text):
+        return "junior"
+    return "unknown"
+
+
+def _infer_fallback_role_type(text: str) -> str:
+    for label, patterns in ROLE_TYPE_PATTERNS:
+        if any(pattern in text for pattern in patterns):
+            return label
+    return "generalist"
+
+
+def _build_fallback_summary(
+    *,
+    title: str,
+    company: str,
+    cleaned_description: str,
+    extracted_skills: list[str],
+    seniority: str,
+    role_type: str,
+    language: AIResponseLanguage,
+) -> str:
+    responsibilities = _extract_summary_themes(cleaned_description)
+    top_skills = ", ".join(extracted_skills[:3])
+    if language == "english":
+        opening = f"{company} is hiring a {seniority if seniority != 'unknown' else ''} {title}".replace("  ", " ").strip()
+        if responsibilities and top_skills:
+            return _normalize_summary_text(
+                f"{opening} focused on {responsibilities[0]}. The strongest signals in the posting are {top_skills}, with success tied to {responsibilities[1] if len(responsibilities) > 1 else 'delivering reliable business-facing outcomes in a regulated environment'}.",
+                MAX_SUMMARY_CHARS,
+            )
+        if top_skills:
+            return _normalize_summary_text(
+                f"{opening} with clear emphasis on {top_skills}. The role reads as a {role_type} position expected to improve operational efficiency and data visibility.",
+                MAX_SUMMARY_CHARS,
+            )
+        return _normalize_summary_text(
+            f"{opening}. The posting emphasizes cross-functional delivery, operational improvement, and clear execution in a structured environment.",
+            MAX_SUMMARY_CHARS,
+        )
+
+    opening = f"{company} busca un perfil {seniority if seniority != 'unknown' else ''} para {title}".replace("  ", " ").strip()
+    if responsibilities and top_skills:
+        return _normalize_summary_text(
+            f"{opening} con foco en {responsibilities[0]}. Las senales mas fuertes del aviso son {top_skills}, y el exito del rol depende de {responsibilities[1] if len(responsibilities) > 1 else 'entregar soluciones confiables para equipos de negocio en un entorno regulado'}.",
+            MAX_SUMMARY_CHARS,
+        )
+    if top_skills:
+        return _normalize_summary_text(
+            f"{opening} con enfasis claro en {top_skills}. El puesto se parece a un rol {role_type} orientado a eficiencia operativa y visibilidad de datos.",
+            MAX_SUMMARY_CHARS,
+        )
+    return _normalize_summary_text(
+        f"{opening}. El aviso enfatiza trabajo cross-functional, mejora operativa y ejecucion prolija dentro de un entorno exigente.",
+        MAX_SUMMARY_CHARS,
+    )
+
+
+def _extract_summary_themes(cleaned_description: str) -> list[str]:
+    lowered = cleaned_description.lower()
+    themes: list[str] = []
+    if "operational workflow" in lowered or "automate operational workflows" in lowered:
+        themes.append("building internal tools that automate operational workflows")
+    if "data visibility" in lowered:
+        themes.append("improving data visibility across business teams")
+    if "regulated" in lowered or "banking" in lowered or "governance" in lowered:
+        themes.append("meeting security, governance, and regulated-environment standards")
+    if "integration" in lowered or "apis" in lowered or "databases" in lowered:
+        themes.append("connecting Retool with APIs, databases, and third-party systems")
+    return themes[:2]
+
+
+def _build_fallback_nice_to_have(
+    cleaned_description: str,
+    required_skills: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
+    lowered = cleaned_description.lower()
+    preferred = _extract_optional_phrases(cleaned_description)
+    suggestions = [item for item in preferred if item not in required_skills]
+    if "certification" in lowered and not any("certification" in item.lower() for item in suggestions):
+        suggestions.append("Databricks certification" if "databricks" in lowered else ("Relevant certification" if language == "english" else "Certificacion relevante"))
+    return _normalize_list(suggestions[:MAX_LIST_ITEMS])
+
+
+def _extract_optional_phrases(cleaned_description: str) -> list[str]:
+    matches: list[str] = []
+    for raw_line in cleaned_description.splitlines():
+        line = " ".join(raw_line.split()).strip(" -")
+        lowered = line.lower()
+        if not line:
+            continue
+        if any(marker in lowered for marker in ("plus", "nice to have", "preferred", "strong plus")):
+            matches.append(line)
+    return matches
+
+
+def _build_fallback_prepare(
+    required_skills: list[str],
+    responsibilities: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
+    top_skills = ", ".join(required_skills[:3]) if required_skills else ""
+    top_responsibility = _compress_focus_area(responsibilities[0] if responsibilities else "")
+    if language == "english":
+        tips = [
+            f"Prepare 2-3 stories that show direct ownership of {top_responsibility.lower()}." if top_responsibility else "Prepare 2-3 stories showing direct ownership of similar business-critical work.",
+            f"Map your strongest evidence to {top_skills} with concrete tools, scale, and outcomes." if top_skills else "Map your strongest evidence to the role's core technical requirements with concrete outcomes.",
+            "Be ready to explain how you worked with stakeholders, handled ambiguity, and shipped quickly without sacrificing governance.",
+            "Review one migration or modernization example end to end: problem, constraints, solution, and measurable impact.",
+            "Practice explaining complex technical decisions in business language.",
+        ]
+    else:
+        tips = [
+            f"Prepara 2-3 historias que demuestren ownership directo sobre {top_responsibility.lower()}." if top_responsibility else "Prepara 2-3 historias con ownership real sobre trabajo critico similar.",
+            f"Relaciona tu mejor evidencia con {top_skills} usando herramientas, escala y resultados concretos." if top_skills else "Relaciona tu mejor evidencia con los requisitos tecnicos centrales usando resultados concretos.",
+            "Practica como colaboraste con stakeholders, resolviste ambiguedad y entregaste rapido sin comprometer governance.",
+            "Repasa un proyecto de migracion o modernizacion de punta a punta: problema, restricciones, solucion e impacto.",
+            "Practica explicar decisiones tecnicas complejas en lenguaje de negocio.",
+        ]
+    return _normalize_list(tips)
+
+
+def _build_fallback_learning_path(cleaned_description: str, language: AIResponseLanguage) -> list[str]:
+    lowered = cleaned_description.lower()
+    items: list[str] = []
+    if "retool" in lowered:
+        items.append("Deepen Retool app patterns for secure internal tooling." if language == "english" else "Profundiza patrones de Retool para internal tools seguros.")
+    if "databricks" in lowered or "spark" in lowered:
+        items.append("Refresh Databricks and Spark workflows for transformations and platform operations." if language == "english" else "Refuerza Databricks y Spark para transformaciones y operacion de plataforma.")
+    if "governance" in lowered or "regulated" in lowered:
+        items.append("Study practical data governance controls, lineage, and access policies in regulated environments." if language == "english" else "Estudia controles practicos de data governance, lineage y access policies en entornos regulados.")
+    if "datadog" in lowered:
+        items.append("Review monitoring and observability patterns in Datadog." if language == "english" else "Repasa patrones de monitoreo y observabilidad en Datadog.")
+    if "sql" in lowered:
+        items.append("Sharpen advanced SQL for analytics, debugging, and data validation." if language == "english" else "Mejora SQL avanzado para analitica, debugging y validacion de datos.")
+    return _normalize_list(items)
+
+
+def _build_fallback_missing_skills(
+    cleaned_description: str,
+    required_skills: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
+    lowered = cleaned_description.lower()
+    items: list[str] = []
+    if "retool" in lowered and "Retool" in required_skills:
+        items.append("Retool delivery in production internal tools." if language == "english" else "Experiencia real con Retool en internal tools productivos.")
+    if "data migration" in lowered or "modernization" in lowered:
+        items.append("Visible ownership of data migration or modernization programs." if language == "english" else "Ownership visible en proyectos de migracion o modernizacion de datos.")
+    if "regulated" in lowered or "governance" in lowered:
+        items.append("Examples of working under strict governance, security, or compliance controls." if language == "english" else "Ejemplos de trabajo bajo controles estrictos de governance, seguridad o compliance.")
+    if "databricks" in lowered:
+        items.append("Hands-on Databricks evidence, ideally with certification or platform operations." if language == "english" else "Evidencia concreta con Databricks, idealmente con certificacion u operacion de plataforma.")
+    if "stakeholder" in lowered or "business" in lowered:
+        items.append("Clear business-facing communication examples tied to technical delivery." if language == "english" else "Ejemplos claros de comunicacion con negocio ligados a entrega tecnica.")
+    return _normalize_list(items)
+
+
+def _build_fallback_resume_tips(
+    required_skills: list[str],
+    responsibilities: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
+    top_skills = ", ".join(required_skills[:4]) if required_skills else "the role's core stack"
+    top_responsibility = _compress_focus_area(responsibilities[0] if responsibilities else "business-critical internal tools")
+    if language == "english":
+        items = [
+            f"Move your strongest evidence for {top_skills} into the summary and most recent experience section.",
+            f"Rewrite bullets to show scope, stakeholders, and measurable outcomes for {top_responsibility.lower()}.",
+            "Name the platforms, databases, governance tools, and cloud environments you used instead of describing them generically.",
+            "Highlight modernization, migration, or automation work with numbers: time saved, data volume, error reduction, or adoption.",
+            "If you have regulated-environment work, make that explicit rather than implied.",
+        ]
+    else:
+        items = [
+            f"Lleva tu mejor evidencia de {top_skills} al resumen y a la experiencia mas reciente.",
+            f"Reescribe bullets mostrando alcance, stakeholders e impacto medible sobre {top_responsibility.lower()}.",
+            "Nombra plataformas, bases, herramientas de governance y clouds concretos en vez de describirlos en general.",
+            "Destaca trabajo de modernizacion, migracion o automatizacion con numeros: tiempo ahorrado, volumen, errores o adopcion.",
+            "Si trabajaste en entornos regulados, dejalo explicito y no solo implicito.",
+        ]
+    return _normalize_list(items)
+
+
+def _build_fallback_interview_tips(
+    required_skills: list[str],
+    responsibilities: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
+    top_skills = ", ".join(required_skills[:3]) if required_skills else "core technical skills"
+    top_responsibility = _compress_focus_area(responsibilities[0] if responsibilities else "internal platform delivery")
+    if language == "english":
+        items = [
+            f"Expect detailed questions on {top_skills} and how you applied them in production.",
+            f"Prepare to walk through a project centered on {top_responsibility.lower()}, including tradeoffs and stakeholder alignment.",
+            "Have one example ready for data quality, governance, or compliance decisions under real constraints.",
+            "Be ready to discuss performance optimization, observability, and support for internal users after launch.",
+            "Practice explaining why you chose a specific architecture, integration pattern, or data platform.",
+        ]
+    else:
+        items = [
+            f"Espera preguntas especificas sobre {top_skills} y como lo aplicaste en produccion.",
+            f"Preparate para recorrer un proyecto enfocado en {top_responsibility.lower()}, incluyendo tradeoffs y alineacion con stakeholders.",
+            "Ten listo un ejemplo sobre data quality, governance o compliance bajo restricciones reales.",
+            "Repasa optimizacion de performance, observabilidad y soporte a usuarios internos despues del lanzamiento.",
+            "Practica justificar por que elegiste una arquitectura, patron de integracion o data platform concreto.",
+        ]
+    return _normalize_list(items)
+
+
+def _build_fallback_projects(
+    required_skills: list[str],
+    responsibilities: list[str],
+    language: AIResponseLanguage,
+) -> list[str]:
+    required_joined = " ".join(required_skills).lower()
+    data_focused = any(keyword in required_joined for keyword in ("databricks", "sql", "data", "spark"))
+    if language == "english":
+        items = [
+            "Build an internal operations dashboard that pulls from APIs and SQL sources, with role-based access and audit-friendly workflows.",
+            "Create a migration case study showing how you modernized a reporting or data pipeline from legacy logic to a governed platform.",
+            "Ship a Retool-style admin tool with approval flows, validation checks, and observability hooks." if "retool" in required_joined else "Ship an internal tool that automates approvals, validations, and operational follow-up.",
+            "Publish a notebook or demo showing data quality checks, lineage decisions, and monitoring alerts." if data_focused else "Publish a case study highlighting governance, performance, and stakeholder outcomes.",
+        ]
+    else:
+        items = [
+            "Construye un dashboard interno de operaciones que consuma APIs y SQL, con accesos por rol y flujos auditables.",
+            "Arma un case study de migracion mostrando como modernizaste reporting o pipelines desde logica legacy a una plataforma gobernada.",
+            "Publica una herramienta estilo Retool con approval flows, validaciones y observabilidad." if "retool" in required_joined else "Publica una internal tool que automatice approvals, validaciones y seguimiento operativo.",
+            "Comparte un notebook o demo con data quality checks, lineage y alertas de monitoreo." if data_focused else "Comparte un case study que destaque governance, performance e impacto en stakeholders.",
+        ]
+    return _normalize_list(items)
+
+
+def _compress_focus_area(value: str) -> str:
+    lowered = value.lower()
+    if "operational workflow" in lowered:
+        return "operational workflow automation"
+    if "data visibility" in lowered:
+        return "data visibility improvements"
+    if "integration" in lowered or "apis" in lowered:
+        return "system integrations"
+    if "governance" in lowered or "regulated" in lowered:
+        return "governed delivery in regulated environments"
+    if not value:
+        return ""
+    return _normalize_text(value.lower(), 72)
+
+
+def _rewrite_fallback_responsibilities(items: list[str]) -> list[str]:
+    rewritten: list[str] = []
+    for item in items:
+        lowered = item.lower()
+        if "retool" in lowered and "operational workflow" in lowered:
+            rewritten.append("Build and deploy Retool applications that automate operational workflows and support business teams")
+            continue
+        if "data visibility" in lowered or "manual processes" in lowered:
+            rewritten.append("Translate business needs into scalable internal tools that improve efficiency and data visibility")
+            continue
+        if "integrations" in lowered and ("apis" in lowered or "databases" in lowered):
+            rewritten.append("Build integrations between Retool, APIs, databases, and third-party platforms")
+            continue
+        if "stakeholders" in lowered or "compliance" in lowered:
+            rewritten.append("Partner with operations, compliance, and technology stakeholders to deliver high-impact automation")
+            continue
+        if "governance" in lowered or "regulated" in lowered:
+            rewritten.append("Ensure delivery meets SDLC, security, and governance standards in regulated environments")
+            continue
+        rewritten.append(item)
+    return rewritten
 
 
 _service: JobAnalyzerService | None = None

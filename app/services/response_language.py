@@ -37,6 +37,42 @@ def localized_add_evidence(language: AIResponseLanguage, keyword: str) -> str:
     return f"Add clear evidence of {keyword}"
 
 
+def localized_add_metric(language: AIResponseLanguage, topic: str) -> str:
+    if language == "spanish":
+        return f"Convierte {topic} en un logro con metricas, alcance e impacto concreto"
+    return f"Turn {topic} into an achievement with metrics, scope, and concrete impact"
+
+
+def localized_add_project_example(language: AIResponseLanguage, topic: str) -> str:
+    if language == "spanish":
+        return f"Agrega un proyecto o bullet especifico que demuestre {topic}"
+    return f"Add a specific project or bullet that proves {topic}"
+
+
+def localized_surface_keyword(language: AIResponseLanguage, keyword: str) -> str:
+    if language == "spanish":
+        return f"Incluye {keyword} en el resumen profesional y en una experiencia relevante"
+    return f"Surface {keyword} in the professional summary and one relevant experience entry"
+
+
+def localized_tailor_summary(language: AIResponseLanguage, strength: str) -> str:
+    if language == "spanish":
+        return f"Abre el CV destacando {strength} como argumento principal de encaje"
+    return f"Open the CV by positioning {strength} as a primary fit signal"
+
+
+def localized_add_exact_keyword_match(language: AIResponseLanguage, keyword: str) -> str:
+    if language == "spanish":
+        return f"Usa la formulacion exacta de {keyword} en skills, resumen o experiencia si realmente aplica"
+    return f"Use the exact wording of {keyword} in skills, summary, or experience if it truthfully applies"
+
+
+def localized_quantify_strength(language: AIResponseLanguage, strength: str) -> str:
+    if language == "spanish":
+        return f"Cuantifica {strength} con resultados, escala o contexto de negocio"
+    return f"Quantify {strength} with results, scale, or business context"
+
+
 def localized_move_strength_earlier(language: AIResponseLanguage, strength: str) -> str:
     if language == "spanish":
         return f"Mueve {strength} mas arriba para que aparezca antes en el CV"

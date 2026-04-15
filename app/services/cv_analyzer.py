@@ -19,10 +19,10 @@ from app.services.job_preprocessing import build_cv_excerpt, build_job_excerpt
 from app.services.response_language import language_instruction, normalize_language
 
 
-MAX_LIST_ITEMS = 4
-MAX_ITEM_CHARS = 60
-MAX_SUMMARY_CHARS = 280
-DEFAULT_CV_MATCH_MAX_TOKENS = 720
+MAX_LIST_ITEMS = 5
+MAX_ITEM_CHARS = 140
+MAX_SUMMARY_CHARS = 420
+DEFAULT_CV_MATCH_MAX_TOKENS = 1100
 CV_MATCH_RETRY_MIN_EXCERPT_CHARS = 900
 logger = logging.getLogger(__name__)
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
@@ -49,7 +49,8 @@ class CvFitSignature(dspy.Signature):
 
     Use only information supported by the provided CV excerpt and job excerpt. Prefer explicit
     matches, specific missing evidence, and concrete improvements over generic career advice.
-    Do not invent experience, inflate fit, or mention irrelevant technologies.
+    Do not invent experience, inflate fit, or mention irrelevant technologies. Be direct, specific,
+    and useful enough that the candidate can act on the analysis immediately.
     """
 
     title: str = dspy.InputField(desc="Job title for role framing")
@@ -58,25 +59,34 @@ class CvFitSignature(dspy.Signature):
     response_language: str = dspy.InputField(desc="Language for every output field")
 
     fit_summary: str = dspy.OutputField(
-        desc="Exactly 1 short sentence, max 28 words, on overall fit using the strongest match and biggest gap."
+        desc="2-3 concrete sentences on overall fit, strongest evidence from the CV, biggest gap, and what that means for candidacy. Stay grounded in the provided text."
     )
     strengths: list[str] = dspy.OutputField(
-        desc="Max 3 short items, 2-8 words each, with only role-relevant strengths clearly supported by the CV."
+        desc="Max 5 substantive items, ideally 6-16 words each, with only role-relevant strengths clearly supported by the CV."
     )
     missing_skills: list[str] = dspy.OutputField(
-        desc="Max 3 short items, 2-8 words each, naming the most important missing skills or missing evidence."
+        desc="Max 5 substantive items, ideally 6-16 words each, naming the most important missing skills, missing evidence, or unclear proof points."
     )
     likely_fit_level: str = dspy.OutputField(
         desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
     )
     resume_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 short action items, 3-10 words each, for CV edits that would show fit better."
+        desc="Max 5 concrete action items, ideally 6-18 words each, for CV edits that would show fit better."
+    )
+    ats_improvements: list[str] = dspy.OutputField(
+        desc="Max 4 concrete ATS-focused actions, ideally 6-16 words each, about exact wording, keyword placement, skills sections, and alignment to the posting."
+    )
+    recruiter_improvements: list[str] = dspy.OutputField(
+        desc="Max 4 recruiter-focused actions, ideally 6-16 words each, about impact, credibility, specificity, and narrative strength."
+    )
+    rewritten_bullets: list[str] = dspy.OutputField(
+        desc="Max 3 rewritten CV bullet examples tailored to this role. Each bullet should sound resume-ready, include action + context + measurable or concrete outcome, and stay grounded in the provided evidence."
     )
     interview_focus: list[str] = dspy.OutputField(
-        desc="Max 3 short prep topics, 2-8 words each, based on the strongest match areas or biggest gaps."
+        desc="Max 5 concrete prep topics, ideally 5-16 words each, based on the strongest match areas or biggest gaps."
     )
     next_steps: list[str] = dspy.OutputField(
-        desc="Max 3 immediate next steps, 3-10 words each, to improve this exact application."
+        desc="Max 5 immediate next steps, ideally 6-18 words each, to improve this exact application."
     )
 
 
@@ -209,6 +219,9 @@ class CvAnalyzerService:
             missing_skills=_normalize_list(result.missing_skills),
             likely_fit_level=_normalize_text(result.likely_fit_level, 20),
             resume_improvements=_normalize_list(result.resume_improvements),
+            ats_improvements=_normalize_list(getattr(result, "ats_improvements", [])),
+            recruiter_improvements=_normalize_list(getattr(result, "recruiter_improvements", [])),
+            rewritten_bullets=_normalize_list(getattr(result, "rewritten_bullets", [])),
             interview_focus=_normalize_list(result.interview_focus),
             next_steps=_normalize_list(result.next_steps),
         )
@@ -245,6 +258,9 @@ class CvAnalyzerService:
             strengths = [f"Experiencia demostrada en {item}" for item in matched[:MAX_LIST_ITEMS]]
             gaps = [f"Falta evidencia clara de {item}" for item in missing[:MAX_LIST_ITEMS]]
             resume_improvements = [f"Agrega logros o proyectos que demuestren {item}" for item in missing[:MAX_LIST_ITEMS]]
+            ats_improvements = [f"Incluye {item} con el wording del aviso cuando sea veraz" for item in missing[:MAX_LIST_ITEMS]]
+            recruiter_improvements = [f"Cuantifica tu impacto relacionado con {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
+            rewritten_bullets = [f"Demostre {item} en un proyecto o experiencia reciente con contexto e impacto medible" for item in matched[:3]]
             interview_focus = [f"Prepara ejemplos concretos sobre {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
             next_steps = (
                 [f"Actualiza el CV para resaltar {item}" for item in missing[:2]]
@@ -259,6 +275,9 @@ class CvAnalyzerService:
             strengths = [f"Demonstrated experience with {item}" for item in matched[:MAX_LIST_ITEMS]]
             gaps = [f"Clear evidence of {item} is missing" for item in missing[:MAX_LIST_ITEMS]]
             resume_improvements = [f"Add measurable examples that show {item}" for item in missing[:MAX_LIST_ITEMS]]
+            ats_improvements = [f"Use the job's wording for {item} where it is truthful" for item in missing[:MAX_LIST_ITEMS]]
+            recruiter_improvements = [f"Quantify your impact around {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
+            rewritten_bullets = [f"Demonstrated {item} in a recent project or role with concrete scope and measurable impact" for item in matched[:3]]
             interview_focus = [f"Prepare specific examples about {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
             next_steps = (
                 [f"Update the CV to foreground {item}" for item in missing[:2]]
@@ -278,6 +297,9 @@ class CvAnalyzerService:
             missing_skills=_normalize_list(gaps),
             likely_fit_level=fit_level,
             resume_improvements=_normalize_list(resume_improvements),
+            ats_improvements=_normalize_list(ats_improvements),
+            recruiter_improvements=_normalize_list(recruiter_improvements),
+            rewritten_bullets=_normalize_list(rewritten_bullets),
             interview_focus=_normalize_list(interview_focus),
             next_steps=_normalize_list(next_steps),
         )
