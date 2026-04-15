@@ -43,7 +43,7 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_output_tokens": 900,
         "job_analysis_max_tokens": 980,
         "job_analysis_retry_max_tokens": 700,
-        "cv_match_max_tokens": 1300,
+        "cv_match_max_tokens": 900,
         "cv_match_retry_max_tokens": 1500,
         "cover_letter_max_tokens": 640,
         "job_preprocess_target_chars": 5000,
