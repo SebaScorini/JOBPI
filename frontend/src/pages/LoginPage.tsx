@@ -57,7 +57,7 @@ export function LoginPage() {
         });
         setError(t('auth.invalidCredentialsHint'));
       } else if (message.toLowerCase().includes('email not confirmed')) {
-        setError(t('auth.emailNotConfirmed') || 'Please verify your email before signing in.');
+        setError(t('auth.emailNotConfirmed'));
       } else {
         setError(message);
         showToast(message, 'error');

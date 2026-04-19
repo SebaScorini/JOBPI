@@ -45,6 +45,10 @@ const es: TranslationNode = {
     tagline: 'Apunta a tu proxima posicion con precision.',
     privacyHint: 'Tu cuenta te permite guardar empleos, CVs e historial de matches de forma segura.',
     emailAddress: 'Correo electronico',
+    checkYourEmail: 'Revisa tu correo',
+    confirmationEmailSent: 'Hemos enviado un enlace de confirmacion a ',
+    clickToVerify: 'Haz clic en el enlace para verificar tu cuenta e iniciar sesion.',
+    emailNotConfirmed: 'Verifica tu correo antes de iniciar sesion.',
     password: 'Contrasena',
     forgotPassword: 'Olvidaste tu contrasena?',
     forgotPasswordDescription:
