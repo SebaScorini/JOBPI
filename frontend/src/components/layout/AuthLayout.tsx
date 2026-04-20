@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { LanguageSelector } from '../LanguageSelector';
@@ -10,13 +10,14 @@ export function AuthLayout() {
   const { user, isLoading } = useAuth();
   const { t } = useLanguage();
   const { resolvedTheme, toggleDarkMode } = useAppTheme();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && user) {
+    if (!isLoading && user && pathname !== '/reset-password') {
       navigate('/dashboard');
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, pathname, navigate]);
 
   if (isLoading) {
     return (

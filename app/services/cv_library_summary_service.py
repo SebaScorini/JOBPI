@@ -109,8 +109,10 @@ class CvLibrarySummaryService:
     def generate(self, clean_text: str) -> str:
         context = _prepare_cv_context(clean_text)
         if not context:
-            logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_empty_context")
-            return _heuristic_library_summary(clean_text)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="The CV text is too empty to generate an AI summary.",
+            )
 
         try:
             generator = self._create_generator()
@@ -129,15 +131,26 @@ class CvLibrarySummaryService:
             if summary:
                 return summary
         except HTTPException:
-            logger.warning("cv_library_summary_fallback reason=timeout_or_http")
+            logger.warning("cv_library_summary_failed reason=timeout_or_http")
+            raise
         except Exception as exc:
             if looks_like_ai_auth_error(exc):
-                logger.warning("cv_library_summary_fallback reason=auth")
+                logger.warning("cv_library_summary_failed reason=auth")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI analysis is not configured.",
+                ) from exc
             else:
-                logger.exception("cv_library_summary_fallback reason=unexpected_error")
+                logger.exception("cv_library_summary_failed reason=unexpected_error")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Failed to generate CV summary with AI. Please try again.",
+                ) from exc
 
-        logger.info("ai_cache_reuse operation=cv_library_summary source=heuristic_fallback")
-        return _heuristic_library_summary(clean_text)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI returned an empty CV summary. Please try again.",
+        )
 
     def _create_generator(self) -> CvLibrarySummaryModule:
         try:

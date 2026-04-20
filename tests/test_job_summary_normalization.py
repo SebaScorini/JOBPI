@@ -1,5 +1,7 @@
 from app.services.cv_library_service import _build_match_explanation
 from app.services.job_analyzer import _normalize_list, _normalize_summary_text
+from app.services.cv_analyzer import _refine_cv_analysis_response
+from app.schemas.cv import CvAnalysisResponse
 
 
 def test_normalize_summary_prefers_complete_sentences():
@@ -96,19 +98,40 @@ def test_build_match_explanation_generates_richer_improvement_suggestions():
     assert any("exact wording" in item.lower() for item in suggestions)
 
 
-def test_cv_fallback_can_include_rewrite_ready_bullets():
-    from app.services.cv_analyzer import CvAnalyzerService
+def test_refine_cv_analysis_response_reduces_cross_section_repetition():
+    response = CvAnalysisResponse(
+        fit_summary="Strong fit with good backend evidence and one visible Docker gap.",
+        strengths=["Strong FastAPI delivery in production systems"],
+        missing_skills=["Missing clear Docker deployment evidence"],
+        likely_fit_level="Strong",
+        resume_improvements=[
+            "Add one bullet with Docker deployment ownership and measurable production impact",
+            "Add one bullet with Docker deployment ownership and measurable production impact",
+        ],
+        ats_improvements=[
+            "Use exact Docker deployment wording from the posting in relevant experience",
+            "Use exact Docker deployment wording from the posting in relevant experience",
+        ],
+        recruiter_improvements=[
+            "Quantify Docker deployment impact with reliability or delivery metrics",
+            "Quantify Docker deployment impact with reliability or delivery metrics",
+        ],
+        rewritten_bullets=[
+            "Led FastAPI service delivery and improved backend reliability by 30% across production workflows."
+        ],
+        interview_focus=[
+            "Prepare to explain Docker deployment tradeoffs in production"
+        ],
+        next_steps=[
+            "Update the CV with Docker deployment evidence before applying",
+            "Update the CV with Docker deployment evidence before applying",
+        ],
+    )
 
-    service = CvAnalyzerService()
-    try:
-        response = service._build_fallback_analysis(
-            job_title="Backend Engineer",
-            job_description="Python FastAPI SQL Docker observability backend APIs.",
-            cv_text="Built Python APIs and improved SQL workflows in production.",
-            language="english",
-        )
-    finally:
-        service._executor.shutdown(wait=False, cancel_futures=True)
+    refined = _refine_cv_analysis_response(response)
 
-    assert isinstance(response.rewritten_bullets, list)
-    assert len(response.rewritten_bullets) >= 1
+    assert len(refined.resume_improvements) <= 1
+    assert len(refined.ats_improvements) <= 1
+    assert len(refined.recruiter_improvements) <= 1
+    assert len(refined.next_steps) <= 1
+    assert refined.resume_improvements or refined.ats_improvements or refined.recruiter_improvements

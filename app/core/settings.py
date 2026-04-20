@@ -2,15 +2,17 @@ import os
 import threading
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from app.core.runtime import configure_runtime_environment
 
 configure_runtime_environment()
 
-import dspy
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    import dspy
 
 
 AppEnv = Literal["development", "production"]
@@ -19,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env", override=False)
 
 _DSPY_CONFIG_LOCK = threading.Lock()
-_DSPY_LM: dspy.LM | None = None
+_DSPY_LM: Any | None = None
 
 ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
     "development": {
@@ -43,8 +45,8 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_output_tokens": 900,
         "job_analysis_max_tokens": 980,
         "job_analysis_retry_max_tokens": 700,
-        "cv_match_max_tokens": 900,
-        "cv_match_retry_max_tokens": 1500,
+        "cv_match_max_tokens": 1200,
+        "cv_match_retry_max_tokens": 1800,
         "cover_letter_max_tokens": 640,
         "job_preprocess_target_chars": 5000,
         "ai_timeout_seconds": 45,
@@ -65,16 +67,16 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "cv_upload_limit": 5,
         "max_pdf_size_mb": 2,
         "max_cvs_per_upload": 3,
-        "max_job_description_chars": 2500,
-        "max_cv_text_chars": 4000,
+        "max_job_description_chars": 8000,
+        "max_cv_text_chars": 8000,
         "max_output_tokens": 900,
-        "job_analysis_max_tokens": 900,
-        "job_analysis_retry_max_tokens": 640,
-        "cv_match_max_tokens": 1200,
-        "cv_match_retry_max_tokens": 1400,
-        "cover_letter_max_tokens": 480,
-        "job_preprocess_target_chars": 3500,
-        "ai_timeout_seconds": 20,
+        "job_analysis_max_tokens": 2400,
+        "job_analysis_retry_max_tokens": 1200,
+        "cv_match_max_tokens": 1600,
+        "cv_match_retry_max_tokens": 2200,
+        "cover_letter_max_tokens": 700,
+        "job_preprocess_target_chars": 5000,
+        "ai_timeout_seconds": 45,
     },
 }
 
@@ -418,7 +420,7 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def configure_dspy() -> dspy.LM:
+def configure_dspy() -> Any:
     global _DSPY_LM
 
     if _DSPY_LM is not None:
@@ -431,6 +433,8 @@ def configure_dspy() -> dspy.LM:
     with _DSPY_CONFIG_LOCK:
         if _DSPY_LM is not None:
             return _DSPY_LM
+
+        import dspy
 
         lm = dspy.LM(
             model=normalize_dspy_model(settings.dspy_model, settings.openrouter_base_url),

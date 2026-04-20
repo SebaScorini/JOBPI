@@ -196,7 +196,7 @@ def test_ai_observability_logs_retry_usage_and_latency(caplog, monkeypatch):
     assert any("provider_total_tokens=168" in message for message in messages)
 
 
-def test_job_analysis_auth_failure_falls_back_without_traceback(caplog):
+def test_job_analysis_auth_failure_returns_explicit_error_without_traceback(caplog):
     class AuthFailureAnalyzer:
         def __call__(self, **kwargs):
             raise RuntimeError(
@@ -208,21 +208,92 @@ def test_job_analysis_auth_failure_falls_back_without_traceback(caplog):
 
     caplog.set_level(logging.WARNING)
     try:
-        result = service.analyze(
-            JobAnalysisRequest(
-                title="Backend Engineer",
-                company="Acme",
-                description="Python FastAPI SQL backend role with API ownership and testing responsibilities." * 3,
+        try:
+            service.analyze(
+                JobAnalysisRequest(
+                    title="Backend Engineer",
+                    company="Acme",
+                    description="Python FastAPI SQL backend role with API ownership and testing responsibilities." * 3,
+                )
             )
-        )
+        except HTTPException as exc:
+            error = exc
+        else:
+            raise AssertionError("Expected analyze() to raise HTTPException")
     finally:
         service._executor.shutdown(wait=False, cancel_futures=True)
 
     messages = [record.getMessage() for record in caplog.records]
 
-    assert result.analysis_result.summary
-    assert any("ai_fallback operation=job_analysis fallback=true reason=auth" in message for message in messages)
+    assert error.status_code == 503
+    assert error.detail == "AI analysis is not configured."
+    assert any("ai_call_failed operation=job_analysis reason=auth" in message for message in messages)
     assert not any(record.exc_info for record in caplog.records if "reason=auth" in record.getMessage())
+
+
+def test_job_analysis_skips_persisted_fallback_cache(test_db, seeded_user):
+    from app.db import crud
+
+    stored = crud.create_job_analysis(
+        test_db,
+        user_id=seeded_user.id,
+        title="Backend Engineer",
+        company="Acme",
+        description="Python FastAPI SQL backend testing role." * 3,
+        clean_description="Python FastAPI SQL backend testing role." * 3,
+        analysis_result={
+            "summary": "Fallback summary.",
+            "seniority": "unknown",
+            "role_type": "generalist",
+            "required_skills": ["Communication"],
+            "nice_to_have_skills": [],
+            "responsibilities": ["Cross-functional delivery"],
+            "how_to_prepare": ["Prepare 2-3 stories showing direct ownership of similar business-critical work."],
+            "learning_path": [],
+            "missing_skills": [],
+            "resume_tips": ["Move your strongest evidence into the summary and most recent experience section."],
+            "interview_tips": ["Expect detailed questions on core technical skills and how you applied them in production."],
+            "portfolio_project_ideas": ["Build an internal operations dashboard that pulls from APIs and SQL sources, with role-based access and audit-friendly workflows."],
+            "_language": "english",
+            "_fallback": True,
+        },
+    )
+
+    class FreshAnalyzer:
+        def __call__(self, **_kwargs):
+            return SimpleNamespace(
+                summary="Strong backend role fit.",
+                seniority="mid",
+                role_type="backend",
+                req_skills=["Python", "FastAPI"],
+                nice_skills=["Docker"],
+                responsibilities=["Build APIs"],
+                prep=["Review APIs"],
+                learn=["Practice testing"],
+                gaps=["Docker"],
+                resume=["Highlight API impact"],
+                interview=["Discuss system design"],
+                projects=["Ship a backend service"],
+            )
+
+    service = JobAnalyzerService()
+    service.analyzer = FreshAnalyzer()
+
+    try:
+        result = service.analyze(
+            JobAnalysisRequest(
+                title="Backend Engineer",
+                company="Acme",
+                description="Python FastAPI SQL backend testing role." * 3,
+            ),
+            session=test_db,
+            user=seeded_user,
+        )
+    finally:
+        service._executor.shutdown(wait=False, cancel_futures=True)
+
+    assert result.id != stored.id
+    assert result.analysis_result.summary == "Strong backend role fit."
 
 
 def test_job_analysis_fallback_keeps_full_stack_description_readable():
@@ -521,3 +592,54 @@ def test_cover_letter_generation_uses_pruned_context_and_cached_summary(monkeypa
     assert len(str(captured["cv_text"])) < len(cv.clean_text)
     assert "Benefits" not in str(captured["job_description"])
     assert "Chess club" not in str(captured["cv_text"])
+
+
+def test_cover_letter_generation_skips_cached_fallback_template(monkeypatch):
+    service = CoverLetterService()
+    service.generator = lambda **_kwargs: SimpleNamespace(
+        cover_letter=(
+            "Dear Acme team,\n\n"
+            "I have led FastAPI and SQL delivery for backend products, including API reliability improvements and clearer operational workflows across production systems.\n\n"
+            "That background would let me contribute quickly to this role while staying grounded in real, measurable experience.\n\n"
+            "Thank you for your time and consideration."
+        )
+    )
+
+    job = SimpleNamespace(
+        id=1,
+        title="Backend Engineer",
+        company="Acme",
+        clean_description="Python FastAPI SQL APIs and backend reliability.",
+    )
+    cv = SimpleNamespace(
+        id=7,
+        summary="Backend engineer focused on Python systems.",
+        library_summary="Backend engineer with Python and FastAPI delivery.",
+        clean_text="Built FastAPI services and SQL workflows with measurable impact.",
+    )
+
+    monkeypatch.setattr(cover_letter_module.crud, "get_job_for_user", lambda session, user_id, job_id: job)
+    monkeypatch.setattr(cover_letter_module.crud, "get_cv_for_user", lambda session, user_id, cv_id: cv)
+    monkeypatch.setattr(
+        cover_letter_module.crud,
+        "get_cached_cover_letter",
+        lambda **_kwargs: (
+            "Dear Acme team,\n\n"
+            "I am excited to apply for the Backend Engineer role. My experience with Python, FastAPI aligns well with the kind of work described for this position.\n\n"
+            "I have delivered practical work related to Python, FastAPI, and I would bring a clear, collaborative, and execution-focused approach from day one.\n\n"
+            "Thank you for your time and consideration."
+        ),
+    )
+    monkeypatch.setattr(cover_letter_module.crud, "update_job_cover_letter", lambda **_kwargs: None)
+
+    try:
+        output = service.generate_cover_letter(
+            session=object(),
+            user=SimpleNamespace(id=123),
+            job_id=job.id,
+            selected_cv_id=cv.id,
+        )
+    finally:
+        service._executor.shutdown(wait=False, cancel_futures=True)
+
+    assert "measurable experience" in output

@@ -6,10 +6,15 @@ from app.db.database import get_session
 from app.dependencies.auth import get_current_user
 from app.models import User
 from app.schemas.match import CVJobMatchRead, MatchListResponse
-from app.services.cv_library_service import get_cv_library_service
 
 
 router = APIRouter(prefix="/matches", tags=["matches"])
+
+
+def _get_cv_library_service():
+    from app.services.cv_library_service import get_cv_library_service
+
+    return get_cv_library_service()
 
 
 @router.get("", response_model=MatchListResponse)
@@ -20,7 +25,7 @@ def list_matches(
     current_user: User = Depends(get_current_user),
 ) -> MatchListResponse:
     params = PaginationParams(limit=limit, offset=offset)
-    matches, total = get_cv_library_service().list_matches(
+    matches, total = _get_cv_library_service().list_matches(
         session,
         current_user,
         limit=params.limit,
@@ -35,4 +40,4 @@ def get_match(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVJobMatchRead:
-    return get_cv_library_service().get_match(session, current_user, match_id)
+    return _get_cv_library_service().get_match(session, current_user, match_id)

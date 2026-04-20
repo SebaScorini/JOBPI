@@ -19,12 +19,27 @@ from app.schemas.job import (
     JobStatusUpdateRequest,
 )
 from app.schemas.match import CVComparisonResponse, CVCompareRequest, CVJobMatchDetailRead, CVMatchRequest
-from app.services.cover_letter_service import get_cover_letter_service
-from app.services.cv_library_service import get_cv_library_service
-from app.services.job_analyzer import get_job_analyzer_service
 
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _get_cover_letter_service():
+    from app.services.cover_letter_service import get_cover_letter_service
+
+    return get_cover_letter_service()
+
+
+def _get_cv_library_service():
+    from app.services.cv_library_service import get_cv_library_service
+
+    return get_cv_library_service()
+
+
+def _get_job_analyzer_service():
+    from app.services.job_analyzer import get_job_analyzer_service
+
+    return get_job_analyzer_service()
 
 
 def _job_description_limit_message(limit: int) -> str:
@@ -78,7 +93,7 @@ def analyze_job(
                 f"Job description must be {settings.max_job_description_chars} characters or fewer."
             ),
         )
-    return get_job_analyzer_service().analyze(payload, session=session, user=current_user)
+    return _get_job_analyzer_service().analyze(payload, session=session, user=current_user)
 
 
 @router.get("", response_model=JobListResponse)
@@ -90,7 +105,7 @@ def list_jobs(
     current_user: User = Depends(get_current_user),
 ) -> JobListResponse:
     params = PaginationParams(limit=limit, offset=offset)
-    jobs, total = get_job_analyzer_service().list_jobs(
+    jobs, total = _get_job_analyzer_service().list_jobs(
         session,
         current_user,
         limit=params.limit,
@@ -106,7 +121,7 @@ def get_job(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
-    return get_job_analyzer_service().get_job(session, current_user, job_id)
+    return _get_job_analyzer_service().get_job(session, current_user, job_id)
 
 
 @router.delete(
@@ -124,7 +139,7 @@ def delete_job(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobDeleteResponse:
-    return get_job_analyzer_service().delete_job(session, current_user, job_id)
+    return _get_job_analyzer_service().delete_job(session, current_user, job_id)
 
 
 @router.patch("/{job_id}/status", response_model=JobRead)
@@ -134,7 +149,7 @@ def update_job_status(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
-    return get_job_analyzer_service().update_job_status(
+    return _get_job_analyzer_service().update_job_status(
         session,
         current_user,
         job_id,
@@ -150,7 +165,7 @@ def update_job_notes(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
-    return get_job_analyzer_service().update_job_notes(session, current_user, job_id, payload.notes)
+    return _get_job_analyzer_service().update_job_notes(session, current_user, job_id, payload.notes)
 
 
 @router.patch("/{job_id}/toggle-saved", response_model=JobRead)
@@ -159,7 +174,7 @@ def toggle_job_saved(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
-    return get_job_analyzer_service().toggle_job_saved(session, current_user, job_id)
+    return _get_job_analyzer_service().toggle_job_saved(session, current_user, job_id)
 
 
 @router.post("/{job_id}/match-cvs", response_model=CVJobMatchDetailRead)
@@ -180,7 +195,7 @@ def match_job_to_cvs(
             window_seconds=settings.match_cvs_window_seconds,
         ),
     )
-    return get_cv_library_service().match_job_to_cv(
+    return _get_cv_library_service().match_job_to_cv(
         session,
         current_user,
         job_id,
@@ -197,7 +212,7 @@ def compare_cvs_for_job(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVComparisonResponse:
-    return get_cv_library_service().compare_cvs_for_job(
+    return _get_cv_library_service().compare_cvs_for_job(
         session,
         current_user,
         job_id,
@@ -225,7 +240,7 @@ def generate_cover_letter(
             window_seconds=settings.cover_letter_window_seconds,
         ),
     )
-    generated_cover_letter = get_cover_letter_service().generate_cover_letter(
+    generated_cover_letter = _get_cover_letter_service().generate_cover_letter(
         session=session,
         user=current_user,
         job_id=job_id,

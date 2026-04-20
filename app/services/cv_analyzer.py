@@ -1,7 +1,7 @@
 import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-import re
 
 from app.core.runtime import configure_runtime_environment
 
@@ -10,7 +10,8 @@ configure_runtime_environment()
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, looks_like_ai_auth_error, run_ai_call_with_circuit_breaker
+from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
+from app.core.ai import build_ai_failure_http_exception
 from app.core.config import configure_dspy, get_settings
 from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
@@ -19,29 +20,65 @@ from app.services.job_preprocessing import build_cv_excerpt, build_job_excerpt
 from app.services.response_language import language_instruction, normalize_language
 
 
-MAX_LIST_ITEMS = 5
-MAX_ITEM_CHARS = 140
 MAX_SUMMARY_CHARS = 420
 DEFAULT_CV_MATCH_MAX_TOKENS = 1100
 CV_MATCH_RETRY_MIN_EXCERPT_CHARS = 900
 logger = logging.getLogger(__name__)
-WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
-MATCH_KEYWORDS: list[tuple[str, str]] = [
-    ("python", "Python"),
-    ("fastapi", "FastAPI"),
-    ("sql", "SQL"),
-    ("postgresql", "PostgreSQL"),
-    ("postgres", "PostgreSQL"),
-    ("docker", "Docker"),
-    ("testing", "Testing"),
-    ("test", "Testing"),
-    ("rest api", "REST APIs"),
-    ("apis", "APIs"),
-    ("backend", "Backend"),
-    ("react", "React"),
-    ("typescript", "TypeScript"),
-    ("analytics", "Analytics"),
-]
+WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{2,}\b")
+NON_SIGNAL_WORDS = {
+    "about",
+    "across",
+    "add",
+    "align",
+    "application",
+    "better",
+    "bullet",
+    "bullets",
+    "candidate",
+    "clear",
+    "clearly",
+    "concrete",
+    "cv",
+    "evidence",
+    "example",
+    "examples",
+    "exact",
+    "focus",
+    "highlight",
+    "improve",
+    "improvements",
+    "interview",
+    "keyword",
+    "keywords",
+    "match",
+    "move",
+    "narrative",
+    "next",
+    "outcomes",
+    "posting",
+    "prepare",
+    "project",
+    "projects",
+    "proof",
+    "recruiter",
+    "relevant",
+    "resume",
+    "role",
+    "section",
+    "sections",
+    "show",
+    "skills",
+    "specific",
+    "steps",
+    "story",
+    "strength",
+    "summary",
+    "tailor",
+    "topic",
+    "topics",
+    "truthful",
+    "wording",
+}
 
 
 class CvFitSignature(dspy.Signature):
@@ -62,31 +99,31 @@ class CvFitSignature(dspy.Signature):
         desc="2-3 concrete sentences on overall fit, strongest evidence from the CV, biggest gap, and what that means for candidacy. Stay grounded in the provided text."
     )
     strengths: list[str] = dspy.OutputField(
-        desc="Max 5 substantive items, ideally 6-16 words each, with only role-relevant strengths clearly supported by the CV."
+        desc="Max 4 substantive items, ideally 6-16 words each. Only include role-relevant evidence clearly supported by the CV. No advice, no missing items, and no restating the summary."
     )
     missing_skills: list[str] = dspy.OutputField(
-        desc="Max 5 substantive items, ideally 6-16 words each, naming the most important missing skills, missing evidence, or unclear proof points."
+        desc="Max 4 substantive items, ideally 6-16 words each, naming the most important missing skills, missing evidence, or unclear proof points. No advice or generic filler."
     )
     likely_fit_level: str = dspy.OutputField(
         desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
     )
     resume_improvements: list[str] = dspy.OutputField(
-        desc="Max 5 concrete action items, ideally 6-18 words each, for CV edits that would show fit better."
+        desc="Max 3 concrete CV-edit actions, ideally 6-18 words each. Focus only on changing bullet content, ordering, or proof in the resume itself. Do not repeat ATS, recruiter, interview, or next-step guidance."
     )
     ats_improvements: list[str] = dspy.OutputField(
-        desc="Max 4 concrete ATS-focused actions, ideally 6-16 words each, about exact wording, keyword placement, skills sections, and alignment to the posting."
+        desc="Max 3 ATS-focused actions, ideally 6-16 words each, only about keyword wording, exact terminology, skills-section coverage, and alignment to the posting. Do not repeat resume bullets or recruiter advice."
     )
     recruiter_improvements: list[str] = dspy.OutputField(
-        desc="Max 4 recruiter-focused actions, ideally 6-16 words each, about impact, credibility, specificity, and narrative strength."
+        desc="Max 3 recruiter-facing actions, ideally 6-16 words each, only about credibility, specificity, business impact, and narrative strength. Do not repeat ATS or resume-edit advice."
     )
     rewritten_bullets: list[str] = dspy.OutputField(
         desc="Max 3 rewritten CV bullet examples tailored to this role. Each bullet should sound resume-ready, include action + context + measurable or concrete outcome, and stay grounded in the provided evidence."
     )
     interview_focus: list[str] = dspy.OutputField(
-        desc="Max 5 concrete prep topics, ideally 5-16 words each, based on the strongest match areas or biggest gaps."
+        desc="Max 3 concrete interview prep topics, ideally 5-16 words each. These are live discussion topics to prepare for, not resume edits or ATS tweaks."
     )
     next_steps: list[str] = dspy.OutputField(
-        desc="Max 5 immediate next steps, ideally 6-18 words each, to improve this exact application."
+        desc="Max 3 immediate next steps, ideally 6-18 words each, for what the candidate should do next after reading this analysis. Keep them action-oriented and distinct from the resume, ATS, recruiter, and interview lists."
     )
 
 
@@ -185,26 +222,14 @@ class CvAnalyzerService:
                 },
             )
         except HTTPException as exc:
-            logger.warning(
-                "ai_fallback operation=cv_match_analysis fallback=true reason=http_%s",
-                exc.status_code,
-            )
-            return self._build_fallback_analysis(
-                job_title=job_title,
-                job_description=job_description,
-                cv_text=cv_text,
-                language=selected_language,
-            )
+            logger.warning("ai_call_http_error operation=cv_match_analysis status_code=%s", exc.status_code)
+            raise
         except Exception as exc:
-            if looks_like_ai_auth_error(exc):
-                logger.warning("ai_fallback operation=cv_match_analysis fallback=true reason=auth")
-            else:
-                logger.warning("ai_fallback operation=cv_match_analysis fallback=true reason=exception", exc_info=exc)
-            return self._build_fallback_analysis(
-                job_title=job_title,
-                job_description=job_description,
-                cv_text=cv_text,
-                language=selected_language,
+            raise build_ai_failure_http_exception(
+                exc=exc,
+                logger=logger,
+                operation="cv_match_analysis",
+                default_detail="Failed to compare the CV against this job. Please try again.",
             )
         finally:
             logger.info(
@@ -225,84 +250,21 @@ class CvAnalyzerService:
             interview_focus=_normalize_list(result.interview_focus),
             next_steps=_normalize_list(result.next_steps),
         )
+        response = _refine_cv_analysis_response(response)
+        if not _is_meaningful_cv_analysis(response):
+            logger.warning("ai_invalid_output operation=cv_match_analysis reason=low_quality_output")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "The AI returned a low-quality CV analysis. "
+                    "Please try again with the AI provider available."
+                ),
+            )
         logger.info(
             "cv_fit response_map_ms=%.1f",
             (time.perf_counter() - mapping_start) * 1000,
         )
         return response
-
-    def _build_fallback_analysis(
-        self,
-        *,
-        job_title: str,
-        job_description: str,
-        cv_text: str,
-        language: AIResponseLanguage,
-    ) -> CvAnalysisResponse:
-        matched, missing = _extract_match_signals(job_title=job_title, job_description=job_description, cv_text=cv_text)
-        match_ratio = len(matched) / max(1, len(matched) + len(missing))
-
-        if match_ratio >= 0.6 and len(matched) >= 2:
-            fit_level = "Strong"
-        elif matched:
-            fit_level = "Moderate"
-        else:
-            fit_level = "Weak"
-
-        if language == "spanish":
-            summary = (
-                f"El CV muestra alineacion con {', '.join(matched[:2])}."
-                if matched
-                else "El CV necesita mas evidencia concreta para demostrar encaje con este puesto."
-            )
-            strengths = [f"Experiencia demostrada en {item}" for item in matched[:MAX_LIST_ITEMS]]
-            gaps = [f"Falta evidencia clara de {item}" for item in missing[:MAX_LIST_ITEMS]]
-            resume_improvements = [f"Agrega logros o proyectos que demuestren {item}" for item in missing[:MAX_LIST_ITEMS]]
-            ats_improvements = [f"Incluye {item} con el wording del aviso cuando sea veraz" for item in missing[:MAX_LIST_ITEMS]]
-            recruiter_improvements = [f"Cuantifica tu impacto relacionado con {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
-            rewritten_bullets = [f"Demostre {item} en un proyecto o experiencia reciente con contexto e impacto medible" for item in matched[:3]]
-            interview_focus = [f"Prepara ejemplos concretos sobre {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
-            next_steps = (
-                [f"Actualiza el CV para resaltar {item}" for item in missing[:2]]
-                or ["Destaca los logros mas relevantes al inicio del CV"]
-            )
-        else:
-            summary = (
-                f"The CV aligns best with {', '.join(matched[:2])}."
-                if matched
-                else "The CV needs clearer evidence to show fit for this role."
-            )
-            strengths = [f"Demonstrated experience with {item}" for item in matched[:MAX_LIST_ITEMS]]
-            gaps = [f"Clear evidence of {item} is missing" for item in missing[:MAX_LIST_ITEMS]]
-            resume_improvements = [f"Add measurable examples that show {item}" for item in missing[:MAX_LIST_ITEMS]]
-            ats_improvements = [f"Use the job's wording for {item} where it is truthful" for item in missing[:MAX_LIST_ITEMS]]
-            recruiter_improvements = [f"Quantify your impact around {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
-            rewritten_bullets = [f"Demonstrated {item} in a recent project or role with concrete scope and measurable impact" for item in matched[:3]]
-            interview_focus = [f"Prepare specific examples about {item}" for item in matched[:MAX_LIST_ITEMS] or missing[:MAX_LIST_ITEMS]]
-            next_steps = (
-                [f"Update the CV to foreground {item}" for item in missing[:2]]
-                or ["Move the strongest role-relevant achievements closer to the top of the CV"]
-            )
-
-        if not strengths:
-            strengths = (
-                ["Relevant backend delivery experience", "Transferable product and execution experience"]
-                if language == "english"
-                else ["Experiencia transferible en entrega de producto", "Base tecnica aplicable al puesto"]
-            )
-
-        return CvAnalysisResponse(
-            fit_summary=self._normalize_summary(summary),
-            strengths=_normalize_list(strengths),
-            missing_skills=_normalize_list(gaps),
-            likely_fit_level=fit_level,
-            resume_improvements=_normalize_list(resume_improvements),
-            ats_improvements=_normalize_list(ats_improvements),
-            recruiter_improvements=_normalize_list(recruiter_improvements),
-            rewritten_bullets=_normalize_list(rewritten_bullets),
-            interview_focus=_normalize_list(interview_focus),
-            next_steps=_normalize_list(next_steps),
-        )
 
     @staticmethod
     def _normalize_summary(value: object) -> str:
@@ -312,9 +274,6 @@ class CvAnalyzerService:
         text = " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -")
         return _normalize_text(text, MAX_SUMMARY_CHARS)
 
-
-
-
 _cv_service: CvAnalyzerService | None = None
 
 
@@ -323,28 +282,137 @@ def get_cv_analyzer_service() -> CvAnalyzerService:
     if _cv_service is None:
         _cv_service = CvAnalyzerService()
     return _cv_service
+def _is_meaningful_cv_analysis(response: CvAnalysisResponse) -> bool:
+    if not response.fit_summary.strip():
+        return False
+    populated_lists = sum(
+        1
+        for items in (
+            response.strengths,
+            response.missing_skills,
+            response.resume_improvements,
+            response.interview_focus,
+            response.next_steps,
+        )
+        if items
+    )
+    return populated_lists >= 3
 
 
-def _extract_match_signals(*, job_title: str, job_description: str, cv_text: str) -> tuple[list[str], list[str]]:
-    lowered_job = f"{job_title} {job_description}".lower()
-    cv_tokens = set(token.lower() for token in WORD_RE.findall(cv_text))
-    matched: list[str] = []
-    missing: list[str] = []
+def looks_like_fallback_cv_analysis(response: CvAnalysisResponse) -> bool:
+    summary = response.fit_summary.lower().strip()
+    if summary.startswith("the cv aligns best with ") or summary.startswith("el cv muestra alineacion con "):
+        return True
+    if summary == "the cv needs clearer evidence to show fit for this role.":
+        return True
+    if summary == "el cv necesita mas evidencia concreta para demostrar encaje con este puesto.":
+        return True
 
-    for needle, label in MATCH_KEYWORDS:
-        if needle not in lowered_job:
+    formulaic_patterns = (
+        "demonstrated experience with",
+        "clear evidence of",
+        "add measurable examples that show",
+        "use the job's wording for",
+        "prepare specific examples about",
+        "falta evidencia clara de",
+        "agrega logros o proyectos que demuestren",
+    )
+    items = [
+        *response.strengths,
+        *response.missing_skills,
+        *response.resume_improvements,
+        *response.ats_improvements,
+        *response.interview_focus,
+    ]
+    hits = sum(
+        any(item.lower().strip().startswith(pattern) for pattern in formulaic_patterns)
+        for item in items
+    )
+    return hits >= 3
+
+
+def _refine_cv_analysis_response(response: CvAnalysisResponse) -> CvAnalysisResponse:
+    strengths = _dedupe_items(response.strengths, limit=4)
+    missing_skills = _dedupe_items(response.missing_skills, limit=4, blocked_items=strengths)
+    rewritten_bullets = _dedupe_items(response.rewritten_bullets, limit=2)
+    resume_improvements = _dedupe_items(
+        response.resume_improvements,
+        limit=3,
+        blocked_items=strengths + rewritten_bullets,
+    )
+    ats_improvements = _dedupe_items(
+        response.ats_improvements,
+        limit=3,
+        blocked_items=resume_improvements + rewritten_bullets,
+    )
+    recruiter_improvements = _dedupe_items(
+        response.recruiter_improvements,
+        limit=3,
+        blocked_items=resume_improvements + ats_improvements + rewritten_bullets,
+    )
+    interview_focus = _dedupe_items(
+        response.interview_focus,
+        limit=3,
+        blocked_items=resume_improvements + ats_improvements + recruiter_improvements,
+    )
+    next_steps = _dedupe_items(
+        response.next_steps,
+        limit=3,
+        blocked_items=resume_improvements + ats_improvements + recruiter_improvements + interview_focus,
+    )
+    return response.model_copy(
+        update={
+            "strengths": strengths,
+            "missing_skills": missing_skills,
+            "rewritten_bullets": rewritten_bullets,
+            "resume_improvements": resume_improvements,
+            "ats_improvements": ats_improvements,
+            "recruiter_improvements": recruiter_improvements,
+            "interview_focus": interview_focus,
+            "next_steps": next_steps,
+        }
+    )
+
+
+def _dedupe_items(
+    items: list[str],
+    *,
+    limit: int,
+    blocked_items: list[str] | None = None,
+) -> list[str]:
+    blocked_signatures = [_item_signature(item) for item in blocked_items or [] if item.strip()]
+    kept: list[str] = []
+    kept_signatures: list[set[str]] = []
+    for item in items:
+        normalized = _normalize_text(item, 180).strip()
+        if not normalized:
             continue
-        is_present = all(part in cv_tokens for part in needle.split())
-        target = matched if is_present else missing
-        if label not in target:
-            target.append(label)
+        signature = _item_signature(normalized)
+        if signature:
+            if any(_signatures_overlap(signature, blocked) for blocked in blocked_signatures):
+                continue
+            if any(_signatures_overlap(signature, existing) for existing in kept_signatures):
+                continue
+            kept_signatures.append(signature)
+        elif normalized in kept:
+            continue
+        kept.append(normalized)
+        if len(kept) >= limit:
+            break
+    return kept
 
-    if not matched and cv_tokens:
-        job_tokens = [
-            token.title()
-            for token in WORD_RE.findall(job_title)
-            if len(token) > 3 and token.lower() in cv_tokens
-        ]
-        matched.extend(job_tokens[:2])
 
-    return matched[:MAX_LIST_ITEMS], missing[:MAX_LIST_ITEMS]
+def _item_signature(value: str) -> set[str]:
+    tokens = {
+        token.lower()
+        for token in WORD_RE.findall(value)
+        if token.lower() not in NON_SIGNAL_WORDS and len(token) >= 4
+    }
+    return tokens
+
+
+def _signatures_overlap(left: set[str], right: set[str]) -> bool:
+    if not left or not right:
+        return False
+    overlap = left & right
+    return len(overlap) >= 2 or overlap == left or overlap == right

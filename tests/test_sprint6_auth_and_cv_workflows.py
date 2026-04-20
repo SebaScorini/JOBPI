@@ -134,6 +134,11 @@ def test_upload_valid_pdf_returns_cv(client, auth_headers, monkeypatch):
 
     monkeypatch.setattr(cv_service_module, "extract_raw_pdf_text", lambda _file_bytes: "Python FastAPI SQL")
     monkeypatch.setattr(cv_service_module, "preprocess_cv_text", lambda raw_text, max_chars=None: raw_text[:max_chars])
+    monkeypatch.setattr(
+        cv_service_module.CvLibraryService,
+        "_build_library_summary",
+        lambda self, _clean_text: "Python backend summary.",
+    )
 
     response = client.post(
         "/cvs/upload",
@@ -147,6 +152,38 @@ def test_upload_valid_pdf_returns_cv(client, auth_headers, monkeypatch):
     assert payload["display_name"] == "Primary Resume"
     assert payload["summary"]
     assert payload["library_summary"]
+
+
+def test_upload_returns_explicit_error_when_cv_analysis_unavailable(client, auth_headers, monkeypatch):
+    import app.services.cv_library_service as cv_service_module
+    from fastapi import HTTPException, status
+
+    monkeypatch.setattr(cv_service_module, "extract_raw_pdf_text", lambda _file_bytes: "Python FastAPI SQL")
+    monkeypatch.setattr(cv_service_module, "preprocess_cv_text", lambda raw_text, max_chars=None: raw_text[:max_chars])
+
+    def _raise_summary_error(self, _clean_text: str) -> str:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI analysis is not configured.",
+        )
+
+    monkeypatch.setattr(
+        cv_service_module.CvLibraryService,
+        "_build_library_summary",
+        _raise_summary_error,
+    )
+
+    response = client.post(
+        "/cvs/upload",
+        headers=auth_headers(),
+        files={"file": ("resume.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        data={"display_name": "Primary Resume"},
+    )
+
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["error"]["code"] == "ERR_SERVICE_UNAVAILABLE"
+    assert payload["error"]["message"] == "AI analysis is not configured."
 
 
 def test_upload_rejects_non_pdf_file(client, auth_headers):
@@ -195,6 +232,11 @@ def test_batch_upload_allows_partial_success(client, auth_headers, monkeypatch):
 
     monkeypatch.setattr(cv_service_module, "extract_raw_pdf_text", lambda _file_bytes: "Python FastAPI SQL")
     monkeypatch.setattr(cv_service_module, "preprocess_cv_text", lambda raw_text, max_chars=None: raw_text[:max_chars])
+    monkeypatch.setattr(
+        cv_service_module.CvLibraryService,
+        "_build_library_summary",
+        lambda self, _clean_text: "Python backend summary.",
+    )
 
     response = client.post(
         "/cvs/batch-upload",

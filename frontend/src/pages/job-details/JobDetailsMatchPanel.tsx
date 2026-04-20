@@ -49,7 +49,7 @@ interface MatchSectionProps {
 
 function MatchSection({ title, eyebrow, tone, icon, items }: MatchSectionProps) {
   return (
-    <section className={`improvement-panel-card improvement-panel-card-${tone}`}>
+    <section className={`improvement-panel-card improvement-panel-card-${tone} flex flex-col`}>
       <div className="mb-4 flex items-start gap-3">
         <div className={`improvement-panel-icon improvement-panel-icon-${tone}`}>{icon}</div>
         <div>
@@ -61,7 +61,7 @@ function MatchSection({ title, eyebrow, tone, icon, items }: MatchSectionProps) 
       </div>
 
       {items.length > 0 ? (
-        <ul className="space-y-3">
+        <ul className="flex-1 space-y-3">
           {items.map((item, index) => (
             <li key={`${title}-${index}`} className="improvement-panel-list-item">
               <span className={`improvement-panel-bullet improvement-panel-bullet-${tone}`} aria-hidden="true" />
@@ -70,7 +70,7 @@ function MatchSection({ title, eyebrow, tone, icon, items }: MatchSectionProps) 
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+        <p className="flex-1 text-sm text-slate-500 dark:text-slate-400">--</p>
       )}
     </section>
   );

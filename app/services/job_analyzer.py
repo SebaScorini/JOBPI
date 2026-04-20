@@ -37,6 +37,23 @@ MAX_LIST_ITEMS = 5
 MAX_ITEM_CHARS = 140
 MAX_SUMMARY_CHARS = 280
 JOB_ANALYSIS_RETRY_DESCRIPTION_CHARS = 5000
+NON_SIGNAL_ITEM_WORDS = {
+    "candidate",
+    "concrete",
+    "focus",
+    "interview",
+    "learn",
+    "learning",
+    "portfolio",
+    "prepare",
+    "project",
+    "projects",
+    "resume",
+    "role",
+    "skills",
+    "specific",
+    "tips",
+}
 SKILL_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
     ("Retool", ("retool",)),
     ("SQL", ("sql", "postgresql", "mysql", "presto")),
@@ -73,6 +90,7 @@ ROLE_TYPE_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
     ("operations", ("operational workflow", "operations", "automation")),
 ]
 logger = logging.getLogger(__name__)
+FALLBACK_ANALYSIS_MARKER = "_fallback"
 
 
 class LeanJobAnalysisSignature(dspy.Signature):
@@ -98,7 +116,7 @@ class LeanJobAnalysisSignature(dspy.Signature):
         desc="Single short role family such as backend, full-stack, frontend, data, devops, mobile, qa, product, or generalist."
     )
     req_skills: list[str] = dspy.OutputField(
-        desc="Max 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short, high-signal phrases only."
+        desc="Max 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short, high-signal phrases only. Avoid repeating role family or obvious duplicates."
     )
     nice_skills: list[str] = dspy.OutputField(
         desc="Max 5 preferred or bonus skills that are helpful but not clearly mandatory. Only include items supported by the posting."
@@ -107,22 +125,22 @@ class LeanJobAnalysisSignature(dspy.Signature):
         desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and avoid generic filler."
     )
     prep: list[str] = dspy.OutputField(
-        desc="Max 5 concrete preparation actions for applying or interviewing well for this specific role. Tie each action to the role's actual requirements."
+        desc="Max 4 concrete preparation actions for applying or interviewing well for this specific role. Focus on what to study, practice, or gather. Do not repeat resume edits, interview topics, or project ideas."
     )
     learn: list[str] = dspy.OutputField(
-        desc="Max 5 focused learning priorities that would close common gaps for this exact posting. Keep them specific and practical."
+        desc="Max 4 focused learning priorities that would close common gaps for this exact posting. These should be skill-building priorities, not interview prep or resume edits."
     )
     gaps: list[str] = dspy.OutputField(
         desc="Max 5 concrete candidate gaps suggested by the posting's expectations. Mention only requirements that appear important for fit."
     )
     resume: list[str] = dspy.OutputField(
-        desc="Max 5 resume improvements that would better align a CV to this role. Each item must be directly actionable and role-specific."
+        desc="Max 4 resume improvements that would better align a CV to this role. Each item must be directly actionable and role-specific. Focus only on CV content and proof, not interview prep."
     )
     interview: list[str] = dspy.OutputField(
-        desc="Max 5 interview focus points the candidate should prepare for, based on the role's scope, tools, and expected outcomes."
+        desc="Max 4 interview focus points the candidate should prepare for, based on the role's scope, tools, and expected outcomes. These are live discussion topics, not resume edits or general prep reminders."
     )
     projects: list[str] = dspy.OutputField(
-        desc="Max 5 portfolio or project ideas that would increase fit for this exact role. Make them realistic, specific, and relevant to the posting."
+        desc="Max 3 portfolio or project ideas that would increase fit for this exact role. Make them realistic, specific, and relevant to the posting. Avoid repeating learning priorities or interview topics."
     )
 
 
@@ -202,7 +220,11 @@ class JobAnalyzerService:
                 company=payload.company,
                 clean_description=cleaned_description,
             )
-            if stored is not None and _analysis_language(stored.analysis_result) == selected_language:
+            if (
+                stored is not None
+                and _analysis_language(stored.analysis_result) == selected_language
+                and not _is_persisted_fallback_job_analysis(stored.analysis_result)
+            ):
                 logger.info("ai_cache operation=job_analysis cache_status=hit source=db job_id=%s", stored.id)
                 response = JobAnalysisPayload(**stored.analysis_result)
                 self._cache[cache_key] = response.model_copy(deep=True)
@@ -260,27 +282,24 @@ class JobAnalyzerService:
                 },
             )
             response = self._build_payload_from_result(result)
+            if not _is_meaningful_job_analysis_payload(response):
+                logger.warning("ai_invalid_output operation=job_analysis reason=low_quality_output")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        "The AI returned a low-quality job analysis. "
+                        "Please try again with the AI provider available."
+                    ),
+                )
         except HTTPException as exc:
-            logger.warning(
-                "ai_fallback operation=job_analysis fallback=true reason=http_%s",
-                exc.status_code,
-            )
-            response = self._build_fallback_analysis_payload(
-                title=payload.title,
-                company=payload.company,
-                cleaned_description=retry_description,
-                language=selected_language,
-            )
+            logger.warning("ai_call_http_error operation=job_analysis status_code=%s", exc.status_code)
+            raise
         except Exception as exc:
-            if looks_like_ai_auth_error(exc):
-                logger.warning("ai_fallback operation=job_analysis fallback=true reason=auth")
-            else:
-                logger.warning("ai_fallback operation=job_analysis fallback=true reason=exception", exc_info=exc)
-            response = self._build_fallback_analysis_payload(
-                title=payload.title,
-                company=payload.company,
-                cleaned_description=retry_description,
-                language=selected_language,
+            raise build_ai_failure_http_exception(
+                exc=exc,
+                logger=logger,
+                operation="job_analysis",
+                default_detail="Failed to analyze job description. Please try again.",
             )
 
         if response is None:
@@ -303,9 +322,10 @@ class JobAnalyzerService:
                     stored = crud.update_job_analysis_result(
                         session,
                         stored,
-                        {**response.model_dump(), "_language": selected_language},
+                        _serialize_job_analysis_result(response, selected_language),
                     )
-                    self._cache[cache_key] = response.model_copy(deep=True)
+                    if _should_cache_job_analysis_payload(response):
+                        self._cache[cache_key] = response.model_copy(deep=True)
                     return self._serialize_job(stored)
 
             stored = crud.create_job_analysis(
@@ -315,11 +335,13 @@ class JobAnalyzerService:
                 company=payload.company,
                 description=payload.description,
                 clean_description=cleaned_description,
-                analysis_result={**response.model_dump(), "_language": selected_language},
+                analysis_result=_serialize_job_analysis_result(response, selected_language),
             )
-            self._cache[cache_key] = response.model_copy(deep=True)
+            if _should_cache_job_analysis_payload(response):
+                self._cache[cache_key] = response.model_copy(deep=True)
             return self._serialize_job(stored)
-        self._cache[cache_key] = response.model_copy(deep=True)
+        if _should_cache_job_analysis_payload(response):
+            self._cache[cache_key] = response.model_copy(deep=True)
         return JobRead(
             id=0,
             title=payload.title,
@@ -422,7 +444,7 @@ class JobAnalyzerService:
         )
 
     def _build_payload_from_result(self, result: object) -> JobAnalysisPayload:
-        return JobAnalysisPayload(
+        return _refine_job_analysis_payload(JobAnalysisPayload(
             summary=_normalize_summary_text(getattr(result, "summary", ""), MAX_SUMMARY_CHARS),
             seniority=_normalize_text(getattr(result, "seniority", ""), 40),
             role_type=_normalize_text(getattr(result, "role_type", ""), 40),
@@ -435,7 +457,7 @@ class JobAnalyzerService:
             resume_tips=_normalize_list(getattr(result, "resume", [])),
             interview_tips=_normalize_list(getattr(result, "interview", [])),
             portfolio_project_ideas=_normalize_list(getattr(result, "projects", [])),
-        )
+        ))
 
     def _build_fallback_analysis_payload(
         self,
@@ -587,9 +609,158 @@ def _build_cache_key(title: str, company: str, description: str, language: AIRes
     return build_context_fingerprint("job_analysis", title, company, description, language)
 
 
+def _serialize_job_analysis_result(payload: JobAnalysisPayload, language: AIResponseLanguage) -> dict[str, object]:
+    data = {**payload.model_dump(), "_language": language}
+    if _is_fallback_job_analysis_payload(payload):
+        data[FALLBACK_ANALYSIS_MARKER] = True
+    return data
+
+
 def _analysis_language(analysis_result: dict) -> AIResponseLanguage:
     language = analysis_result.get("_language") if isinstance(analysis_result, dict) else None
     return normalize_language(language)
+
+
+def _is_persisted_fallback_job_analysis(analysis_result: dict | object) -> bool:
+    return bool(isinstance(analysis_result, dict) and analysis_result.get(FALLBACK_ANALYSIS_MARKER))
+
+
+def _should_cache_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
+    return not _is_fallback_job_analysis_payload(payload)
+
+
+def _is_fallback_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
+    formulaic_prefixes = (
+        "prepare 2-3 stories",
+        "prepara 2-3 historias",
+        "move your strongest evidence",
+        "lleva tu mejor evidencia",
+        "expect detailed questions on",
+        "espera preguntas especificas sobre",
+        "build an internal operations dashboard",
+        "construye un dashboard interno de operaciones",
+    )
+    summary = payload.summary.lower().strip()
+    if "the posting emphasizes cross-functional delivery" in summary:
+        return True
+    if "el aviso enfatiza trabajo cross-functional" in summary:
+        return True
+
+    combined_lists = [
+        *payload.how_to_prepare,
+        *payload.resume_tips,
+        *payload.interview_tips,
+        *payload.portfolio_project_ideas,
+    ]
+    lowered_items = [item.lower().strip() for item in combined_lists if item.strip()]
+    formulaic_hits = sum(
+        any(item.startswith(prefix) for prefix in formulaic_prefixes)
+        for item in lowered_items
+    )
+    return formulaic_hits >= 2
+
+
+def _is_meaningful_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
+    populated_lists = sum(
+        1
+        for items in (
+            payload.required_skills,
+            payload.responsibilities,
+            payload.how_to_prepare,
+            payload.resume_tips,
+            payload.interview_tips,
+        )
+        if items
+    )
+    return bool(payload.summary.strip()) and populated_lists >= 3
+
+
+def _refine_job_analysis_payload(payload: JobAnalysisPayload) -> JobAnalysisPayload:
+    required_skills = _dedupe_job_items(payload.required_skills, limit=5)
+    nice_to_have_skills = _dedupe_job_items(payload.nice_to_have_skills, limit=4, blocked_items=required_skills)
+    responsibilities = _dedupe_job_items(payload.responsibilities, limit=4)
+    how_to_prepare = _dedupe_job_items(
+        payload.how_to_prepare,
+        limit=4,
+        blocked_items=responsibilities,
+    )
+    learning_path = _dedupe_job_items(
+        payload.learning_path,
+        limit=4,
+        blocked_items=how_to_prepare,
+    )
+    missing_skills = _dedupe_job_items(payload.missing_skills, limit=4, blocked_items=required_skills)
+    resume_tips = _dedupe_job_items(
+        payload.resume_tips,
+        limit=4,
+        blocked_items=how_to_prepare + learning_path,
+    )
+    interview_tips = _dedupe_job_items(
+        payload.interview_tips,
+        limit=4,
+        blocked_items=how_to_prepare + resume_tips,
+    )
+    portfolio_project_ideas = _dedupe_job_items(
+        payload.portfolio_project_ideas,
+        limit=3,
+        blocked_items=learning_path + interview_tips,
+    )
+    return payload.model_copy(
+        update={
+            "required_skills": required_skills,
+            "nice_to_have_skills": nice_to_have_skills,
+            "responsibilities": responsibilities,
+            "how_to_prepare": how_to_prepare,
+            "learning_path": learning_path,
+            "missing_skills": missing_skills,
+            "resume_tips": resume_tips,
+            "interview_tips": interview_tips,
+            "portfolio_project_ideas": portfolio_project_ideas,
+        }
+    )
+
+
+def _dedupe_job_items(
+    items: list[str],
+    *,
+    limit: int,
+    blocked_items: list[str] | None = None,
+) -> list[str]:
+    blocked_signatures = [_job_item_signature(item) for item in blocked_items or [] if item.strip()]
+    kept: list[str] = []
+    kept_signatures: list[set[str]] = []
+    for item in items:
+        normalized = _normalize_text(item, 180).strip()
+        if not normalized:
+            continue
+        signature = _job_item_signature(normalized)
+        if signature:
+            if any(_job_signatures_overlap(signature, blocked) for blocked in blocked_signatures):
+                continue
+            if any(_job_signatures_overlap(signature, existing) for existing in kept_signatures):
+                continue
+            kept_signatures.append(signature)
+        elif normalized in kept:
+            continue
+        kept.append(normalized)
+        if len(kept) >= limit:
+            break
+    return kept
+
+
+def _job_item_signature(value: str) -> set[str]:
+    return {
+        token.lower()
+        for token in re.findall(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{2,}\b", value)
+        if token.lower() not in NON_SIGNAL_ITEM_WORDS and len(token) >= 4
+    }
+
+
+def _job_signatures_overlap(left: set[str], right: set[str]) -> bool:
+    if not left or not right:
+        return False
+    overlap = left & right
+    return len(overlap) >= 2 or overlap == left or overlap == right
 
 
 def _looks_actionable_fallback_sentence(value: str) -> bool:

@@ -165,17 +165,19 @@ def build_ai_failure_http_exception(
     operation: str,
     default_detail: str,
 ) -> HTTPException:
-    logger.exception("ai_call_failed operation=%s", operation, exc_info=exc)
     if looks_like_ai_auth_error(exc):
+        logger.warning("ai_call_failed operation=%s reason=auth", operation)
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI analysis is not configured.",
         )
     if _looks_like_provider_unavailable(exc):
+        logger.warning("ai_call_failed operation=%s reason=provider_unavailable", operation)
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=AI_PROVIDER_UNAVAILABLE_DETAIL,
         )
+    logger.exception("ai_call_failed operation=%s", operation, exc_info=exc)
     return HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=default_detail,

@@ -18,11 +18,8 @@ from app.schemas.match import (
     CVJobMatchRead,
     MatchLevel,
 )
-from app.services.cv_analyzer import get_cv_analyzer_service
-from app.services.cv_library_summary_service import (
-    get_cv_library_summary_service,
-    _heuristic_library_summary,
-)
+from app.services.cv_analyzer import get_cv_analyzer_service, looks_like_fallback_cv_analysis
+from app.services.cv_library_summary_service import get_cv_library_summary_service
 from app.services.job_preprocessing import CONTEXT_BUILDER_VERSION
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 from app.services.response_language import (
@@ -453,7 +450,8 @@ class CvLibraryService:
             cv_text=cv_text,
             language=language,
         )
-        self._analysis_cache[cache_key] = result.model_copy(deep=True)
+        if not looks_like_fallback_cv_analysis(result):
+            self._analysis_cache[cache_key] = result.model_copy(deep=True)
         return result
 
     def _get_pair_analysis_result(
@@ -469,13 +467,22 @@ class CvLibraryService:
         regenerate: bool = False,
     ) -> CvAnalysisResponse:
         if existing_match is not None and not regenerate:
-            logger.info(
-                "ai_cache_reuse operation=cv_match_analysis source=db user_id=%s job_id=%s cv_id=%s",
-                user_id,
-                job_id,
-                cv_id,
-            )
-            return self._build_cached_match_result(existing_match, language)
+            cached_result = self._build_cached_match_result(existing_match, language)
+            if looks_like_fallback_cv_analysis(cached_result):
+                logger.info(
+                    "ai_cache_reuse operation=cv_match_analysis source=db skipped=fallback_like user_id=%s job_id=%s cv_id=%s",
+                    user_id,
+                    job_id,
+                    cv_id,
+                )
+            else:
+                logger.info(
+                    "ai_cache_reuse operation=cv_match_analysis source=db user_id=%s job_id=%s cv_id=%s",
+                    user_id,
+                    job_id,
+                    cv_id,
+                )
+                return cached_result
 
         try:
             logger.info(
@@ -771,9 +778,14 @@ class CvLibraryService:
     def _build_library_summary(self, clean_text: str) -> str:
         try:
             return self._get_library_summary_service().generate(clean_text)
+        except HTTPException:
+            raise
         except Exception:
             logger.warning("cv_library_summary_service_unavailable", exc_info=True)
-            return _heuristic_library_summary(clean_text)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to generate CV summary with AI. Please try again.",
+            )
 
     def _get_loaded_attr(self, obj: object, attr_name: str) -> str:
         try:
@@ -793,17 +805,26 @@ class CvLibraryService:
         if isinstance(current, str) and current.strip():
             return current
 
+        summary = getattr(cv, "summary", "")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+
         # Avoid write-on-read and expensive lazy loads in list endpoints.
         clean_text = self._get_loaded_attr(cv, "clean_text")
         if clean_text.strip():
-            return _heuristic_library_summary(clean_text)
-
-        summary = getattr(cv, "summary", "")
-        if isinstance(summary, str) and summary.strip():
-            return _heuristic_library_summary(summary)
+            first_line = next(
+                (
+                    " ".join(line.split()).strip(" -")
+                    for line in clean_text.splitlines()
+                    if " ".join(line.split()).strip(" -")
+                ),
+                "",
+            )
+            if first_line:
+                return first_line[:180]
 
         display_name = getattr(cv, "display_name", "")
-        return _heuristic_library_summary(display_name if isinstance(display_name, str) else "")
+        return display_name.strip() if isinstance(display_name, str) else ""
 
     def _serialize_cv(self, session: Session, cv: object) -> CVRead:
         return CVRead(

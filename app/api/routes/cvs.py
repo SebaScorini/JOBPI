@@ -22,11 +22,16 @@ from app.schemas.cv import (
     CVTagsUpdate,
     CVUploadResult,
 )
-from app.services.cv_library_service import get_cv_library_service
 
 
 router = APIRouter(prefix="/cvs", tags=["cvs"])
 logger = logging.getLogger(__name__)
+
+
+def _get_cv_library_service():
+    from app.services.cv_library_service import get_cv_library_service
+
+    return get_cv_library_service()
 
 
 @router.post("/upload", response_model=CVRead, status_code=status.HTTP_201_CREATED)
@@ -68,7 +73,7 @@ async def upload_cv(
             detail=f"PDF file must be under {settings.max_pdf_size_mb} MB.",
         )
 
-    service = get_cv_library_service()
+    service = _get_cv_library_service()
     try:
         return service.upload_cv(
             session=session,
@@ -125,7 +130,7 @@ async def batch_upload_cvs(
             detail=f"You can upload up to {settings.max_cvs_per_upload} CVs per request.",
         )
 
-    service = get_cv_library_service()
+    service = _get_cv_library_service()
     results: list[CVUploadResult] = []
     succeeded = 0
     failed = 0
@@ -219,7 +224,7 @@ def list_cvs(
     current_user: User = Depends(get_current_user),
 ) -> CVListResponse:
     params = PaginationParams(limit=limit, offset=offset)
-    cvs, total = get_cv_library_service().list_cvs_filtered(
+    cvs, total = _get_cv_library_service().list_cvs_filtered(
         session,
         current_user,
         search=search,
@@ -236,7 +241,7 @@ def get_cv(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVDetailRead:
-    return get_cv_library_service().get_cv(session, current_user, cv_id)
+    return _get_cv_library_service().get_cv(session, current_user, cv_id)
 
 
 @router.get("/{cv_id}/download", response_model=CVDownloadResponse)
@@ -245,7 +250,7 @@ def download_cv(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVDownloadResponse:
-    url = get_cv_library_service().get_cv_download_url(session, current_user, cv_id)
+    url = _get_cv_library_service().get_cv_download_url(session, current_user, cv_id)
     return CVDownloadResponse(url=url)
 
 
@@ -256,7 +261,7 @@ def update_cv_tags(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVRead:
-    return get_cv_library_service().update_cv_tags(session, current_user, cv_id, payload.tags)
+    return _get_cv_library_service().update_cv_tags(session, current_user, cv_id, payload.tags)
 
 
 @router.patch("/{cv_id}/toggle-favorite", response_model=CVRead)
@@ -265,7 +270,7 @@ def toggle_cv_favorite(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVRead:
-    return get_cv_library_service().toggle_cv_favorite(session, current_user, cv_id)
+    return _get_cv_library_service().toggle_cv_favorite(session, current_user, cv_id)
 
 
 @router.post("/bulk-delete", response_model=BulkActionResponse)
@@ -274,7 +279,7 @@ def bulk_delete_cvs(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> BulkActionResponse:
-    return BulkActionResponse(**get_cv_library_service().bulk_delete_cvs(session, current_user, payload.cv_ids))
+    return BulkActionResponse(**_get_cv_library_service().bulk_delete_cvs(session, current_user, payload.cv_ids))
 
 
 @router.post("/bulk-tag", response_model=BulkActionResponse)
@@ -283,7 +288,7 @@ def bulk_tag_cvs(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> BulkActionResponse:
-    return BulkActionResponse(**get_cv_library_service().bulk_tag_cvs(session, current_user, payload.cv_ids, payload.tags))
+    return BulkActionResponse(**_get_cv_library_service().bulk_tag_cvs(session, current_user, payload.cv_ids, payload.tags))
 
 
 @router.delete("/{cv_id}")
@@ -292,5 +297,5 @@ def delete_cv(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, bool]:
-    get_cv_library_service().delete_cv(session, current_user, cv_id)
+    _get_cv_library_service().delete_cv(session, current_user, cv_id)
     return {"ok": True}
