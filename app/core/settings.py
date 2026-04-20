@@ -1,7 +1,9 @@
 import os
 import threading
+from importlib import import_module
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
 
 from app.core.runtime import configure_runtime_environment
@@ -13,6 +15,13 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     import dspy
+
+
+# Keep a patchable module-level handle for tests while still allowing lazy import.
+dspy: Any = SimpleNamespace(
+    LM=None,
+    settings=SimpleNamespace(configure=lambda **kwargs: None),
+)
 
 
 AppEnv = Literal["development", "production"]
@@ -434,9 +443,11 @@ def configure_dspy() -> Any:
         if _DSPY_LM is not None:
             return _DSPY_LM
 
-        import dspy
+        dspy_module = dspy
+        if getattr(dspy_module, "LM", None) is None:
+            dspy_module = import_module("dspy")
 
-        lm = dspy.LM(
+        lm = dspy_module.LM(
             model=normalize_dspy_model(settings.dspy_model, settings.openrouter_base_url),
             api_key=settings.openrouter_api_key,
             api_base=settings.openrouter_base_url,
@@ -444,6 +455,6 @@ def configure_dspy() -> Any:
             max_tokens=max(50, min(settings.max_output_tokens, 4000)),
             extra_body={"reasoning": {"enabled": False}},
         )
-        dspy.settings.configure(lm=lm)
+        dspy_module.settings.configure(lm=lm)
         _DSPY_LM = lm
         return lm
