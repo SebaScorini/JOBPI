@@ -2,7 +2,7 @@
 
 Use this checklist after each deployment to confirm JOBPI is healthy and observable.
 
-## Sprint 7 Local Reliability Checks
+## Local Reliability Checks
 
 Before deployment, run:
 

@@ -1,66 +1,98 @@
 # JOBPI
 
-AI-powered job application assistant for CV optimization, role matching, and application tracking.
-
-# JOBPI
-
-AI-powered job application assistant for CV optimization, role matching, and application tracking.
+JOBPI is an AI-powered job application assistant for analyzing roles, managing a CV library, matching resumes to jobs, generating cover letters, and tracking application progress.
 
 ## Overview
 
-JOBPI helps users analyze job descriptions, manage a personal CV library, compare CVs against a role, generate cover letters, and track applications in one workflow. The backend handles authentication, persistence, and AI-assisted analysis; the frontend provides the dashboard and job-management experience.
-
-## Tech Stack
-
-Backend: FastAPI, SQLModel, PostgreSQL on Supabase, Supabase Auth & Storage, SQLite fallback for local development, DSPy, OpenRouter.
-
-Frontend: React, TypeScript, Vite, Tailwind CSS, Framer Motion, React Router.
+The backend is a FastAPI service with SQLModel persistence, Supabase Auth and Storage integration, and DSPy-powered AI workflows through OpenRouter. The frontend is a React + Vite SPA that provides the dashboard, job analysis, CV library, match views, and application tracker.
 
 ## Features
 
-- Supabase Authentication (JWT-based)
-- Single and batch CV upload with Supabase Storage
-- CV summaries, tags, and favorite CV support
-- Job description analysis with modern motion UI
-- CV-to-job matching and comparison
-- Tailored cover letter generation
-- Job tracking with soft-delete and audit support
-- Job-detail copy actions for high-signal analysis sections
+- Supabase-backed sign up, login, password reset, and session handling.
+- Single and batch CV upload with PDF storage and signed download links.
+- CV library management with search, tags, favorites, bulk delete, and bulk tagging.
+- Job analysis with structured AI output, saved jobs, status updates, notes, and soft delete.
+- CV-to-job match analysis, CV comparison, and tailored cover letter generation.
+- Match list and tracker views for reviewing application progress.
+- English and Spanish UI plus matching AI response language.
 
-```bash
-# Copy environment template
-cp .config/.env.docker .env
+## Tech Stack
 
-# Customize environment variables in .env as needed
+- Backend: FastAPI, SQLModel, Alembic, PostgreSQL, SQLite fallback for development.
+- AI: DSPy, OpenRouter, token clamping, circuit breaker retries, and response normalization.
+- Auth and storage: Supabase Auth, Supabase Storage, legacy JWT bridge support.
+- Frontend: React 18, TypeScript, Vite, React Router, Tailwind CSS, Framer Motion, Supabase JS.
+- Ops: Redis optional for shared rate limiting, Sentry optional for error tracking, Vercel deployment support.
 
-# Start all services (backend, frontend, database)
+## Setup
+
+### 1. Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- npm
+- PostgreSQL if you want to run against a local database instead of the SQLite fallback
+- An OpenRouter API key
+- A Supabase project if you want auth and storage to work end-to-end
+
+### 2. Environment variables
+
+The full list is documented in [.env.example](.env.example) and [.config/.env.docker](.config/.env.docker).
+
+Backend variables you will usually need:
+
+- `DATABASE_URL` - PostgreSQL in production, optional SQLite fallback in development.
+- `SECRET_KEY`
+- `OPENROUTER_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_JWT_SECRET`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CORS_ORIGINS`
+- `REDIS_URL` if you want distributed rate limiting
+
+Frontend variables you will usually need:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_API_URL` if the frontend is not talking to the default local backend or hosted API
+- `VITE_SITE_URL` for canonical URLs and password reset redirects
+
+### 3. Docker setup
+
+Docker is the fastest way to run the whole stack locally.
+
+```powershell
+Copy-Item .config\.env.docker .env
 make up
-
-# View logs
-make logs
-
-# Access the app
-# Frontend: http://localhost:3000
-# Backend: http://localhost:8000
-# Docs: http://localhost:8000/docs
 ```
 
-See [DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md) for detailed Docker setup.
+Then open:
 
-### Option 2: Local Installation
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+- API docs: http://localhost:8000/docs
 
-If you want to use your own `OPENROUTER_API_KEY` and `DSPY_MODEL`:
+Useful commands:
 
-**Backend:**
+```bash
+make logs
+make down
+make restart
+```
+
+### 4. Local backend + frontend
+
+Backend:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Frontend:**
+Frontend:
 
 ```bash
 cd frontend
@@ -68,116 +100,24 @@ npm install
 npm run dev
 ```
 
-### Option 3: Deployed Version
+## Run Locally
 
-Use the hosted version at https://jobpi-app.vercel.app/
+If you use the Docker stack, run `make up` from the repository root and wait for the backend health check to pass. If you run services separately, start the backend first and then the frontend so the Vite app can reach the API.
 
-## Deployment
+The backend can fall back to SQLite in development when `DATABASE_URL` is omitted, but production requires PostgreSQL.
 
-The backend is deployed on Vercel through the Python entrypoint in `api/index.py`. Production should use Supabase PostgreSQL via `DATABASE_URL`, `APP_ENV=production`, a strong `SECRET_KEY`, and a valid `OPENROUTER_API_KEY`.
+## Basic Usage
 
-For production observability and scaling, also set:
-
-- `SENTRY_DSN` for runtime error tracking
-- `REDIS_URL` for shared rate limiting across instances
-
-The frontend should be built with `VITE_API_URL` pointing to the deployed backend. `VITE_SITE_URL` is recommended for production canonical URLs.
-The committed frontend runtime currently requires `VITE_API_URL`; `VITE_SITE_URL` remains optional deployment metadata.
-
-If you use the hosted version, open https://jobpi-app.vercel.app/ and sign in normally. If you install locally, you can point the app to your own backend and configure your own AI provider values in `.env`.
-
-See the detailed guides in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), and [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
-
-## Project Structure
-
-JOBPI is organized for clarity and maintainability:
-
-```text
-JOBPI/
-|-- .config/    Configuration and Docker resources
-|-- .scripts/   Helper scripts
-|-- api/        Vercel backend entrypoint
-|-- app/        Backend FastAPI application
-|-- frontend/   React application
-|-- docs/       Canonical documentation
-|-- tests/      Test suite
-```
-
-For a complete directory guide, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
-
-### Backend Architecture
-
-- `app/api/routes/`: auth, CV, job, and match endpoints
-- `app/core/`: settings, AI, security, validation, rate limiting
-- `app/db/`: database engine, sessions, schema, CRUD operations
-- `app/models/`: SQLModel ORM entities
-- `app/schemas/`: Pydantic request/response validation
-- `app/services/`: PDF extraction, job analysis, CV matching, cover letters
-
-### Frontend Structure
-
-- `frontend/src/pages/`: page-level components
-- `frontend/src/components/`: reusable components
-- `frontend/src/services/`: API client
-- `frontend/src/context/`: React context state
-- `frontend/src/i18n/`: internationalization files
-
-## Testing
-
-Tests are organized in the `tests/` directory and cover validation, auth, uploads, pagination, matching, cover-letter generation, and API reliability flows. The backend pytest suite imports the application directly and does not require a separately running API server.
-
-### Backend tests
-```bash
-pytest -q
-pytest --cov=app --cov-report=term-missing -q
-```
-
-### Local benchmark baseline
-```bash
-python tests/benchmark.py
-```
-
-### Frontend tests
-```bash
-cd frontend
-npm run test
-npm run build
-```
-
-### CI
-The repository includes [ci.yml](.github/workflows/ci.yml) to run backend tests with coverage, a benchmark smoke script, frontend tests, and the frontend production build.
-
-See [tests/README.md](tests/README.md) for more detailed test documentation.
-
-### Sprint 7 verification
-```bash
-pytest -q
-pytest --cov=app --cov-report=term-missing -q
-python tests/benchmark.py
-cd frontend
-npm run test
-npm run build
-```
-
-## Documentation
-
-### Getting Started
-- [DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md) - 5-minute Docker setup
-- [PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) - Full directory guide
-
-### Reference & Architecture
-- [PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) - Project overview
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
-- [API_REFERENCE.md](docs/API_REFERENCE.md) - REST API endpoints
-
-### Configuration & Deployment
-- [ENVIRONMENT.md](docs/ENVIRONMENT.md) - All environment variables
-- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Production deployment
-- [RATE_LIMITING.md](docs/RATE_LIMITING.md) - Runtime limiter behavior and Redis fallback
-- [HEALTH_CHECK.md](docs/HEALTH_CHECK.md) - Post-deploy validation checklist
-- [DOCKER.md](docs/DOCKER.md) - Complete Docker guide with 40+ commands
+1. Register or sign in on the landing page.
+2. Open the CV library and upload one or more PDF resumes.
+3. Go to Job Analysis, paste a job description, and generate a structured analysis.
+4. Open the resulting job detail page to match a CV, compare two CVs, or generate a cover letter.
+5. Update the job status, save notes, or toggle the saved flag as your application progresses.
+6. Review the Matches and Tracker views to monitor fit and application status across saved jobs.
 
 ## Notes
 
-Local development can use SQLite if `DATABASE_URL` is omitted and `APP_ENV=development`. Production requires PostgreSQL.
+- The backend entrypoint for Vercel is `api/index.py`.
+- The project keeps a legacy JWT bridge so older sessions can still be resolved during the migration to Supabase Auth.
+- For deeper design notes and endpoint details, see the architecture and API docs in the `docs/` folder.
 

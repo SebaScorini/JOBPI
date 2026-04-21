@@ -1,81 +1,147 @@
 # ARCHITECTURE
 
-## Folder Structure
+JOBPI is a modular monolith with a React SPA on the client, a FastAPI backend on the server, and Supabase-backed identity and storage. The system is optimized around short, structured AI calls rather than long free-form generation.
 
-- `app/api/routes/`: HTTP endpoints for auth, CVs, jobs, and matches.
-- `app/core/`: runtime settings, AI helpers, security, rate limiting, validation.
-- `app/db/`: engine/session setup, schema bootstrap, CRUD helpers.
-- `app/dependencies/`: request-scoped dependencies such as current-user resolution.
-- `app/models/`: SQLModel entities.
-- `app/schemas/`: request and response models.
-- `app/services/`: PDF extraction, job analysis, CV matching, summaries, cover letters.
-- `frontend/src/pages/`: routed screens.
-- `frontend/src/components/`: shared UI and layout components.
-- `frontend/src/services/`: API client and mapping helpers.
+## System Design
 
-Reference structure map: [`docs/PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
+| Layer | Main Responsibility |
+| --- | --- |
+| `frontend/` | React SPA, auth/session handling, routing, page transitions, and API calls. |
+| `app/main.py` | FastAPI application setup, CORS, request logging, error shaping, health check. |
+| `app/api/routes/` | HTTP endpoints for auth, CVs, jobs, and matches. |
+| `app/services/` | PDF extraction, preprocessing, job analysis, CV analysis, summaries, matches, cover letters, storage integration. |
+| `app/db/` | SQLModel CRUD, session handling, and migrations. |
+| `app/core/` | Settings, AI execution, rate limiting, auth verification, logging, runtime setup. |
+| Supabase | Auth, storage, and production database support. |
+| OpenRouter + DSPy | LLM execution for job analysis, CV fit analysis, summaries, and cover letters. |
 
-## Request Flow
+The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI app defined in `app.main`.
 
-1. A frontend page calls the API client in `frontend/src/services/api.ts`.
-2. The FastAPI route validates the payload and applies size or rate checks where needed.
-3. The service layer performs preprocessing, AI calls, persistence, and response shaping.
-4. SQLModel stores or reads user-scoped data through the database layer.
-5. The frontend renders normalized DTOs returned by the backend.
+## Main Components
 
-Request lifecycle controls:
+### Backend
 
-- Request and response size guardrails are enforced at middleware and route levels.
-- Structured error envelopes are returned for application and validation failures.
-- Trace IDs are attached to responses for diagnostics.
+- `app/api/routes/auth.py` exposes `/auth/register`, `/auth/login`, and `/auth/me`.
+- `app/api/routes/cvs.py` exposes upload, batch upload, list, detail, download, tag, favorite, bulk delete, and bulk tag flows.
+- `app/api/routes/jobs.py` exposes job analysis, list, detail, delete, status updates, notes, saved toggles, match generation, compare flows, and cover letter generation.
+- `app/api/routes/matches.py` exposes match listing and match detail.
+- `app/models/entities.py` contains the SQLModel tables for users, CVs, job analyses, and CV-job matches.
+- `app/db/crud.py` owns persistence logic, soft deletes, deduplication helpers, and storage cleanup.
 
-## Auth Flow
+### Frontend
 
-1. User submits credentials to `/auth/login` or creates an account through `/auth/register`.
-2. Login returns a bearer token.
-3. The frontend stores the token and sends it on protected requests.
-4. The backend resolves the current user from the token subject.
-5. All CV, job, and match operations remain scoped to that user.
+- `frontend/src/App.tsx` defines the route tree and lazy-loaded screens.
+- `frontend/src/context/AuthContext.tsx` wraps Supabase sessions and resolves the backend user profile.
+- `frontend/src/context/LanguageContext.tsx` provides UI i18n and maps the UI language to the AI response language.
+- `frontend/src/context/AppThemeContext.tsx` manages light, dark, and system theme state.
+- `frontend/src/pages/` contains the dashboard, CV library, job analysis, job detail, matches, tracker, and auth screens.
+- `frontend/src/services/api.ts` is the typed API client for all backend endpoints.
 
-Auth implementation details:
+### AI Services
 
-- Passwords are stored as hashes.
-- Bearer tokens are signed with `SECRET_KEY`.
-- Auth endpoints are rate-limited separately from AI-heavy endpoints.
+- `app/services/job_analyzer.py` analyzes job descriptions into structured fields such as summary, skills, responsibilities, prep, learning path, and interview guidance.
+- `app/services/cv_analyzer.py` compares a CV against a job description and returns fit summary, strengths, missing skills, improvements, rewritten bullets, interview focus, and next steps.
+- `app/services/cv_library_summary_service.py` creates compact library summaries for CV cards.
+- `app/services/cover_letter_service.py` generates a concise cover letter grounded in the selected job and CV.
+- `app/services/job_preprocessing.py` builds signal-heavy excerpts and fingerprints so analyses can be cached and retried deterministically.
 
-## Database Flow
+## HTTP Surface
 
-- `users` stores the account identity and password hash.
-- `cvs` stores uploaded CV files, extracted text, summary text, and tags.
-- `job_analyses` stores the raw and cleaned job description, structured analysis, status, notes, and cached cover-letter data.
-- `cv_job_matches` stores job-to-CV fit results and recommended match data.
-- SQLite is supported locally, but PostgreSQL is the production target.
+### Auth
 
-Schema management:
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
 
-- Alembic migrations are applied during startup when available.
-- Existing pre-migration databases are stamped to baseline before upgrade.
+### CVs
 
-## Deployment Architecture
+- `POST /cvs/upload`
+- `POST /cvs/batch-upload`
+- `GET /cvs`
+- `GET /cvs/{cv_id}`
+- `GET /cvs/{cv_id}/download`
+- `PATCH /cvs/{cv_id}/tags`
+- `PATCH /cvs/{cv_id}/toggle-favorite`
+- `POST /cvs/bulk-delete`
+- `POST /cvs/bulk-tag`
+- `DELETE /cvs/{cv_id}`
 
-- Backend deployment entrypoint: `api/index.py`.
-- Frontend deployment: Vite build output hosted separately or on the same platform with `VITE_API_URL` pointing to the backend.
-- Vercel rewrites route all requests to the Python entrypoint in this repository.
-- Supabase provides the hosted production database.
+### Jobs
 
-Production topology (logical):
+- `POST /jobs/analyze`
+- `GET /jobs`
+- `GET /jobs/{job_id}`
+- `DELETE /jobs/{job_id}`
+- `PATCH /jobs/{job_id}/status`
+- `PATCH /jobs/{job_id}/notes`
+- `PATCH /jobs/{job_id}/toggle-saved`
+- `POST /jobs/{job_id}/match-cvs`
+- `POST /jobs/{job_id}/compare-cvs`
+- `POST /jobs/{job_id}/cover-letter`
 
-1. Browser requests frontend assets.
-2. Frontend calls backend API over HTTPS.
-3. Backend executes auth, validation, and orchestration.
-4. Backend calls OpenRouter for AI generation and Supabase Postgres for persistence.
-5. Optional services: Redis for distributed rate limiting and Sentry for exception telemetry.
+### Matches
 
-## Notes
+- `GET /matches`
+- `GET /matches/{match_id}`
 
-- Runtime schema creation is handled on backend startup.
-- AI features are routed through DSPy with OpenRouter as the provider.
-- Production uses stricter rate limits and smaller upload budgets than local development.
+### Health
+
+- `GET /health`
+
+## Data Flow
+
+### CV Upload Flow
+
+1. The frontend sends a PDF through `/cvs/upload` or `/cvs/batch-upload`.
+2. The backend validates authentication, content type, request size, and per-user rate limits.
+3. `pdf_extractor.py` extracts raw text and `job_preprocessing.py` removes noise and keeps high-signal sections.
+4. `cv_library_service.py` deduplicates by cleaned text, generates or refreshes a library summary, stores the PDF in Supabase Storage, and persists the CV row.
+5. The API returns the stored CV metadata for the UI.
+
+### Job Analysis Flow
+
+1. The frontend submits title, company, description, and UI language to `/jobs/analyze`.
+2. `job_preprocessing.py` cleans the description, prioritizes useful sections, and truncates to the target size.
+3. `job_analyzer.py` runs a DSPy module with a token budget and a retry budget through the AI circuit breaker.
+4. The analysis is normalized into `JobAnalysisPayload`, stored, cached, and returned to the frontend.
+
+### Match, Compare, and Cover Letter Flow
+
+1. The job detail page requests CV matching, CV comparison, or cover-letter generation.
+2. `cv_library_service.py` loads the job and selected CVs, reuses valid cached results where possible, and computes a heuristic score for match ordering.
+3. `cv_analyzer.py` produces the structured fit analysis used by match and comparison views.
+4. `cover_letter_service.py` generates a short cover letter, normalizes it, and persists the result on the job row.
+
+## Service Interactions
+
+- `get_current_user` accepts Supabase JWTs and, during the migration window, legacy app JWTs.
+- `enforce_rate_limit` uses Redis when `REDIS_URL` is configured and falls back to in-memory counters otherwise.
+- `run_ai_call_with_circuit_breaker` wraps every AI request with timeouts, retries, token-budget control, and truncation detection.
+- `configure_runtime_environment` sets `DSPY_CACHEDIR` on Vercel so the runtime uses a writable temporary path.
+- `SupabaseStorageService` creates signed URLs for downloads and removes PDFs when CVs are deleted.
+
+## AI Design Choices
+
+- `job_preprocessing.py` strips low-signal content, keeps requirements and responsibilities, and extracts CV lines that are more likely to matter to the model.
+- `estimate_payload_tokens` and the context fingerprint helpers reduce unnecessary repeated work.
+- `dspy_lm_override` clamps max tokens and disables reasoning output to keep responses concise.
+- `CvLibrarySummaryService` uses a fresh DSPy instance for per-upload isolation so batch uploads do not leak stale summary state.
+- `cv_library_service.py` rejects fallback-like analyses and re-runs or falls back to cached data only when the stored output still looks trustworthy.
+
+## Key Decisions and Trade-offs
+
+- SQLite exists only as a development fallback. Production expects PostgreSQL.
+- CVs, jobs, and matches use soft deletes so application history is preserved and dependent records can be cleaned up safely.
+- AI outputs are intentionally bounded and normalized, which reduces noise but can also shorten responses when the model is verbose or underperforms.
+- The comparison endpoint returns decision-oriented fields only, which keeps the UI focused and avoids duplicating the full match payload.
+- The frontend uses route-level lazy loading and suspense fallbacks so the app stays responsive while loading feature-heavy screens.
+
+## Current Limitations
+
+- AI output can still become generic or repetitive when the provider response is weak.
+- Short summaries are a deliberate product choice, so some detail is sacrificed for speed and consistency.
+- Scanned PDFs or CVs with little extractable text can fail early in preprocessing.
+- English and Spanish are the only supported output languages.
 
 ## Related Docs
 

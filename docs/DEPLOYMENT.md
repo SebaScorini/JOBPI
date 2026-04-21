@@ -12,7 +12,7 @@ JOBPI supports two documented ways to use the app:
 - Python and Node.js toolchains for local execution.
 - A PostgreSQL database for production deployments.
 - OpenRouter API credentials for AI-enabled features.
-- Vercel projects for backend and frontend hosting (if using Vercel).
+- Vercel projects for backend and frontend hosting if you deploy there.
 
 ## Local Run
 
@@ -73,7 +73,7 @@ Recommended production variables:
 7. Set `FRONTEND_URL` or `CORS_ORIGINS` for the deployed frontend domain.
 8. Set `VITE_API_URL` in the frontend project to the backend URL.
 9. Make sure the backend environment installs `alembic`; startup now upgrades the schema to `head`.
-10. Treat `VITE_SITE_URL` as optional deployment metadata only; the committed frontend runtime does not currently require it.
+10. Set `VITE_SITE_URL` when you want canonical URLs and password-reset redirects to point at a specific deployment origin; the frontend falls back to the browser origin when available.
 
 Suggested project split on Vercel:
 
@@ -134,9 +134,9 @@ Use [`docs/HEALTH_CHECK.md`](HEALTH_CHECK.md) for the full checklist.
 3. If a schema migration caused the issue, stop and verify the database state before attempting an Alembic downgrade.
 4. Re-run the health-check flow after rollback to confirm recovery.
 
-## Sprint 7 Pre-Deploy Verification
+## Pre-Deploy Verification
 
-Run these checks before merging or deploying Sprint 7 changes:
+Run these checks before merging or deploying changes:
 
 ```powershell
 pytest -q
