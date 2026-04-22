@@ -1,0 +1,18 @@
+Generalist software developer interested in building useful products and learning modern stacks.
+
+SUMMARY
+Developer with broad experience across web projects, documentation, and team support.
+
+EXPERIENCE
+- Helped maintain a web application by fixing bugs and updating user-facing text.
+- Supported a small team with documentation, testing, and release coordination.
+- Built a few frontend features using JavaScript and React.
+- Assisted with basic SQL queries and report updates when needed.
+- Participated in code reviews and meetings with product stakeholders.
+
+PROJECTS
+- Personal portfolio site and a task tracker prototype.
+- Small class project that stored notes in a simple database.
+
+TECHNICAL SKILLS
+JavaScript, React, HTML, CSS, basic SQL, documentation, teamwork

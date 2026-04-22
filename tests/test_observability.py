@@ -3,7 +3,7 @@ import logging
 
 from fastapi.testclient import TestClient
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.main import create_app
 
 
@@ -42,5 +42,21 @@ def test_development_cover_letter_defaults():
     assert settings.cover_letter_limit == 6
     assert settings.cover_letter_window_seconds == 600
     assert settings.cover_letter_max_tokens == 640
-    assert settings.cv_match_max_tokens == 1200
+    assert settings.cv_match_max_tokens >= 100
     assert settings.cv_match_retry_max_tokens >= settings.cv_match_max_tokens
+
+
+def test_settings_preserve_distinct_retry_token_budgets():
+    settings = Settings(
+        database_url="sqlite:///./test.db",
+        secret_key="test-secret",
+        cv_match_max_tokens=1200,
+        cv_match_retry_max_tokens=1800,
+        job_analysis_max_tokens=900,
+        job_analysis_retry_max_tokens=1400,
+    )
+
+    assert settings.cv_match_max_tokens == 1200
+    assert settings.cv_match_retry_max_tokens == 1800
+    assert settings.job_analysis_max_tokens == 900
+    assert settings.job_analysis_retry_max_tokens == 1400

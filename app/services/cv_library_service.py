@@ -18,9 +18,8 @@ from app.schemas.match import (
     CVJobMatchRead,
     MatchLevel,
 )
-from app.services.cv_analyzer import get_cv_analyzer_service, looks_like_fallback_cv_analysis
+from app.services.cv_analyzer import get_cv_analyzer_service
 from app.services.cv_library_summary_service import get_cv_library_summary_service
-from app.services.job_preprocessing import CONTEXT_BUILDER_VERSION
 from app.services.pdf_extractor import extract_raw_pdf_text, preprocess_cv_text
 from app.services.response_language import (
     localized_add_evidence,
@@ -50,7 +49,6 @@ logger = logging.getLogger(__name__)
 class CvLibraryService:
     def __init__(self) -> None:
         self.cv_analyzer = None
-        self._analysis_cache: dict[tuple[str, int, int, int, str], CvAnalysisResponse] = {}
         self.storage_service = get_supabase_storage_service()
 
     def upload_cv(
@@ -331,6 +329,8 @@ class CvLibraryService:
                 job_title=job.title,
                 job_description=job.clean_description,
                 cv_text=cv.clean_text,
+                cv_summary=getattr(cv, "summary", ""),
+                cv_library_summary=getattr(cv, "library_summary", ""),
             )
             score = compute_heuristic_score(cv.clean_text, job.clean_description)
             created = crud.create_match(
@@ -390,6 +390,8 @@ class CvLibraryService:
             job_title=job.title,
             job_description=job.clean_description,
             cv_text=cv.clean_text,
+            cv_summary=getattr(cv, "summary", ""),
+            cv_library_summary=getattr(cv, "library_summary", ""),
             language=language,
             existing_match=existing_match,
             regenerate=regenerate,
@@ -437,22 +439,19 @@ class CvLibraryService:
         job_title: str,
         job_description: str,
         cv_text: str,
+        cv_summary: str = "",
+        cv_library_summary: str = "",
         language: AIResponseLanguage = "english",
     ) -> CvAnalysisResponse:
-        cache_key = (CONTEXT_BUILDER_VERSION, user_id, job_id, cv_id, language)
-        cached = self._analysis_cache.get(cache_key)
-        if cached is not None:
-            return cached.model_copy(deep=True)
-
-        result = self._get_cv_analyzer().analyze(
+        _ = (user_id, job_id, cv_id)
+        return self._get_cv_analyzer().analyze(
             job_title=job_title,
             job_description=job_description,
             cv_text=cv_text,
+            cv_summary=cv_summary or None,
+            cv_library_summary=cv_library_summary or None,
             language=language,
         )
-        if not looks_like_fallback_cv_analysis(result):
-            self._analysis_cache[cache_key] = result.model_copy(deep=True)
-        return result
 
     def _get_pair_analysis_result(
         self,
@@ -462,49 +461,31 @@ class CvLibraryService:
         job_title: str,
         job_description: str,
         cv_text: str,
+        cv_summary: str,
+        cv_library_summary: str,
         language: AIResponseLanguage,
         existing_match: object | None,
         regenerate: bool = False,
     ) -> CvAnalysisResponse:
-        if existing_match is not None and not regenerate:
-            cached_result = self._build_cached_match_result(existing_match, language)
-            if looks_like_fallback_cv_analysis(cached_result):
-                logger.info(
-                    "ai_cache_reuse operation=cv_match_analysis source=db skipped=fallback_like user_id=%s job_id=%s cv_id=%s",
-                    user_id,
-                    job_id,
-                    cv_id,
-                )
-            else:
-                logger.info(
-                    "ai_cache_reuse operation=cv_match_analysis source=db user_id=%s job_id=%s cv_id=%s",
-                    user_id,
-                    job_id,
-                    cv_id,
-                )
-                return cached_result
-
-        try:
-            logger.info(
-                "ai_call operation=cv_match_analysis user_id=%s job_id=%s cv_id=%s regenerate=%s",
-                user_id,
-                job_id,
-                cv_id,
-                regenerate,
-            )
-            return self._analyze_pair(
-                user_id=user_id,
-                job_id=job_id,
-                cv_id=cv_id,
-                job_title=job_title,
-                job_description=job_description,
-                cv_text=cv_text,
-                language=language,
-            )
-        except HTTPException:
-            if existing_match is None:
-                raise
-            return self._build_cached_match_result(existing_match, language)
+        _ = (existing_match, regenerate)
+        logger.info(
+            "ai_call operation=cv_match_analysis user_id=%s job_id=%s cv_id=%s regenerate=%s",
+            user_id,
+            job_id,
+            cv_id,
+            regenerate,
+        )
+        return self._analyze_pair(
+            user_id=user_id,
+            job_id=job_id,
+            cv_id=cv_id,
+            job_title=job_title,
+            job_description=job_description,
+            cv_text=cv_text,
+            cv_summary=cv_summary,
+            cv_library_summary=cv_library_summary,
+            language=language,
+        )
 
     def _build_cached_match_result(
         self,

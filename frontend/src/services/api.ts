@@ -218,9 +218,56 @@ export class ApiError extends Error {
   }
 }
 
+const LEGACY_AUTH_TOKEN_KEY = 'jobpi_legacy_auth_token';
+
+export const authStorage = {
+  getToken: () => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return window.localStorage.getItem(LEGACY_AUTH_TOKEN_KEY);
+  },
+  setToken: (token: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(LEGACY_AUTH_TOKEN_KEY, token);
+  },
+  clearToken: () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+  },
+};
+
 async function getSupabaseToken(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+  return session?.access_token ?? authStorage.getToken();
+}
+
+let authResetInFlight: Promise<void> | null = null;
+
+async function resetPersistedAuthSession(): Promise<void> {
+  if (authResetInFlight) {
+    return authResetInFlight;
+  }
+
+  authResetInFlight = (async () => {
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (error) {
+      console.warn('Failed to clear persisted auth session:', error);
+    } finally {
+      authStorage.clearToken();
+      authResetInFlight = null;
+    }
+  })();
+
+  return authResetInFlight;
 }
 
 async function buildHeaders(options: ApiRequestOptions): Promise<HeadersInit> {
@@ -244,6 +291,13 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
       ...init,
       headers: builtHeaders,
     });
+
+    // Only reset the auth session for 401 (invalid or expired token).
+    // A 403 is a permission-denied response (business logic) and must NOT
+    // destroy the session — the user may still be validly authenticated.
+    if (auth && response.status === 401) {
+      await resetPersistedAuthSession();
+    }
 
     return await parseResponse<T>(response);
   } catch (error) {
@@ -458,14 +512,6 @@ function mapMatch(match: BackendMatchRead): CVJobMatch {
   };
 }
 
-// Legacy authStorage shim — kept for backward compat during migration.
-// Supabase handles token storage internally via localStorage.
-export const authStorage = {
-  getToken: () => null,
-  setToken: (_token: string) => {},
-  clearToken: () => {},
-};
-
 export const apiService = {
   async getMe(token?: string): Promise<User> {
     const user = await request<BackendUser>('/auth/me', {
@@ -474,6 +520,19 @@ export const apiService = {
     });
 
     return mapUser(user);
+  },
+  async loginWithLegacyAuth(email: string, password: string): Promise<string> {
+    const response = await request<{ access_token: string; token_type: string }>('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        username: email,
+        password,
+        grant_type: 'password',
+      }),
+    });
+
+    return response.access_token;
   },
 
   async analyzeJob(requestBody: JobAnalysisRequest): Promise<JobAnalysisResponse> {

@@ -1,0 +1,28 @@
+As a Python Engineer at ETHICS CODE, you will be responsible for writing clean, maintainable code, participating in code reviews, and contributing to the continuous improvement of development practices.
+
+Responsibilities
+
+Develop and maintain backend services and APIs using Python
+Collaborate with product managers, designers, and other engineers to deliver new features
+Write clean, efficient, and well-documented code following best practices
+Participate in code reviews and provide constructive feedback
+Optimize applications for performance, scalability, and security
+Troubleshoot, debug, and resolve software defects and issues
+Familiarity with cloud-based database services (e.g., Snowflake), data transformation (e.g., dbt), and orchestration tools (e.g., Airflow)
+Experience with AWS cloud services (S3, Lambda, Glue, etc.)
+Proficiency in container orchestration and containerization using Amazon EKS and Docker
+Experience with Infrastructure as Code (IaC) utilizing Terraform
+Familiarity with monitoring and logging using Prometheus and Grafana
+
+Requirements
+
+Bachelor's degree in Computer Science, Software Engineering, or a related field
+Preferred: Experience within the Life Science Clinical Trial software technology
+Proven experience as a Python Developer or Engineer
+Strong proficiency in Python and its frameworks (e.g., Django, Flask)
+Experience with RESTful API design and development
+Knowledge of database systems such as PostgreSQL, MySQL, or MongoDB
+Familiarity with version control systems like Git
+Understanding of software development best practices, including testing and CI/CD pipelines
+Good problem-solving skills and attention to detail
+Effective communication and teamwork skills

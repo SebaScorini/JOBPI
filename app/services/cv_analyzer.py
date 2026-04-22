@@ -10,17 +10,19 @@ configure_runtime_environment()
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, run_ai_call_with_circuit_breaker
 from app.core.ai import build_ai_failure_http_exception
+from app.core.ai import dspy_lm_override, run_structured_ai_call, use_provider_fallback_model
 from app.core.config import configure_dspy, get_settings
+from app.models.ai_schemas import CvAnalysisAIOutput
 from app.schemas.job import AIResponseLanguage
 from app.schemas.cv import CvAnalysisResponse
 from app.services.job_analyzer import _normalize_list, _normalize_text
-from app.services.job_preprocessing import build_cv_excerpt, build_job_excerpt
+from app.services.job_preprocessing import build_cv_context, build_job_context, clean_description
+from app.services.pdf_extractor import preprocess_cv_text
 from app.services.response_language import language_instruction, normalize_language
 
 
-MAX_SUMMARY_CHARS = 420
+MAX_SUMMARY_CHARS = 700
 DEFAULT_CV_MATCH_MAX_TOKENS = 1100
 CV_MATCH_RETRY_MIN_EXCERPT_CHARS = 900
 logger = logging.getLogger(__name__)
@@ -79,6 +81,30 @@ NON_SIGNAL_WORDS = {
     "truthful",
     "wording",
 }
+MISSING_SKILL_ACTION_PREFIXES = (
+    "add ",
+    "show ",
+    "highlight ",
+    "use ",
+    "move ",
+    "quantify ",
+    "prepare ",
+    "rewrite ",
+    "include ",
+    "update ",
+)
+GENERIC_MISSING_SKILL_PHRASES = (
+    "more experience",
+    "additional experience",
+    "better alignment",
+    "stronger alignment",
+    "broader background",
+    "more background",
+    "more exposure",
+    "stronger experience",
+    "relevant experience",
+    "general experience",
+)
 
 
 class CvFitSignature(dspy.Signature):
@@ -88,42 +114,52 @@ class CvFitSignature(dspy.Signature):
     matches, specific missing evidence, and concrete improvements over generic career advice.
     Do not invent experience, inflate fit, or mention irrelevant technologies. Be direct, specific,
     and useful enough that the candidate can act on the analysis immediately.
+    Do not use generic buzzwords, empty praise, unsupported claims, or assume the role is technical
+    if the posting is not. Do not repeat the prompt, do not summarize the CV broadly, and do not
+    collapse different recommendation types into similar filler.
+    Keep the recommendation lists clearly separated: resume_improvements are CV edits, ats_improvements
+    are wording and keyword alignment, recruiter_improvements are credibility and impact framing,
+    interview_focus are discussion topics, and next_steps are immediate actions after reading the analysis.
+    Avoid reusing the same phrase stem across multiple lists.
+    Prioritize filling these sections completely, in this order, if output budget gets tight:
+    rewritten_bullets, resume_improvements, ats_improvements, recruiter_improvements, strengths,
+    missing_skills. Interview focus and next steps are lowest priority.
     """
 
     title: str = dspy.InputField(desc="Job title for role framing")
-    job: str = dspy.InputField(desc="Pruned job excerpt emphasizing requirements, responsibilities, and tools")
-    cv: str = dspy.InputField(desc="Pruned CV excerpt emphasizing summary, skills, recent experience, and metrics")
+    job: str = dspy.InputField(desc="Cleaned, high-signal job description emphasizing requirements, responsibilities, and tools")
+    cv: str = dspy.InputField(desc="Cleaned CV text emphasizing summary, skills, recent experience, and measurable evidence")
     response_language: str = dspy.InputField(desc="Language for every output field")
 
     fit_summary: str = dspy.OutputField(
-        desc="2-3 concrete sentences on overall fit, strongest evidence from the CV, biggest gap, and what that means for candidacy. Stay grounded in the provided text."
-    )
-    strengths: list[str] = dspy.OutputField(
-        desc="Max 4 substantive items, ideally 6-16 words each. Only include role-relevant evidence clearly supported by the CV. No advice, no missing items, and no restating the summary."
-    )
-    missing_skills: list[str] = dspy.OutputField(
-        desc="Max 4 substantive items, ideally 6-16 words each, naming the most important missing skills, missing evidence, or unclear proof points. No advice or generic filler."
+        desc="Exactly 2 concise sentences, ideally 45-80 words total, on overall fit, strongest CV evidence, biggest gap, and what that means for candidacy. Mention at least one specific capability, project type, or outcome evidenced in the CV when possible. Do not consume the budget with a long narrative."
     )
     likely_fit_level: str = dspy.OutputField(
         desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
     )
-    resume_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 concrete CV-edit actions, ideally 6-18 words each. Focus only on changing bullet content, ordering, or proof in the resume itself. Do not repeat ATS, recruiter, interview, or next-step guidance."
-    )
-    ats_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 ATS-focused actions, ideally 6-16 words each, only about keyword wording, exact terminology, skills-section coverage, and alignment to the posting. Do not repeat resume bullets or recruiter advice."
-    )
-    recruiter_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 recruiter-facing actions, ideally 6-16 words each, only about credibility, specificity, business impact, and narrative strength. Do not repeat ATS or resume-edit advice."
-    )
     rewritten_bullets: list[str] = dspy.OutputField(
         desc="Max 3 rewritten CV bullet examples tailored to this role. Each bullet should sound resume-ready, include action + context + measurable or concrete outcome, and stay grounded in the provided evidence."
     )
+    resume_improvements: list[str] = dspy.OutputField(
+        desc="Max 3 concrete CV-edit actions, ideally 5-12 words each. Focus only on changing bullet content, ordering, or proof in the resume itself. Name what evidence or bullet should change, and do not repeat ATS, recruiter, interview, or next-step guidance."
+    )
+    ats_improvements: list[str] = dspy.OutputField(
+        desc="Max 3 ATS-focused actions, ideally 5-12 words each, only about keyword wording, exact terminology, skills-section coverage, and alignment to the posting. Prefer exact posting language when possible and do not repeat resume bullets or recruiter advice."
+    )
+    recruiter_improvements: list[str] = dspy.OutputField(
+        desc="Max 3 recruiter-facing actions, ideally 5-12 words each, only about credibility, specificity, business impact, and narrative strength. Push for stronger proof and business framing, and do not repeat ATS or resume-edit advice."
+    )
+    strengths: list[str] = dspy.OutputField(
+        desc="Max 4 substantive items, ideally 5-12 words each. Only include role-relevant evidence clearly supported by the CV. No advice, no missing items, and no restating the summary."
+    )
+    missing_skills: list[str] = dspy.OutputField(
+        desc="Max 4 substantive items, ideally 5-12 words each, naming the most important missing skill, missing responsibility, or missing proof point. Each item must name a concrete technology, responsibility, domain, or evidence gap from the role. This section is diagnosis only: no advice, no action verbs, no generic filler like 'more experience', and no overlap with resume or ATS improvements."
+    )
     interview_focus: list[str] = dspy.OutputField(
-        desc="Max 3 concrete interview prep topics, ideally 5-16 words each. These are live discussion topics to prepare for, not resume edits or ATS tweaks."
+        desc="Max 2 concrete interview prep topics, ideally 4-8 words each. These are live discussion topics to prepare for, not resume edits or ATS tweaks."
     )
     next_steps: list[str] = dspy.OutputField(
-        desc="Max 3 immediate next steps, ideally 6-18 words each, for what the candidate should do next after reading this analysis. Keep them action-oriented and distinct from the resume, ATS, recruiter, and interview lists."
+        desc="Max 2 immediate next steps, ideally 5-10 words each, for what the candidate should do next after reading this analysis. Keep them action-oriented, sequenced for near-term execution, and distinct from the resume, ATS, recruiter, and interview lists."
     )
 
 
@@ -139,6 +175,7 @@ class CvFitModule(dspy.Module):
         cv_text: str,
         response_language: str,
         max_tokens: int | None = None,
+        model: str | None = None,
     ):
         if max_tokens is None:
             return self.predict(
@@ -148,7 +185,7 @@ class CvFitModule(dspy.Module):
                 response_language=response_language,
             )
 
-        with dspy_lm_override(max_tokens=max_tokens):
+        with dspy_lm_override(max_tokens=max_tokens, model=model):
             return self.predict(
                 title=job_title,
                 job=job_description,
@@ -184,28 +221,20 @@ class CvAnalyzerService:
         job_description: str,
         cv_text: str,
         language: AIResponseLanguage = "english",
+        cv_summary: str | None = None,
+        cv_library_summary: str | None = None,
     ) -> CvAnalysisResponse:
         selected_language = normalize_language(language)
-        job_excerpt = build_job_excerpt(job_description)
-        cv_excerpt = build_cv_excerpt(cv_text, job_description=job_excerpt)
-        retry_job_excerpt = build_job_excerpt(
-            job_description,
-            max_chars=min(
-                len(job_excerpt),
-                max(CV_MATCH_RETRY_MIN_EXCERPT_CHARS, int(len(job_excerpt) * 0.75)),
-            ),
-        )
-        retry_cv_excerpt = build_cv_excerpt(
-            cv_text,
-            job_description=retry_job_excerpt,
-            max_chars=min(
-                len(cv_excerpt),
-                max(CV_MATCH_RETRY_MIN_EXCERPT_CHARS, int(len(cv_excerpt) * 0.75)),
-            ),
+        job_context = build_job_context(clean_description(job_description), title=job_title)
+        cv_context = build_cv_context(
+            preprocess_cv_text(cv_text),
+            summary=cv_summary,
+            library_summary=cv_library_summary,
         )
         dspy_start = time.perf_counter()
         try:
-            result = run_ai_call_with_circuit_breaker(
+            parsed = run_structured_ai_call(
+                schema=CvAnalysisAIOutput,
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="cv_match_analysis",
@@ -213,12 +242,13 @@ class CvAnalyzerService:
                 callable_=self._get_analyzer(),
                 lm_max_tokens=self.max_tokens,
                 retry_lm_max_tokens=self.retry_max_tokens,
-                attempt_kwargs_builder=lambda attempt: {
+                attempt_kwargs_builder_with_exception=lambda attempt, previous_exception: {
                     "job_title": job_title,
-                    "job_description": job_excerpt if attempt == 0 else retry_job_excerpt,
-                    "cv_text": cv_excerpt if attempt == 0 else retry_cv_excerpt,
+                    "job_description": job_context,
+                    "cv_text": cv_context,
                     "response_language": language_instruction(selected_language),
                     "max_tokens": self.max_tokens if attempt == 0 else self.retry_max_tokens,
+                    "model": use_provider_fallback_model(attempt, previous_exception),
                 },
             )
         except HTTPException as exc:
@@ -238,6 +268,7 @@ class CvAnalyzerService:
             )
 
         mapping_start = time.perf_counter()
+        result = parsed.payload
         response = CvAnalysisResponse(
             fit_summary=self._normalize_summary(result.fit_summary),
             strengths=_normalize_list(result.strengths),
@@ -283,7 +314,8 @@ def get_cv_analyzer_service() -> CvAnalyzerService:
         _cv_service = CvAnalyzerService()
     return _cv_service
 def _is_meaningful_cv_analysis(response: CvAnalysisResponse) -> bool:
-    if not response.fit_summary.strip():
+    # Require a non-trivial fit summary — a placeholder is not enough.
+    if len(response.fit_summary.strip()) < 15:
         return False
     populated_lists = sum(
         1
@@ -332,33 +364,45 @@ def looks_like_fallback_cv_analysis(response: CvAnalysisResponse) -> bool:
 
 
 def _refine_cv_analysis_response(response: CvAnalysisResponse) -> CvAnalysisResponse:
-    strengths = _dedupe_items(response.strengths, limit=4)
-    missing_skills = _dedupe_items(response.missing_skills, limit=4, blocked_items=strengths)
-    rewritten_bullets = _dedupe_items(response.rewritten_bullets, limit=2)
+    strengths = _dedupe_items(response.strengths, limit=5)
+    rewritten_bullets = _dedupe_items(response.rewritten_bullets, limit=4)
     resume_improvements = _dedupe_items(
         response.resume_improvements,
-        limit=3,
+        limit=4,
         blocked_items=strengths + rewritten_bullets,
     )
     ats_improvements = _dedupe_items(
         response.ats_improvements,
-        limit=3,
+        limit=4,
         blocked_items=resume_improvements + rewritten_bullets,
     )
     recruiter_improvements = _dedupe_items(
         response.recruiter_improvements,
-        limit=3,
+        limit=4,
         blocked_items=resume_improvements + ats_improvements + rewritten_bullets,
     )
     interview_focus = _dedupe_items(
         response.interview_focus,
-        limit=3,
+        limit=4,
         blocked_items=resume_improvements + ats_improvements + recruiter_improvements,
     )
     next_steps = _dedupe_items(
         response.next_steps,
-        limit=3,
+        limit=4,
         blocked_items=resume_improvements + ats_improvements + recruiter_improvements + interview_focus,
+    )
+    missing_skills = _dedupe_items(
+        _filter_missing_skill_items(response.missing_skills),
+        limit=5,
+        blocked_items=(
+            strengths
+            + rewritten_bullets
+            + resume_improvements
+            + ats_improvements
+            + recruiter_improvements
+            + interview_focus
+            + next_steps
+        ),
     )
     return response.model_copy(
         update={
@@ -374,45 +418,57 @@ def _refine_cv_analysis_response(response: CvAnalysisResponse) -> CvAnalysisResp
     )
 
 
+def _filter_missing_skill_items(items: list[str]) -> list[str]:
+    filtered: list[str] = []
+    for item in items:
+        normalized = _normalize_text(item, 180).strip()
+        if not normalized:
+            continue
+
+        lowered = normalized.lower()
+        if lowered.startswith(MISSING_SKILL_ACTION_PREFIXES):
+            continue
+
+        signal_words = [
+            token.lower()
+            for token in WORD_RE.findall(normalized)
+            if token.lower() not in NON_SIGNAL_WORDS
+        ]
+        if not signal_words:
+            continue
+        if (
+            lowered in GENERIC_MISSING_SKILL_PHRASES
+            or (
+                len(signal_words) < 3
+                and any(lowered.startswith(phrase) for phrase in GENERIC_MISSING_SKILL_PHRASES)
+            )
+        ):
+            continue
+
+        filtered.append(normalized)
+    return filtered
+
+
 def _dedupe_items(
     items: list[str],
     *,
     limit: int,
     blocked_items: list[str] | None = None,
 ) -> list[str]:
-    blocked_signatures = [_item_signature(item) for item in blocked_items or [] if item.strip()]
+    blocked_values = {
+        _normalize_text(item, 180).strip().lower()
+        for item in blocked_items or []
+        if item.strip()
+    }
     kept: list[str] = []
-    kept_signatures: list[set[str]] = []
     for item in items:
         normalized = _normalize_text(item, 180).strip()
         if not normalized:
             continue
-        signature = _item_signature(normalized)
-        if signature:
-            if any(_signatures_overlap(signature, blocked) for blocked in blocked_signatures):
-                continue
-            if any(_signatures_overlap(signature, existing) for existing in kept_signatures):
-                continue
-            kept_signatures.append(signature)
-        elif normalized in kept:
+        lowered = normalized.lower()
+        if lowered in blocked_values or lowered in {entry.lower() for entry in kept}:
             continue
         kept.append(normalized)
         if len(kept) >= limit:
             break
     return kept
-
-
-def _item_signature(value: str) -> set[str]:
-    tokens = {
-        token.lower()
-        for token in WORD_RE.findall(value)
-        if token.lower() not in NON_SIGNAL_WORDS and len(token) >= 4
-    }
-    return tokens
-
-
-def _signatures_overlap(left: set[str], right: set[str]) -> bool:
-    if not left or not right:
-        return False
-    overlap = left & right
-    return len(overlap) >= 2 or overlap == left or overlap == right

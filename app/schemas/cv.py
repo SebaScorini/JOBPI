@@ -7,16 +7,16 @@ from app.core.pagination import PaginatedResponse, PaginationParams
 
 
 class CvAnalysisResponse(BaseModel):
-    fit_summary: str
-    strengths: list[str]
-    missing_skills: list[str]
-    likely_fit_level: str
-    resume_improvements: list[str]
-    ats_improvements: list[str]
-    recruiter_improvements: list[str]
-    rewritten_bullets: list[str]
-    interview_focus: list[str]
-    next_steps: list[str]
+    fit_summary: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    likely_fit_level: str = ""
+    resume_improvements: list[str] = Field(default_factory=list)
+    ats_improvements: list[str] = Field(default_factory=list)
+    recruiter_improvements: list[str] = Field(default_factory=list)
+    rewritten_bullets: list[str] = Field(default_factory=list)
+    interview_focus: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
 
 
 class CVRead(BaseModel):

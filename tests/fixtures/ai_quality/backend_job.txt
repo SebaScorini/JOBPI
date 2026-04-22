@@ -1,0 +1,25 @@
+Backend Engineer for Product Platform
+
+ABOUT THE ROLE
+We are building a product platform that powers internal workflows, job tracking, and AI-assisted recommendations for hiring teams.
+
+You will design and ship backend APIs, improve the reliability of matching workflows, and work closely with product and frontend engineers.
+
+RESPONSIBILITIES
+- Build and maintain FastAPI services that expose stable JSON APIs.
+- Design PostgreSQL queries and data models for search, matching, and reporting.
+- Improve observability with metrics, structured logs, and tracing.
+- Work with Docker-based local development and deployment workflows.
+- Partner with frontend engineers to keep API payloads easy to render.
+
+REQUIREMENTS
+- Strong Python and FastAPI experience.
+- Solid PostgreSQL or SQL background.
+- Experience with Docker and API debugging.
+- Familiarity with metrics, logging, and production incident response.
+- Ability to explain tradeoffs and write clear technical documentation.
+
+PREFERRED
+- AWS, Kubernetes, or other cloud deployment experience.
+- Background with AI-powered products, search, or ranking systems.
+- Experience improving developer productivity or internal tools.

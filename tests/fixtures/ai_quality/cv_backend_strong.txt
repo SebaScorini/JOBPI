@@ -1,0 +1,18 @@
+Backend engineer with Python, FastAPI, PostgreSQL, and Docker delivery for product and workflow platforms.
+
+SUMMARY
+Product-minded backend engineer focused on reliable APIs, matching systems, and measurable delivery improvements.
+
+EXPERIENCE
+- Built FastAPI services for a workflow platform that handled matching, review, and status updates for hiring operations.
+- Designed PostgreSQL tables and SQL queries that supported search, filtering, and recommendation scoring.
+- Added structured logging and metrics dashboards that reduced time to diagnose API incidents from hours to minutes.
+- Shipped Dockerized services and reproducible local environments for a team of 6 engineers.
+- Worked closely with frontend engineers to simplify API payloads and remove brittle response mapping.
+
+PROJECTS
+- Built an internal job matching tool that compared job requirements against CV evidence and highlighted concrete gaps.
+- Created an admin dashboard that exposed API usage, error rates, and deployment health in one view.
+
+TECHNICAL SKILLS
+Python, FastAPI, PostgreSQL, SQL, Docker, AWS, observability, API design, testing, documentation

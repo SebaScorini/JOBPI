@@ -79,3 +79,6 @@ skills-lock.json
 .github/prompts/plan-jobpi.prompt.md
 next-sprint-prompt.md
 copilot-instructions.md
+tests/fixtures/ai_quality_live/runs/
+tests/fixtures/*.pdf
+tests/fixtures/ai_quality_live/cvs/

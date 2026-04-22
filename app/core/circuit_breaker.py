@@ -37,13 +37,19 @@ class AICircuitBreaker:
         logger: logging.Logger,
         callable_: Callable[[], Any],
         callable_with_attempt: Callable[[int], Any] | None = None,
+        callable_with_attempt_and_exception: Callable[[int, Exception | None], Any] | None = None,
         retryable: Callable[[Exception], bool],
+        describe_exception: Callable[[Exception], str] | None = None,
         token_budget: int | None = None,
         token_budget_for_attempt: Callable[[int], int | None] | None = None,
+        attempt_context_builder: Callable[[int, Exception | None], dict[str, Any]] | None = None,
     ) -> Any:
         attempt = 0
+        previous_exception: Exception | None = None
         while True:
             try:
+                if callable_with_attempt_and_exception is not None:
+                    return callable_with_attempt_and_exception(attempt, previous_exception)
                 if callable_with_attempt is not None:
                     return callable_with_attempt(attempt)
                 return callable_()
@@ -61,13 +67,24 @@ class AICircuitBreaker:
                     if token_budget_for_attempt is not None
                     else token_budget
                 )
+                current_context = (
+                    attempt_context_builder(attempt, previous_exception)
+                    if attempt_context_builder is not None
+                    else {}
+                )
+                next_context = (
+                    attempt_context_builder(attempt + 1, exc)
+                    if attempt_context_builder is not None
+                    else {}
+                )
 
                 if attempt >= self.config.max_retries:
                     logger.error(
-                        "ai_circuit_open operation=%s attempts=%s token_budget=%s",
+                        "ai_circuit_open operation=%s attempts=%s token_budget=%s model=%s",
                         operation,
                         attempt + 1,
                         current_token_budget,
+                        current_context.get("model"),
                     )
                     raise CircuitBreakerOpenError(operation=operation, attempts=attempt + 1) from exc
 
@@ -75,13 +92,18 @@ class AICircuitBreaker:
                     self.config.max_backoff_ms,
                     self.config.initial_backoff_ms * (2**attempt),
                 )
+                retry_reason = describe_exception(exc) if describe_exception is not None else type(exc).__name__
                 logger.warning(
-                    "ai_retry operation=%s retry=%s delay_ms=%s token_budget=%s next_token_budget=%s",
+                    "ai_retry operation=%s retry=%s delay_ms=%s token_budget=%s next_token_budget=%s model=%s next_model=%s reason=%s",
                     operation,
                     attempt + 1,
                     delay_ms,
                     current_token_budget,
                     next_token_budget,
+                    current_context.get("model"),
+                    next_context.get("model"),
+                    retry_reason,
                 )
                 self._sleep(delay_ms / 1000)
+                previous_exception = exc
                 attempt += 1
