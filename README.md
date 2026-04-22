@@ -4,7 +4,7 @@ JOBPI is an AI-powered job application assistant for analyzing roles, managing a
 
 ## Overview
 
-The backend is a FastAPI service with SQLModel persistence, Supabase Auth and Storage integration, and DSPy-powered AI workflows through OpenRouter. The frontend is a React + Vite SPA that provides the dashboard, job analysis, CV library, match views, and application tracker.
+The backend is a FastAPI service with SQLModel persistence, Supabase Auth and Storage integration, and DSPy-powered AI workflows through OpenRouter or any OpenAI-compatible provider (including Groq). The frontend is a React + Vite SPA that provides the dashboard, job analysis, CV library, match views, and application tracker.
 
 ## Features
 
@@ -32,7 +32,7 @@ The backend is a FastAPI service with SQLModel persistence, Supabase Auth and St
 - Node.js 18+
 - npm
 - PostgreSQL if you want to run against a local database instead of the SQLite fallback
-- An OpenRouter API key
+- An OpenRouter, Groq, or OpenAI-compatible API key
 - A Supabase project if you want auth and storage to work end-to-end
 
 ### 2. Environment variables
@@ -43,7 +43,7 @@ Backend variables you will usually need:
 
 - `DATABASE_URL` - PostgreSQL in production, optional SQLite fallback in development.
 - `SECRET_KEY`
-- `OPENROUTER_API_KEY`
+- `OPENROUTER_API_KEY` (or `GROQ_API_KEY` / `OPENAI_API_KEY`)
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_JWT_SECRET`

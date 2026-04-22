@@ -194,9 +194,7 @@ def _truncate_cv(text: str, max_chars: int | None = None) -> str:
 
     if len(text) <= max_cv_chars:
         return text
-    # Skip the first 100 chars (usually name/address block)
-    start = min(100, len(text) // 4)
-    excerpt = text[start: start + max_cv_chars]
+    excerpt = text[:max_cv_chars]
     cutoff = excerpt.rfind("\n")
     if cutoff < int(max_cv_chars * 0.6):
         cutoff = max_cv_chars

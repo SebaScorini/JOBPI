@@ -2,12 +2,15 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
+import dspy
 from fastapi import HTTPException
+import pytest
 
 import app.core.ai as ai_module
 import app.services.cover_letter_service as cover_letter_module
-from app.core.ai import run_ai_call_with_circuit_breaker
+from app.core.ai import run_ai_call_with_circuit_breaker, validate_ai_output
 from app.core.circuit_breaker import AICircuitBreaker, CircuitBreakerConfig
+from app.models.ai_schemas import AIOutputValidationFailure, CvAnalysisAIOutput, CvLibrarySummaryAIOutput, JobAnalysisAIOutput
 from app.schemas.job import JobAnalysisRequest
 from app.services.cover_letter_service import CoverLetterService
 from app.services.cv_analyzer import CvAnalyzerService
@@ -81,14 +84,15 @@ def test_context_builders_are_deterministic_and_preserve_role_evidence():
     )
     assert "Python" in job_excerpt
     assert "Benefits" not in job_excerpt
+    assert "## Job Description" in job_excerpt
     assert "Backend engineer with Python and FastAPI delivery." in cv_excerpt
     assert "Built FastAPI services" in cv_excerpt
     assert "Chess club" not in cv_excerpt
-    assert len(job_excerpt) <= 190
-    assert len(cv_excerpt) <= 240
+    assert "## CV Summary" in cv_excerpt
+    assert "## CV Content" in cv_excerpt
 
 
-def test_job_analysis_retry_uses_retry_budget_and_smaller_context(monkeypatch):
+def test_job_analysis_retry_uses_retry_budget_and_full_context(monkeypatch):
     monkeypatch.setattr(
         ai_module,
         "_ai_circuit_breaker",
@@ -145,7 +149,8 @@ def test_job_analysis_retry_uses_retry_budget_and_smaller_context(monkeypatch):
     assert len(calls) == 2
     assert calls[0]["max_tokens"] == 900
     assert calls[1]["max_tokens"] == 420
-    assert len(str(calls[1]["description"])) < len(str(calls[0]["description"]))
+    assert str(calls[1]["description"]) == str(calls[0]["description"])
+    assert "Requirement 17" in str(calls[0]["description"])
     assert result.analysis_result.summary == "Strong backend role fit."
 
 
@@ -192,8 +197,61 @@ def test_ai_observability_logs_retry_usage_and_latency(caplog, monkeypatch):
     assert result["usage"]["total_tokens"] == 168
     assert any("ai_call_start operation=test_ai_call" in message for message in messages)
     assert any("ai_retry operation=test_ai_call retry=1" in message for message in messages)
+    assert any("reason=http_503" in message for message in messages)
     assert any("ai_call_complete operation=test_ai_call" in message for message in messages)
     assert any("provider_total_tokens=168" in message for message in messages)
+
+
+def test_job_analysis_switches_to_provider_fallback_model_on_provider_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        ai_module,
+        "_ai_circuit_breaker",
+        AICircuitBreaker(
+            config=CircuitBreakerConfig(max_retries=1, initial_backoff_ms=0, max_backoff_ms=0),
+            sleep_func=lambda _seconds: None,
+        ),
+    )
+
+    calls: list[dict[str, object]] = []
+
+    class ProviderFlakyAnalyzer:
+        def __call__(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RuntimeError("OpenrouterException: service unavailable")
+            return SimpleNamespace(
+                summary="Strong backend role fit.",
+                seniority="mid",
+                role_type="backend",
+                req_skills=["Python", "FastAPI"],
+                nice_skills=["Docker"],
+                responsibilities=["Build APIs"],
+                prep=["Review APIs"],
+                learn=["Practice testing"],
+                gaps=["Docker"],
+                resume=["Highlight API impact"],
+                interview=["Discuss system design"],
+                projects=["Ship a backend service"],
+            )
+
+    service = JobAnalyzerService()
+    service.analyzer = ProviderFlakyAnalyzer()
+
+    try:
+        result = service.analyze(
+            JobAnalysisRequest(
+                title="Backend Engineer",
+                company="Acme",
+                description="Python FastAPI SQL backend role with API ownership and testing responsibilities." * 3,
+            )
+        )
+    finally:
+        service._executor.shutdown(wait=False, cancel_futures=True)
+
+    assert len(calls) == 2
+    assert calls[0]["model"] == ai_module.get_settings().dspy_model
+    assert calls[1]["model"] == ai_module.get_settings().dspy_provider_fallback_model
+    assert result.analysis_result.summary == "Strong backend role fit."
 
 
 def test_job_analysis_auth_failure_returns_explicit_error_without_traceback(caplog):
@@ -231,7 +289,7 @@ def test_job_analysis_auth_failure_returns_explicit_error_without_traceback(capl
     assert not any(record.exc_info for record in caplog.records if "reason=auth" in record.getMessage())
 
 
-def test_job_analysis_skips_persisted_fallback_cache(test_db, seeded_user):
+def test_job_analysis_refreshes_persisted_fallback_result_without_cache_reuse(test_db, seeded_user):
     from app.db import crud
 
     stored = crud.create_job_analysis(
@@ -292,8 +350,12 @@ def test_job_analysis_skips_persisted_fallback_cache(test_db, seeded_user):
     finally:
         service._executor.shutdown(wait=False, cancel_futures=True)
 
-    assert result.id != stored.id
+    assert result.id == stored.id
     assert result.analysis_result.summary == "Strong backend role fit."
+    refreshed = crud.get_job_for_user(test_db, seeded_user.id, stored.id)
+    assert refreshed is not None
+    assert refreshed.analysis_result["summary"] == "Strong backend role fit."
+    assert refreshed.analysis_result.get("_fallback") is not True
 
 
 def test_job_analysis_fallback_keeps_full_stack_description_readable():
@@ -406,7 +468,7 @@ def test_job_analysis_fallback_extracts_retool_data_and_governance_signals():
     assert len(payload.interview_tips) >= 3
 
 
-def test_cv_analyzer_uses_pruned_job_and_cv_context():
+def test_cv_analyzer_uses_cleaned_job_and_cv_context():
     captured: dict[str, object] = {}
 
     class CaptureAnalyzer:
@@ -457,14 +519,13 @@ def test_cv_analyzer_uses_pruned_job_and_cv_context():
         service._executor.shutdown(wait=False, cancel_futures=True)
 
     assert response.fit_summary == "Strong fit for the role."
-    assert len(str(captured["job_description"])) < len(job_description)
-    assert len(str(captured["cv_text"])) < len(cv_text)
     assert "Python" in str(captured["job_description"])
     assert "Benefits" not in str(captured["job_description"])
     assert "Chess club" not in str(captured["cv_text"])
+    assert "Shipped a Dockerized application workflow assistant." in str(captured["cv_text"])
 
 
-def test_cv_analysis_retry_uses_retry_budget_and_smaller_context(monkeypatch):
+def test_cv_analysis_retry_uses_retry_budget_and_full_context(monkeypatch):
     monkeypatch.setattr(
         ai_module,
         "_ai_circuit_breaker",
@@ -517,12 +578,14 @@ def test_cv_analysis_retry_uses_retry_budget_and_smaller_context(monkeypatch):
     assert len(calls) == 2
     assert calls[0]["max_tokens"] == 720
     assert calls[1]["max_tokens"] == 960
-    assert len(str(calls[1]["job_description"])) < len(str(calls[0]["job_description"]))
-    assert len(str(calls[1]["cv_text"])) < len(str(calls[0]["cv_text"]))
+    assert str(calls[1]["job_description"]) == str(calls[0]["job_description"])
+    assert str(calls[1]["cv_text"]) == str(calls[0]["cv_text"])
+    assert "Requirement 17" in str(calls[0]["job_description"])
+    assert "Project 17" in str(calls[0]["cv_text"])
     assert result.fit_summary == "Strong fit for the role."
 
 
-def test_cover_letter_generation_uses_pruned_context_and_cached_summary(monkeypatch):
+def test_cover_letter_generation_uses_full_context_and_cached_summary(monkeypatch):
     captured: dict[str, object] = {}
 
     class CaptureGenerator:
@@ -588,10 +651,189 @@ def test_cover_letter_generation_uses_pruned_context_and_cached_summary(monkeypa
 
     assert output.startswith("Dear Acme team")
     assert captured["cv_summary"] == "Backend engineer with Python and FastAPI delivery."
-    assert len(str(captured["job_description"])) < len(job.clean_description)
-    assert len(str(captured["cv_text"])) < len(cv.clean_text)
+    assert "## Job Description" in str(captured["job_description"])
+    assert "## CV Content" in str(captured["cv_text"])
     assert "Benefits" not in str(captured["job_description"])
     assert "Chess club" not in str(captured["cv_text"])
+
+
+def test_validate_ai_output_preserves_raw_payload_on_schema_failure(caplog):
+    caplog.set_level(logging.WARNING)
+    logger = logging.getLogger("tests.ai_schema_validation")
+
+    with pytest.raises(AIOutputValidationFailure) as exc_info:
+        validate_ai_output(
+            result={"summary": 123, "extra": "field"},
+            schema=CvLibrarySummaryAIOutput,
+            operation="cv_library_summary",
+            logger=logger,
+        )
+
+    failure = exc_info.value
+    assert failure.failure_category == "schema_validation_failed"
+    assert failure.schema_name == "CvLibrarySummaryAIOutput"
+    assert failure.raw_output == {"summary": 123, "extra": "field"}
+    assert any(issue.field_path in {"summary", "extra"} for issue in failure.issues)
+    assert any("schema_validation_success=false" in record.getMessage() for record in caplog.records)
+
+
+def test_validate_ai_output_handles_dspy_prediction_store(caplog):
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("tests.ai_prediction_validation")
+    prediction = dspy.Prediction(
+        summary="Strong backend role fit.",
+        seniority="mid",
+        role_type="backend",
+        req_skills=["Python", "FastAPI"],
+        nice_skills=["Docker"],
+        responsibilities=["Build APIs"],
+        prep=["Review APIs"],
+        learn=["Practice testing"],
+        gaps=["Docker"],
+        resume=["Highlight API impact"],
+        interview=["Discuss system design"],
+        projects=["Ship a backend service"],
+    )
+
+    parsed = validate_ai_output(
+        result=prediction,
+        schema=JobAnalysisAIOutput,
+        operation="job_analysis",
+        logger=logger,
+    )
+
+    assert parsed.payload.summary == "Strong backend role fit."
+    assert parsed.raw_output["role_type"] == "backend"
+
+
+def test_validate_ai_output_parses_fenced_json_and_normalizes_cv_labels(caplog):
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("tests.ai_fenced_json_validation")
+
+    raw_output = """
+```json
+{
+  "fit_summary": "Strong fit for this backend role.",
+        "strengths": "Python\\nFastAPI",
+  "missing_skills": ["Docker"],
+  "fit_level": "very strong",
+  "resume_improvements": "Add Docker evidence, strengthen deployment stories",
+  "ats_improvements": null,
+  "recruiter_improvements": ["Quantify backend impact"],
+  "rewritten_bullets": ["Built FastAPI services"],
+  "interview_focus": "Explain scaling tradeoffs",
+  "next_steps": "Apply with the backend version of the CV"
+}
+```
+"""
+
+    parsed = validate_ai_output(
+        result=raw_output,
+        schema=CvAnalysisAIOutput,
+        operation="cv_match_analysis",
+        logger=logger,
+    )
+
+    assert parsed.payload.fit_summary == "Strong fit for this backend role."
+    assert parsed.payload.strengths == ["Python", "FastAPI"]
+    assert parsed.payload.likely_fit_level == "Strong"
+    assert parsed.payload.resume_improvements == ["Add Docker evidence", "strengthen deployment stories"]
+    assert parsed.payload.ats_improvements == []
+    assert parsed.payload.interview_focus == ["Explain scaling tradeoffs"]
+
+
+def test_job_analysis_schema_normalizes_nested_and_overlong_skill_lists(caplog):
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("tests.job_analysis_schema_normalization")
+
+    parsed = validate_ai_output(
+        result={
+            "summary": "Strong frontend role fit.",
+            "seniority": "mid",
+            "role_type": "frontend",
+            "req_skills": [
+                ["TypeScript", "React"],
+                "Next.js, React Native",
+                "Redux Toolkit",
+                "TanStack Query",
+                "Orval",
+            ],
+            "nice_skills": ["Shadcn/ui", "GitFlow"],
+            "responsibilities": ["Build product interfaces", "Integrate APIs"],
+            "prep": ["Review state management tradeoffs"],
+            "learn": ["Practice React Native basics"],
+            "gaps": ["React Native"],
+            "resume": ["Highlight frontend ownership"],
+            "interview": ["Explain architecture"],
+            "projects": ["Build a demo app"],
+        },
+        schema=JobAnalysisAIOutput,
+        operation="job_analysis",
+        logger=logger,
+    )
+
+    assert parsed.payload.req_skills == [
+        "TypeScript",
+        "React",
+        "Next.js",
+        "React Native",
+        "Redux Toolkit",
+    ]
+
+
+def test_run_structured_ai_call_retries_after_schema_failure(monkeypatch):
+    monkeypatch.setattr(
+        ai_module,
+        "_ai_circuit_breaker",
+        AICircuitBreaker(
+            config=CircuitBreakerConfig(max_retries=0, initial_backoff_ms=0, max_backoff_ms=0),
+            sleep_func=lambda _seconds: None,
+        ),
+    )
+
+    calls: list[dict[str, object]] = []
+
+    def flaky_structured_call(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return {"gaps": ["React Native"], "interview": ["Explain architecture"], "projects": ["Build a demo app"]}
+        return dspy.Prediction(
+            summary="Strong frontend role fit.",
+            seniority="mid",
+            role_type="frontend",
+            req_skills=["TypeScript", "React"],
+            nice_skills=["Next.js"],
+            responsibilities=["Build product interfaces"],
+            prep=["Review state management tradeoffs"],
+            learn=["Practice React Native basics"],
+            gaps=["React Native"],
+            resume=["Highlight frontend ownership"],
+            interview=["Explain architecture"],
+            projects=["Build a demo app"],
+        )
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        parsed = ai_module.run_structured_ai_call(
+            schema=JobAnalysisAIOutput,
+            executor=executor,
+            timeout_seconds=5,
+            operation="job_analysis",
+            logger=logging.getLogger("tests.structured_retry"),
+            callable_=flaky_structured_call,
+            lm_max_tokens=500,
+            retry_lm_max_tokens=300,
+            attempt_kwargs_builder_with_exception=lambda attempt, previous_exception: {
+                "model": ai_module.use_provider_fallback_model(attempt + (1 if previous_exception else 0), previous_exception),
+            },
+        )
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    assert parsed.payload.summary == "Strong frontend role fit."
+    assert len(calls) == 2
+    assert calls[0]["model"] == ai_module.get_settings().dspy_model
+    assert calls[1]["model"] == ai_module.get_settings().dspy_provider_fallback_model
 
 
 def test_cover_letter_generation_skips_cached_fallback_template(monkeypatch):
@@ -643,3 +885,47 @@ def test_cover_letter_generation_skips_cached_fallback_template(monkeypatch):
         service._executor.shutdown(wait=False, cancel_futures=True)
 
     assert "measurable experience" in output
+
+
+def test_job_analysis_fallback_for_frontend_role_stays_role_specific():
+    description = """
+    Acerca del Rol
+    Como desarrollador TypeScript/React, seras responsable de construir y optimizar nuestras aplicaciones moviles y de escritorio.
+    Colaboraras con Producto, UX/UI y Backend para garantizar interfaces fluidas, seguras y de alto rendimiento.
+
+    Responsabilidades
+    Crear y mantener aplicaciones con TypeScript y React / React Native.
+    Conectar interfaces con APIs RESTful y servicios backend.
+    Analizar, diagnosticar y corregir bugs en produccion.
+
+    Habilidades requeridas
+    2+ anos con TypeScript y React.
+    Experiencia con Context API, Redux Toolkit o TanStack Query.
+    Conocimiento de SOLID y Clean Architecture.
+    Dominio de Git y GitFlow.
+    """
+
+    service = JobAnalyzerService()
+    try:
+        payload = service._build_fallback_analysis_payload(
+            title="Desarrollador TypeScript/React",
+            company="Prueba Local",
+            cleaned_description=description,
+            language="spanish",
+        )
+    finally:
+        service._executor.shutdown(wait=False, cancel_futures=True)
+
+    all_text = " ".join(
+        [
+            payload.summary,
+            *payload.required_skills,
+            *payload.responsibilities,
+            *payload.how_to_prepare,
+            *payload.portfolio_project_ideas,
+        ]
+    ).lower()
+
+    assert "typescript" in all_text
+    assert "react" in all_text
+    assert "retool" not in all_text

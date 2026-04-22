@@ -19,18 +19,18 @@ class JobAnalysisRequest(BaseModel):
 
 
 class JobAnalysisPayload(BaseModel):
-    summary: str
-    seniority: str
-    role_type: str
-    required_skills: list[str]
-    nice_to_have_skills: list[str]
-    responsibilities: list[str]
-    how_to_prepare: list[str]
-    learning_path: list[str]
-    missing_skills: list[str]
-    resume_tips: list[str]
-    interview_tips: list[str]
-    portfolio_project_ideas: list[str]
+    summary: str = ""
+    seniority: str = "unknown"
+    role_type: str = "generalist"
+    required_skills: list[str] = Field(default_factory=list)
+    nice_to_have_skills: list[str] = Field(default_factory=list)
+    responsibilities: list[str] = Field(default_factory=list)
+    how_to_prepare: list[str] = Field(default_factory=list)
+    learning_path: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    resume_tips: list[str] = Field(default_factory=list)
+    interview_tips: list[str] = Field(default_factory=list)
+    portfolio_project_ideas: list[str] = Field(default_factory=list)
 
 
 class JobAnalysisResponse(JobAnalysisPayload):

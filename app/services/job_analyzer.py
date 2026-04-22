@@ -15,11 +15,12 @@ from sqlmodel import Session
 from app.core.ai import (
     build_ai_failure_http_exception,
     dspy_lm_override,
-    looks_like_ai_auth_error,
-    run_ai_call_with_circuit_breaker,
+    run_structured_ai_call,
+    use_provider_fallback_model,
 )
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
+from app.models.ai_schemas import JobAnalysisAIOutput
 from app.models import User
 from app.schemas.job import (
     AIResponseLanguage,
@@ -29,13 +30,13 @@ from app.schemas.job import (
     JobRead,
     JobStatus,
 )
-from app.services.job_preprocessing import build_context_fingerprint, build_job_excerpt, clean_description
+from app.services.job_preprocessing import build_job_context, clean_description
 from app.services.response_language import language_instruction, normalize_language
 
 
-MAX_LIST_ITEMS = 5
+MAX_LIST_ITEMS = 6
 MAX_ITEM_CHARS = 140
-MAX_SUMMARY_CHARS = 280
+MAX_SUMMARY_CHARS = 420
 JOB_ANALYSIS_RETRY_DESCRIPTION_CHARS = 5000
 NON_SIGNAL_ITEM_WORDS = {
     "candidate",
@@ -100,14 +101,21 @@ class LeanJobAnalysisSignature(dspy.Signature):
     Prefer the concrete requirements, responsibilities, tools, seniority, and outcomes that will
     help a candidate prepare. Be specific, but do not pad, repeat, generalize, or copy long
     fragments from the posting. Prefer sharp, useful synthesis over longer text.
+    Do not use generic buzzwords, vague career advice, unsupported claims, or tech-only framing
+    when the posting is clearly non-technical. Do not repeat the prompt, do not restate section
+    labels, and do not collapse distinct insights into generic filler.
+    Keep each output section meaningfully distinct: responsibilities should describe the work,
+    prep should focus on what to practice or gather, learning_path should focus on skills to build,
+    resume should focus on CV edits, interview should focus on live discussion topics, and projects
+    should propose portfolio ideas. Avoid reusing the same wording pattern across sections.
     """
 
     title: str = dspy.InputField(desc="Job title for role framing")
     company: str = dspy.InputField(desc="Company name for context only")
-    desc: str = dspy.InputField(desc="Cleaned, high-signal job excerpt with requirements and responsibilities")
+    desc: str = dspy.InputField(desc="Cleaned, high-signal job description with requirements and responsibilities")
     response_language: str = dspy.InputField(desc="Language for every output field")
     summary: str = dspy.OutputField(
-        desc="1-2 concise sentences explaining what the role most needs and what success likely looks like. Grounded only in the posting."
+        desc="1-2 concise sentences explaining what the role most needs, what success likely looks like, and one concrete signal that makes the role distinctive. Grounded only in the posting."
     )
     seniority: str = dspy.OutputField(
         desc="Single label such as junior, mid, senior, lead, or unknown. Use unknown if the level is not reasonably clear."
@@ -122,25 +130,25 @@ class LeanJobAnalysisSignature(dspy.Signature):
         desc="Max 5 preferred or bonus skills that are helpful but not clearly mandatory. Only include items supported by the posting."
     )
     responsibilities: list[str] = dspy.OutputField(
-        desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and avoid generic filler."
+        desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and mention the real scope, systems, or stakeholders when the posting provides them."
     )
     prep: list[str] = dspy.OutputField(
-        desc="Max 4 concrete preparation actions for applying or interviewing well for this specific role. Focus on what to study, practice, or gather. Do not repeat resume edits, interview topics, or project ideas."
+        desc="Max 4 concrete preparation actions for applying or interviewing well for this specific role. Focus on what to study, practice, or gather before applying. Make each action role-specific and avoid generic advice like 'review the stack' or 'prepare examples'."
     )
     learn: list[str] = dspy.OutputField(
-        desc="Max 4 focused learning priorities that would close common gaps for this exact posting. These should be skill-building priorities, not interview prep or resume edits."
+        desc="Max 4 focused learning priorities that would close common gaps for this exact posting. These should be skill-building priorities tied to tools, domains, or delivery expectations in the posting, not interview prep or resume edits."
     )
     gaps: list[str] = dspy.OutputField(
         desc="Max 5 concrete candidate gaps suggested by the posting's expectations. Mention only requirements that appear important for fit."
     )
     resume: list[str] = dspy.OutputField(
-        desc="Max 4 resume improvements that would better align a CV to this role. Each item must be directly actionable and role-specific. Focus only on CV content and proof, not interview prep."
+        desc="Max 4 resume improvements that would better align a CV to this role. Each item must be directly actionable and role-specific. Focus only on CV content, ordering, and proof, and name the kind of evidence that should be added."
     )
     interview: list[str] = dspy.OutputField(
-        desc="Max 4 interview focus points the candidate should prepare for, based on the role's scope, tools, and expected outcomes. These are live discussion topics, not resume edits or general prep reminders."
+        desc="Max 4 interview focus points the candidate should prepare for, based on the role's scope, tools, and expected outcomes. These are live discussion topics with concrete angles or tradeoffs, not resume edits or general prep reminders."
     )
     projects: list[str] = dspy.OutputField(
-        desc="Max 3 portfolio or project ideas that would increase fit for this exact role. Make them realistic, specific, and relevant to the posting. Avoid repeating learning priorities or interview topics."
+        desc="Max 3 portfolio or project ideas that would increase fit for this exact role. Make them realistic, specific, and relevant to the posting, with a deliverable or scope that clearly differs from the learning and interview sections."
     )
 
 
@@ -156,6 +164,7 @@ class JobAnalyzerModule(dspy.Module):
         description: str,
         response_language: str,
         max_tokens: int | None = None,
+        model: str | None = None,
     ):
         if max_tokens is None:
             return self.predict(
@@ -165,7 +174,7 @@ class JobAnalyzerModule(dspy.Module):
                 response_language=response_language,
             )
 
-        with dspy_lm_override(max_tokens=max_tokens):
+        with dspy_lm_override(max_tokens=max_tokens, model=model):
             return self.predict(
                 title=title,
                 company=company,
@@ -181,9 +190,7 @@ class JobAnalyzerService:
         self.timeout_seconds = settings.ai_timeout_seconds
         self.max_tokens = settings.job_analysis_max_tokens
         self.retry_max_tokens = settings.job_analysis_retry_max_tokens
-        self.retry_description_chars = settings.job_preprocess_target_chars
         self._executor = ThreadPoolExecutor(max_workers=4)
-        self._cache: dict[str, JobAnalysisPayload] = {}
 
     def _get_analyzer(self) -> JobAnalyzerModule:
         if self.analyzer is None:
@@ -204,14 +211,12 @@ class JobAnalyzerService:
         user: User | None = None,
     ) -> JobRead:
         cleaned_description = clean_description(payload.description)
-        selected_language = normalize_language(payload.language)
-        cache_key = _build_cache_key(payload.title, payload.company, cleaned_description, selected_language)
-        retry_description_limit = min(
-            self.retry_description_chars,
-            max(600, int(len(cleaned_description) * 0.75)),
+        prompt_description = build_job_context(
+            cleaned_description,
+            title=payload.title,
+            company=payload.company,
         )
-        retry_description = build_job_excerpt(cleaned_description, max_chars=retry_description_limit)
-
+        selected_language = normalize_language(payload.language)
         if session is not None and user is not None and not payload.regenerate:
             stored = crud.get_matching_job_analysis(
                 session,
@@ -220,52 +225,20 @@ class JobAnalyzerService:
                 company=payload.company,
                 clean_description=cleaned_description,
             )
-            if (
-                stored is not None
-                and _analysis_language(stored.analysis_result) == selected_language
-                and not _is_persisted_fallback_job_analysis(stored.analysis_result)
-            ):
-                logger.info("ai_cache operation=job_analysis cache_status=hit source=db job_id=%s", stored.id)
-                response = JobAnalysisPayload(**stored.analysis_result)
-                self._cache[cache_key] = response.model_copy(deep=True)
-                return self._serialize_job(stored)
-
-        cached = None if payload.regenerate else self._cache.get(cache_key)
-        if cached is not None:
-            logger.info("ai_cache operation=job_analysis cache_status=hit source=memory")
-            if session is not None and user is not None:
-                stored = crud.create_job_analysis(
-                    session,
-                    user_id=user.id,
-                    title=payload.title,
-                    company=payload.company,
-                    description=payload.description,
-                    clean_description=cleaned_description,
-                    analysis_result={**cached.model_dump(), "_language": selected_language},
-                )
-                return self._serialize_job(stored)
-
-            return JobRead(
-                id=0,
-                title=payload.title,
-                company=payload.company,
-                description=payload.description,
-                clean_description=cleaned_description,
-                analysis_result=cached.model_copy(deep=True),
-                created_at=None,
-            )
+            if stored is not None and _analysis_language(stored.analysis_result) != selected_language:
+                stored = None
 
         response: JobAnalysisPayload | None = None
         try:
             analyzer = self._get_analyzer()
-            logger.info("ai_cache operation=job_analysis cache_status=miss source=none")
             logger.info(
                 "ai_call operation=job_analysis title=%s company=%s regenerate=%s",
                 payload.title,
                 payload.company,
                 payload.regenerate,
             )
-            result = run_ai_call_with_circuit_breaker(
+            parsed = run_structured_ai_call(
+                schema=JobAnalysisAIOutput,
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="job_analysis",
@@ -273,15 +246,16 @@ class JobAnalyzerService:
                 callable_=analyzer,
                 lm_max_tokens=self.max_tokens,
                 retry_lm_max_tokens=self.retry_max_tokens,
-                attempt_kwargs_builder=lambda attempt: {
+                attempt_kwargs_builder_with_exception=lambda attempt, previous_exception: {
                     "title": payload.title,
                     "company": payload.company,
-                    "description": cleaned_description if attempt == 0 else retry_description,
+                    "description": prompt_description,
                     "response_language": language_instruction(selected_language),
                     "max_tokens": self.max_tokens if attempt == 0 else self.retry_max_tokens,
+                    "model": use_provider_fallback_model(attempt, previous_exception),
                 },
             )
-            response = self._build_payload_from_result(result)
+            response = self._build_payload_from_result(parsed.payload)
             if not _is_meaningful_job_analysis_payload(response):
                 logger.warning("ai_invalid_output operation=job_analysis reason=low_quality_output")
                 raise HTTPException(
@@ -292,14 +266,37 @@ class JobAnalyzerService:
                     ),
                 )
         except HTTPException as exc:
-            logger.warning("ai_call_http_error operation=job_analysis status_code=%s", exc.status_code)
-            raise
+            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE and exc.detail == "AI analysis is not configured.":
+                logger.warning("ai_call_http_error operation=job_analysis status_code=%s", exc.status_code)
+                raise
+            logger.warning(
+                "ai_fallback operation=job_analysis reason=http_exception status_code=%s",
+                exc.status_code,
+            )
+            response = self._build_fallback_analysis_payload(
+                title=payload.title,
+                company=payload.company,
+                cleaned_description=cleaned_description,
+                language=selected_language,
+            )
         except Exception as exc:
-            raise build_ai_failure_http_exception(
+            http_error = build_ai_failure_http_exception(
                 exc=exc,
                 logger=logger,
                 operation="job_analysis",
                 default_detail="Failed to analyze job description. Please try again.",
+            )
+            if http_error.status_code == status.HTTP_503_SERVICE_UNAVAILABLE and http_error.detail == "AI analysis is not configured.":
+                raise http_error
+            logger.warning(
+                "ai_fallback operation=job_analysis reason=exception status_code=%s",
+                http_error.status_code,
+            )
+            response = self._build_fallback_analysis_payload(
+                title=payload.title,
+                company=payload.company,
+                cleaned_description=cleaned_description,
+                language=selected_language,
             )
 
         if response is None:
@@ -324,24 +321,25 @@ class JobAnalyzerService:
                         stored,
                         _serialize_job_analysis_result(response, selected_language),
                     )
-                    if _should_cache_job_analysis_payload(response):
-                        self._cache[cache_key] = response.model_copy(deep=True)
                     return self._serialize_job(stored)
 
-            stored = crud.create_job_analysis(
-                session,
-                user_id=user.id,
-                title=payload.title,
-                company=payload.company,
-                description=payload.description,
-                clean_description=cleaned_description,
-                analysis_result=_serialize_job_analysis_result(response, selected_language),
-            )
-            if _should_cache_job_analysis_payload(response):
-                self._cache[cache_key] = response.model_copy(deep=True)
+            if stored is not None:
+                stored = crud.update_job_analysis_result(
+                    session,
+                    stored,
+                    _serialize_job_analysis_result(response, selected_language),
+                )
+            else:
+                stored = crud.create_job_analysis(
+                    session,
+                    user_id=user.id,
+                    title=payload.title,
+                    company=payload.company,
+                    description=payload.description,
+                    clean_description=cleaned_description,
+                    analysis_result=_serialize_job_analysis_result(response, selected_language),
+                )
             return self._serialize_job(stored)
-        if _should_cache_job_analysis_payload(response):
-            self._cache[cache_key] = response.model_copy(deep=True)
         return JobRead(
             id=0,
             title=payload.title,
@@ -578,7 +576,7 @@ def _normalize_summary_text(value: object, limit: int) -> str:
             if len(candidate) > limit:
                 break
             selected.append(sentence)
-            if len(selected) >= 2:
+            if len(selected) >= 3:
                 break
 
         if selected:
@@ -661,6 +659,12 @@ def _is_fallback_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
 
 
 def _is_meaningful_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
+    # Require a non-trivial summary — a single word or placeholder is not enough.
+    if len(payload.summary.strip()) < 20:
+        return False
+    # Count how many key lists have at least one item. We require 4 out of 6
+    # (raised from 3/5) to catch partially-empty AI responses that previously
+    # slipped through and stored incomplete data in the database.
     populated_lists = sum(
         1
         for items in (
@@ -669,10 +673,11 @@ def _is_meaningful_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
             payload.how_to_prepare,
             payload.resume_tips,
             payload.interview_tips,
+            payload.learning_path,
         )
         if items
     )
-    return bool(payload.summary.strip()) and populated_lists >= 3
+    return populated_lists >= 4
 
 
 def _refine_job_analysis_payload(payload: JobAnalysisPayload) -> JobAnalysisPayload:
@@ -859,14 +864,20 @@ def _build_fallback_summary(
 def _extract_summary_themes(cleaned_description: str) -> list[str]:
     lowered = cleaned_description.lower()
     themes: list[str] = []
+    if "mobile" in lowered or "react native" in lowered:
+        themes.append("building reliable mobile or cross-platform product experiences")
+    if "desktop" in lowered:
+        themes.append("shipping high-performance desktop application experiences")
+    if "frontend" in lowered or "ui" in lowered or "ux" in lowered:
+        themes.append("delivering polished user-facing experiences with strong product collaboration")
     if "operational workflow" in lowered or "automate operational workflows" in lowered:
         themes.append("building internal tools that automate operational workflows")
     if "data visibility" in lowered:
         themes.append("improving data visibility across business teams")
+    if "integration" in lowered or "apis" in lowered or "databases" in lowered:
+        themes.append("connecting product features with APIs, backend services, and external systems")
     if "regulated" in lowered or "banking" in lowered or "governance" in lowered:
         themes.append("meeting security, governance, and regulated-environment standards")
-    if "integration" in lowered or "apis" in lowered or "databases" in lowered:
-        themes.append("connecting Retool with APIs, databases, and third-party systems")
     return themes[:2]
 
 
@@ -906,16 +917,16 @@ def _build_fallback_prepare(
         tips = [
             f"Prepare 2-3 stories that show direct ownership of {top_responsibility.lower()}." if top_responsibility else "Prepare 2-3 stories showing direct ownership of similar business-critical work.",
             f"Map your strongest evidence to {top_skills} with concrete tools, scale, and outcomes." if top_skills else "Map your strongest evidence to the role's core technical requirements with concrete outcomes.",
-            "Be ready to explain how you worked with stakeholders, handled ambiguity, and shipped quickly without sacrificing governance.",
-            "Review one migration or modernization example end to end: problem, constraints, solution, and measurable impact.",
+            "Be ready to explain how you worked with stakeholders, handled ambiguity, and shipped reliably under deadlines.",
+            "Review one end-to-end delivery example: problem, constraints, solution, and measurable impact.",
             "Practice explaining complex technical decisions in business language.",
         ]
     else:
         tips = [
             f"Prepara 2-3 historias que demuestren ownership directo sobre {top_responsibility.lower()}." if top_responsibility else "Prepara 2-3 historias con ownership real sobre trabajo critico similar.",
             f"Relaciona tu mejor evidencia con {top_skills} usando herramientas, escala y resultados concretos." if top_skills else "Relaciona tu mejor evidencia con los requisitos tecnicos centrales usando resultados concretos.",
-            "Practica como colaboraste con stakeholders, resolviste ambiguedad y entregaste rapido sin comprometer governance.",
-            "Repasa un proyecto de migracion o modernizacion de punta a punta: problema, restricciones, solucion e impacto.",
+            "Practica como colaboraste con stakeholders, resolviste ambiguedad y entregaste bien bajo deadlines.",
+            "Repasa un proyecto de punta a punta: problema, restricciones, solucion e impacto medible.",
             "Practica explicar decisiones tecnicas complejas en lenguaje de negocio.",
         ]
     return _normalize_list(tips)
@@ -968,17 +979,17 @@ def _build_fallback_resume_tips(
         items = [
             f"Move your strongest evidence for {top_skills} into the summary and most recent experience section.",
             f"Rewrite bullets to show scope, stakeholders, and measurable outcomes for {top_responsibility.lower()}.",
-            "Name the platforms, databases, governance tools, and cloud environments you used instead of describing them generically.",
-            "Highlight modernization, migration, or automation work with numbers: time saved, data volume, error reduction, or adoption.",
-            "If you have regulated-environment work, make that explicit rather than implied.",
+            "Name the tools, frameworks, APIs, and platforms you used instead of describing them generically.",
+            "Highlight delivery, optimization, debugging, or automation work with numbers: speed, adoption, reliability, or time saved.",
+            "If you have cross-functional product or production support experience, make that explicit rather than implied.",
         ]
     else:
         items = [
             f"Lleva tu mejor evidencia de {top_skills} al resumen y a la experiencia mas reciente.",
             f"Reescribe bullets mostrando alcance, stakeholders e impacto medible sobre {top_responsibility.lower()}.",
-            "Nombra plataformas, bases, herramientas de governance y clouds concretos en vez de describirlos en general.",
-            "Destaca trabajo de modernizacion, migracion o automatizacion con numeros: tiempo ahorrado, volumen, errores o adopcion.",
-            "Si trabajaste en entornos regulados, dejalo explicito y no solo implicito.",
+            "Nombra herramientas, frameworks, APIs y plataformas concretas en vez de describirlas en general.",
+            "Destaca trabajo de entrega, optimizacion, debugging o automatizacion con numeros: velocidad, adopcion, confiabilidad o tiempo ahorrado.",
+            "Si trabajaste con producto, UX/UI o incidencias de produccion, dejalo explicito y no solo implicito.",
         ]
     return _normalize_list(items)
 
@@ -994,16 +1005,16 @@ def _build_fallback_interview_tips(
         items = [
             f"Expect detailed questions on {top_skills} and how you applied them in production.",
             f"Prepare to walk through a project centered on {top_responsibility.lower()}, including tradeoffs and stakeholder alignment.",
-            "Have one example ready for data quality, governance, or compliance decisions under real constraints.",
-            "Be ready to discuss performance optimization, observability, and support for internal users after launch.",
+            "Have one example ready for debugging or quality decisions under real constraints.",
+            "Be ready to discuss performance optimization, reliability, and production support after launch.",
             "Practice explaining why you chose a specific architecture, integration pattern, or data platform.",
         ]
     else:
         items = [
             f"Espera preguntas especificas sobre {top_skills} y como lo aplicaste en produccion.",
             f"Preparate para recorrer un proyecto enfocado en {top_responsibility.lower()}, incluyendo tradeoffs y alineacion con stakeholders.",
-            "Ten listo un ejemplo sobre data quality, governance o compliance bajo restricciones reales.",
-            "Repasa optimizacion de performance, observabilidad y soporte a usuarios internos despues del lanzamiento.",
+            "Ten listo un ejemplo sobre debugging o decisiones de calidad bajo restricciones reales.",
+            "Repasa optimizacion de performance, confiabilidad y soporte en produccion despues del lanzamiento.",
             "Practica justificar por que elegiste una arquitectura, patron de integracion o data platform concreto.",
         ]
     return _normalize_list(items)
@@ -1016,20 +1027,37 @@ def _build_fallback_projects(
 ) -> list[str]:
     required_joined = " ".join(required_skills).lower()
     data_focused = any(keyword in required_joined for keyword in ("databricks", "sql", "data", "spark"))
+    frontend_focused = any(keyword in required_joined for keyword in ("react", "typescript", "next.js", "react native"))
     if language == "english":
-        items = [
-            "Build an internal operations dashboard that pulls from APIs and SQL sources, with role-based access and audit-friendly workflows.",
-            "Create a migration case study showing how you modernized a reporting or data pipeline from legacy logic to a governed platform.",
-            "Ship a Retool-style admin tool with approval flows, validation checks, and observability hooks." if "retool" in required_joined else "Ship an internal tool that automates approvals, validations, and operational follow-up.",
-            "Publish a notebook or demo showing data quality checks, lineage decisions, and monitoring alerts." if data_focused else "Publish a case study highlighting governance, performance, and stakeholder outcomes.",
-        ]
+        if frontend_focused:
+            items = [
+                "Build a cross-platform TypeScript app that consumes REST APIs with clear state management decisions.",
+                "Ship a React or Next.js workflow with measurable performance and UX improvements.",
+                "Create a production-style debugging case study showing how you diagnosed and fixed a real UI issue.",
+                "Publish a small component or feature demo that highlights architecture, API integration, and code quality choices.",
+            ]
+        else:
+            items = [
+                "Build an internal operations dashboard that pulls from APIs and SQL sources, with role-based access and audit-friendly workflows.",
+                "Create a migration case study showing how you modernized a reporting or data pipeline from legacy logic to a governed platform.",
+                "Ship a Retool-style admin tool with approval flows, validation checks, and observability hooks." if "retool" in required_joined else "Ship an internal tool that automates approvals, validations, and operational follow-up.",
+                "Publish a notebook or demo showing data quality checks, lineage decisions, and monitoring alerts." if data_focused else "Publish a case study highlighting governance, performance, and stakeholder outcomes.",
+            ]
     else:
-        items = [
-            "Construye un dashboard interno de operaciones que consuma APIs y SQL, con accesos por rol y flujos auditables.",
-            "Arma un case study de migracion mostrando como modernizaste reporting o pipelines desde logica legacy a una plataforma gobernada.",
-            "Publica una herramienta estilo Retool con approval flows, validaciones y observabilidad." if "retool" in required_joined else "Publica una internal tool que automatice approvals, validaciones y seguimiento operativo.",
-            "Comparte un notebook o demo con data quality checks, lineage y alertas de monitoreo." if data_focused else "Comparte un case study que destaque governance, performance e impacto en stakeholders.",
-        ]
+        if frontend_focused:
+            items = [
+                "Construye una app TypeScript cross-platform que consuma APIs REST y muestre decisiones claras de state management.",
+                "Publica un flujo en React o Next.js con mejoras medibles de performance y UX.",
+                "Arma un caso de debugging en produccion mostrando como encontraste y corregiste un bug real de UI.",
+                "Comparte un demo pequeno que destaque arquitectura, integracion con APIs y decisiones de calidad de codigo.",
+            ]
+        else:
+            items = [
+                "Construye un dashboard interno de operaciones que consuma APIs y SQL, con accesos por rol y flujos auditables.",
+                "Arma un case study de migracion mostrando como modernizaste reporting o pipelines desde logica legacy a una plataforma gobernada.",
+                "Publica una herramienta estilo Retool con approval flows, validaciones y observabilidad." if "retool" in required_joined else "Publica una internal tool que automatice approvals, validaciones y seguimiento operativo.",
+                "Comparte un notebook o demo con data quality checks, lineage y alertas de monitoreo." if data_focused else "Comparte un case study que destaque governance, performance e impacto en stakeholders.",
+            ]
     return _normalize_list(items)
 
 

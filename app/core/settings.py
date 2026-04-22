@@ -53,12 +53,12 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cv_text_chars": 8000,
         "max_output_tokens": 900,
         "job_analysis_max_tokens": 980,
-        "job_analysis_retry_max_tokens": 700,
+        "job_analysis_retry_max_tokens": 980,
         "cv_match_max_tokens": 1200,
-        "cv_match_retry_max_tokens": 1800,
+        "cv_match_retry_max_tokens": 1200,
         "cover_letter_max_tokens": 640,
         "job_preprocess_target_chars": 5000,
-        "ai_timeout_seconds": 45,
+        "ai_timeout_seconds": 60,
     },
     "production": {
         "rate_limit_enabled": True,
@@ -80,12 +80,12 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cv_text_chars": 8000,
         "max_output_tokens": 900,
         "job_analysis_max_tokens": 2400,
-        "job_analysis_retry_max_tokens": 1200,
+        "job_analysis_retry_max_tokens": 2400,
         "cv_match_max_tokens": 1600,
-        "cv_match_retry_max_tokens": 2200,
+        "cv_match_retry_max_tokens": 1600,
         "cover_letter_max_tokens": 700,
         "job_preprocess_target_chars": 5000,
-        "ai_timeout_seconds": 45,
+        "ai_timeout_seconds": 60,
     },
 }
 
@@ -111,6 +111,16 @@ def normalize_dspy_model(model: str, api_base: str) -> str:
     if cleaned_model.lower().startswith("openrouter/"):
         return cleaned_model
     return f"openrouter/{cleaned_model.lstrip('/')}"
+
+
+def build_dspy_lm_kwargs(*, api_base: str) -> dict[str, Any]:
+    """Return provider-specific LM kwargs that are safe for the active endpoint."""
+    if not _get_env_bool("DSPY_SEND_REASONING_EXTRA_BODY", False):
+        return {}
+    cleaned_api_base = _strip_wrapping_quotes(api_base).lower()
+    if "openrouter.ai" not in cleaned_api_base:
+        return {}
+    return {"extra_body": {"reasoning": {"enabled": False}}}
 
 
 def _get_app_env() -> AppEnv:
@@ -182,12 +192,35 @@ def _default_database_url() -> str:
     return ""
 
 
+def _resolve_ai_api_key() -> str:
+    return (
+        _get_env_str("OPENROUTER_API_KEY")
+        or _get_env_str("GROQ_API_KEY")
+        or _get_env_str("OPENAI_API_KEY")
+    )
+
+
+def _resolve_ai_base_url() -> str:
+    configured_base_url = (
+        _get_env_str("OPENROUTER_BASE_URL")
+        or _get_env_str("GROQ_BASE_URL")
+        or _get_env_str("OPENAI_BASE_URL")
+    )
+    if configured_base_url:
+        return configured_base_url
+    if _get_env_str("OPENROUTER_API_KEY"):
+        return "https://openrouter.ai/api/v1"
+    if _get_env_str("GROQ_API_KEY"):
+        return "https://api.groq.com/openai/v1"
+    if _get_env_str("OPENAI_API_KEY"):
+        return "https://api.openai.com/v1"
+    return "https://openrouter.ai/api/v1"
+
+
 class Settings(BaseModel):
     app_env: AppEnv = Field(default_factory=_get_app_env)
-    openrouter_api_key: str = Field(default_factory=lambda: _get_env_str("OPENROUTER_API_KEY"))
-    openrouter_base_url: str = Field(
-        default_factory=lambda: _get_env_str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    )
+    openrouter_api_key: str = Field(default_factory=_resolve_ai_api_key)
+    openrouter_base_url: str = Field(default_factory=_resolve_ai_base_url)
     sentry_dsn: str | None = Field(default_factory=lambda: _get_env_str("SENTRY_DSN") or None)
     redis_url: str | None = Field(default_factory=lambda: _get_env_str("REDIS_URL") or None)
     supabase_url: str = Field(default_factory=lambda: _get_env_str("SUPABASE_URL"))
@@ -205,9 +238,15 @@ class Settings(BaseModel):
         default_factory=lambda: _get_env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
     )
     dspy_model: str = Field(
-        default_factory=lambda: _get_env_str("DSPY_MODEL", "openrouter/minimax/minimax-m2.5:free")
+        default_factory=lambda: _get_env_str("DSPY_MODEL", "openrouter/nvidia/nemotron-3-super-120b-a12b:free")
     )
-    dspy_temperature: float = Field(default_factory=lambda: _get_env_float("DSPY_TEMPERATURE", 0.0))
+    dspy_provider_fallback_model: str = Field(
+        default_factory=lambda: _get_env_str(
+            "DSPY_PROVIDER_FALLBACK_MODEL",
+            "openrouter/google/gemma-4-31b-it:free",
+        )
+    )
+    dspy_temperature: float = Field(default_factory=lambda: _get_env_float("DSPY_TEMPERATURE", 0.35))
     rate_limit_enabled: bool = Field(
         default_factory=lambda: _get_env_bool("RATE_LIMIT_ENABLED", bool(_env_default("rate_limit_enabled")))
     )
@@ -346,8 +385,12 @@ class Settings(BaseModel):
             self.database_url = _default_sqlite_database_url()
         self.openrouter_base_url = _strip_wrapping_quotes(self.openrouter_base_url).rstrip("/")
         self.dspy_model = normalize_dspy_model(self.dspy_model, self.openrouter_base_url)
+        self.dspy_provider_fallback_model = normalize_dspy_model(
+            self.dspy_provider_fallback_model,
+            self.openrouter_base_url,
+        )
         self.trusted_user_email = self.trusted_user_email.lower()
-        self.dspy_temperature = min(max(self.dspy_temperature, 0.2), 0.4)
+        self.dspy_temperature = min(max(self.dspy_temperature, 0.25), 0.55)
         self.sqlite_timeout_seconds = max(1, self.sqlite_timeout_seconds)
         self.auth_window_seconds = max(60, self.auth_window_seconds)
         self.auth_register_limit = max(1, self.auth_register_limit)
@@ -366,12 +409,9 @@ class Settings(BaseModel):
         self.max_cv_text_chars = max(500, self.max_cv_text_chars)
         self.max_output_tokens = min(4000, max(50, self.max_output_tokens))
         self.job_analysis_max_tokens = min(4000, max(100, self.job_analysis_max_tokens))
-        self.job_analysis_retry_max_tokens = min(
-            self.job_analysis_max_tokens,
-            max(100, self.job_analysis_retry_max_tokens),
-        )
+        self.job_analysis_retry_max_tokens = min(4000, max(100, self.job_analysis_retry_max_tokens))
         self.cv_match_max_tokens = min(4000, max(100, self.cv_match_max_tokens))
-        self.cv_match_retry_max_tokens = min(4000, max(self.cv_match_max_tokens, self.cv_match_retry_max_tokens))
+        self.cv_match_retry_max_tokens = min(4000, max(100, self.cv_match_retry_max_tokens))
         self.cover_letter_max_tokens = min(4000, max(100, self.cover_letter_max_tokens))
         self.job_preprocess_target_chars = min(
             self.max_job_description_chars,
@@ -437,7 +477,7 @@ def configure_dspy() -> Any:
 
     settings = get_settings()
     if not settings.openrouter_api_key:
-        raise ValueError("OPENROUTER_API_KEY is not set")
+        raise ValueError("AI API key is not set. Configure OPENROUTER_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY")
 
     with _DSPY_CONFIG_LOCK:
         if _DSPY_LM is not None:
@@ -451,9 +491,9 @@ def configure_dspy() -> Any:
             model=normalize_dspy_model(settings.dspy_model, settings.openrouter_base_url),
             api_key=settings.openrouter_api_key,
             api_base=settings.openrouter_base_url,
-            temperature=min(max(settings.dspy_temperature, 0.2), 0.4),
+            temperature=min(max(settings.dspy_temperature, 0.25), 0.55),
             max_tokens=max(50, min(settings.max_output_tokens, 4000)),
-            extra_body={"reasoning": {"enabled": False}},
+            **build_dspy_lm_kwargs(api_base=settings.openrouter_base_url),
         )
         dspy_module.settings.configure(lm=lm)
         _DSPY_LM = lm

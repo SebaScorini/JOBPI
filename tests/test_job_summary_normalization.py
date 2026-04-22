@@ -2,6 +2,8 @@ from app.services.cv_library_service import _build_match_explanation
 from app.services.job_analyzer import _normalize_list, _normalize_summary_text
 from app.services.cv_analyzer import _refine_cv_analysis_response
 from app.schemas.cv import CvAnalysisResponse
+from app.schemas.job import JobAnalysisPayload
+from app.services.job_analyzer import _refine_job_analysis_payload
 
 
 def test_normalize_summary_prefers_complete_sentences():
@@ -135,3 +137,68 @@ def test_refine_cv_analysis_response_reduces_cross_section_repetition():
     assert len(refined.recruiter_improvements) <= 1
     assert len(refined.next_steps) <= 1
     assert refined.resume_improvements or refined.ats_improvements or refined.recruiter_improvements
+
+
+def test_refine_cv_analysis_response_filters_generic_missing_skills():
+    response = CvAnalysisResponse(
+        fit_summary="Moderate fit with good backend experience but a few visible gaps.",
+        strengths=["Strong FastAPI delivery in production systems"],
+        missing_skills=[
+            "More experience",
+            "Add Docker deployment bullet",
+            "Limited evidence of Docker production ownership",
+            "No explicit observability ownership examples",
+        ],
+        likely_fit_level="Moderate",
+        resume_improvements=["Add Docker deployment bullet"],
+        ats_improvements=[],
+        recruiter_improvements=[],
+        rewritten_bullets=[],
+        interview_focus=[],
+        next_steps=[],
+    )
+
+    refined = _refine_cv_analysis_response(response)
+
+    assert "More experience" not in refined.missing_skills
+    assert "Add Docker deployment bullet" not in refined.missing_skills
+    assert "Limited evidence of Docker production ownership" in refined.missing_skills
+    assert "No explicit observability ownership examples" in refined.missing_skills
+
+
+def test_refine_job_analysis_payload_reduces_cross_section_repetition():
+    payload = JobAnalysisPayload(
+        summary="Backend platform role focused on API delivery and production reliability.",
+        seniority="mid",
+        role_type="backend",
+        required_skills=["Python", "FastAPI", "Docker"],
+        nice_to_have_skills=["Kubernetes"],
+        responsibilities=["Own backend API delivery across production systems"],
+        how_to_prepare=[
+            "Prepare examples of backend API delivery across production systems",
+            "Prepare examples of backend API delivery across production systems",
+        ],
+        learning_path=[
+            "Study backend API delivery tradeoffs across production systems",
+        ],
+        missing_skills=["Clear Docker production ownership evidence"],
+        resume_tips=[
+            "Show backend API delivery across production systems with measurable impact",
+            "Show backend API delivery across production systems with measurable impact",
+        ],
+        interview_tips=[
+            "Discuss backend API delivery tradeoffs in production systems",
+            "Discuss backend API delivery tradeoffs in production systems",
+        ],
+        portfolio_project_ideas=[
+            "Build a backend API platform demo with production-style observability and Docker delivery",
+            "Build a backend API platform demo with production-style observability and Docker delivery",
+        ],
+    )
+
+    refined = _refine_job_analysis_payload(payload)
+
+    assert len(refined.how_to_prepare) <= 1
+    assert len(refined.resume_tips) <= 1
+    assert len(refined.interview_tips) <= 1
+    assert len(refined.portfolio_project_ideas) <= 1

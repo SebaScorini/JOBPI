@@ -9,13 +9,19 @@ import dspy
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
-from app.core.ai import build_ai_failure_http_exception, dspy_lm_override, run_ai_call_with_circuit_breaker
+from app.core.ai import (
+    build_ai_failure_http_exception,
+    dspy_lm_override,
+    run_structured_ai_call,
+    use_provider_fallback_model,
+)
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
+from app.models.ai_schemas import CoverLetterAIOutput
 from app.models import User
 from app.schemas.job import AIResponseLanguage
 from app.services.job_analyzer import _normalize_text
-from app.services.job_preprocessing import build_cv_excerpt, build_job_excerpt
+from app.services.job_preprocessing import build_cv_context, build_job_context
 from app.services.response_language import language_instruction, normalize_language
 
 
@@ -32,16 +38,21 @@ class CoverLetterSignature(dspy.Signature):
     Use only claims that are supported by the CV summary or CV excerpt. Emphasize the most
     relevant matches to the role, sound human and specific, and avoid filler, flattery,
     repetition, exaggerated confidence, or unsupported achievements.
+    Do not use generic praise, generic "excited to apply" filler, or vague statements that could
+    fit any role. Do not invent outcomes, do not repeat the job description, and do not assume a
+    technical framing if the job is non-technical.
+    Make the body feel role-specific by naming 2-3 concrete overlaps between the candidate evidence
+    and the role, and vary sentence openings instead of reusing stock cover-letter phrasing.
     """
 
     job_title: str = dspy.InputField(desc="Target job title")
     company: str = dspy.InputField(desc="Company name for salutation and context")
-    job_description: str = dspy.InputField(desc="Pruned job excerpt with the most relevant requirements and responsibilities")
+    job_description: str = dspy.InputField(desc="Markdown job context with the full useful posting content")
     cv_summary: str = dspy.InputField(desc="Short CV summary with the candidate's highest-level positioning")
-    cv_text: str = dspy.InputField(desc="Pruned CV evidence excerpt with relevant skills, experience, and achievements")
+    cv_text: str = dspy.InputField(desc="Markdown CV context with the candidate's relevant evidence")
     response_language: str = dspy.InputField(desc="Language for the final cover letter")
     cover_letter: str = dspy.OutputField(
-        desc="Plain text only. Include greeting, 2-3 short paragraphs, and sign-off. Keep it specific to the role, concise, professional, and roughly under 180 words."
+        desc="Plain text only. Include greeting, 2-3 short paragraphs, and sign-off. Keep it specific to the role, concise, professional, and roughly under 180 words / about 1200 characters or less. Sound like a tailored application, not a generic template."
     )
 
 
@@ -59,6 +70,7 @@ class CoverLetterModule(dspy.Module):
         cv_text: str,
         response_language: str,
         max_tokens: int | None = None,
+        model: str | None = None,
     ):
         if max_tokens is None:
             return self.predict(
@@ -70,7 +82,7 @@ class CoverLetterModule(dspy.Module):
                 response_language=response_language,
             )
 
-        with dspy_lm_override(max_tokens=max_tokens):
+        with dspy_lm_override(max_tokens=max_tokens, model=model):
             return self.predict(
                 job_title=job_title,
                 company=company,
@@ -119,30 +131,21 @@ class CoverLetterService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        if not regenerate:
-            cached_cover_letter = crud.get_cached_cover_letter(
-                session=session,
-                user_id=user.id,
-                job_id=job_id,
-                cv_id=selected_cv_id,
-                language=selected_language,
-            )
-            if cached_cover_letter and not _looks_like_fallback_cover_letter(cached_cover_letter, company=job.company):
-                logger.info(
-                    "ai_cache operation=cover_letter_generation cache_status=hit source=db job_id=%s cv_id=%s",
-                    job_id,
-                    selected_cv_id,
-                )
-                return cached_cover_letter
-
-        logger.info("ai_cache operation=cover_letter_generation cache_status=miss source=none")
-        job_excerpt = build_job_excerpt(job.clean_description)
+        # NOTE (PII): build_job_context and build_cv_context pass content from
+        # the raw PDF text to the AI provider (OpenRouter). For CVs, this may
+        # include the candidate's name, address, phone number, and email from
+        # the document header. This is intentional for generation quality but
+        # should be reviewed if stricter data-handling requirements apply.
+        job_context = build_job_context(
+            job.clean_description,
+            title=job.title,
+            company=job.company,
+        )
         cv_summary = getattr(cv, "library_summary", "") or cv.summary
-        cv_excerpt = build_cv_excerpt(
+        cv_context = build_cv_context(
             cv.clean_text,
             summary=cv.summary,
             library_summary=cv_summary,
-            job_description=job_excerpt,
         )
         try:
             generator = self._get_generator()
@@ -152,22 +155,26 @@ class CoverLetterService:
                 selected_cv_id,
                 regenerate,
             )
-            result = run_ai_call_with_circuit_breaker(
+            parsed = run_structured_ai_call(
+                schema=CoverLetterAIOutput,
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="cover_letter_generation",
                 logger=logger,
                 callable_=generator,
                 lm_max_tokens=self.max_tokens,
-                job_title=job.title,
-                company=job.company,
-                job_description=job_excerpt,
-                cv_summary=cv_summary,
-                cv_text=cv_excerpt,
-                response_language=language_instruction(selected_language),
-                max_tokens=self.max_tokens,
+                attempt_kwargs_builder_with_exception=lambda attempt, previous_exception: {
+                    "job_title": job.title,
+                    "company": job.company,
+                    "job_description": job_context,
+                    "cv_summary": cv_summary,
+                    "cv_text": cv_context,
+                    "response_language": language_instruction(selected_language),
+                    "max_tokens": self.max_tokens,
+                    "model": use_provider_fallback_model(attempt, previous_exception),
+                },
             )
-            cover_letter = _normalize_cover_letter(result.cover_letter)
+            cover_letter = _normalize_cover_letter(parsed.payload.cover_letter)
             if not _is_meaningful_cover_letter(cover_letter):
                 logger.warning("ai_invalid_output operation=cover_letter_generation reason=low_quality_output")
                 raise HTTPException(

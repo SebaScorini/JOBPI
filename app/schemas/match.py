@@ -30,10 +30,10 @@ class CVComparisonWinner(BaseModel):
 
 class CVComparisonResponse(BaseModel):
     winner: CVComparisonWinner
-    overall_reason: str
-    comparative_strengths: list[str]
-    comparative_weaknesses: list[str]
-    job_alignment_breakdown: list[str]
+    overall_reason: str = ""
+    comparative_strengths: list[str] = Field(default_factory=list)
+    comparative_weaknesses: list[str] = Field(default_factory=list)
+    job_alignment_breakdown: list[str] = Field(default_factory=list)
 
 
 class CVJobMatchRead(BaseModel):
@@ -41,23 +41,23 @@ class CVJobMatchRead(BaseModel):
     user_id: int
     cv_id: int
     job_id: int
-    fit_level: str
-    fit_summary: str
-    why_this_cv: str
-    strengths: list[str]
-    missing_skills: list[str]
-    improvement_suggestions: list[str]
-    suggested_improvements: list[str]
-    missing_keywords: list[str]
+    fit_level: str = ""
+    fit_summary: str = ""
+    why_this_cv: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    improvement_suggestions: list[str] = Field(default_factory=list)
+    suggested_improvements: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
     reorder_suggestions: list[str] | None = None
-    match_level: MatchLevel
+    match_level: MatchLevel = "weak"
     recommended: bool
     created_at: datetime
 
 
 class CVJobMatchDetailRead(CVJobMatchRead):
-    heuristic_score: float
-    result: CvAnalysisResponse
+    heuristic_score: float = 0.0
+    result: CvAnalysisResponse = Field(default_factory=CvAnalysisResponse)
 
 
 MatchListResponse: TypeAlias = PaginatedResponse[CVJobMatchRead]

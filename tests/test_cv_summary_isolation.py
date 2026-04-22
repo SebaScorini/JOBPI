@@ -7,6 +7,7 @@ from uuid import uuid4
 from sqlmodel import SQLModel, Session, create_engine
 
 from app.db import crud
+from app.models.ai_schemas import CvLibrarySummaryAIOutput
 from app.services.cv_library_service import CvLibraryService
 from app.services.cv_library_summary_service import CvLibrarySummaryService, _normalize_library_summary
 
@@ -17,13 +18,16 @@ class _LeakySummaryModule:
 
     def __call__(self, *, cv: str, max_tokens: int | None = None):
         if self._first_result is None:
-            headline = cv.splitlines()[0].strip()
+            headline = next(
+                (line.strip() for line in cv.splitlines() if line.strip() and not line.strip().startswith("## ")),
+                cv.splitlines()[0].strip(),
+            )
             self._first_result = SimpleNamespace(summary=f"{headline} summary")
         return self._first_result
 
 
 def _call_summary_generator(**kwargs):
-    return kwargs["callable_"](cv=kwargs["cv"], max_tokens=kwargs["max_tokens"])
+    return SimpleNamespace(payload=kwargs["callable_"](cv=kwargs["cv"], max_tokens=kwargs["max_tokens"]))
 
 
 class CvLibrarySummaryIsolationTests(unittest.TestCase):
@@ -156,6 +160,46 @@ class CvLibrarySummaryNormalizationTests(unittest.TestCase):
             normalized,
             "Backend developer with Python and FastAPI experience.",
         )
+
+    def test_schema_normalizes_overlong_summary_and_completion_artifacts(self):
+        payload = CvLibrarySummaryAIOutput.model_validate(
+            {
+                "summary": (
+                    "Backend Developer focused on Python and FastAPI, building production REST APIs, "
+                    "AI-powered workflows with DSPy, and multi-tenant SaaS platforms. Experienced in "
+                    "full-stack development including React/TypeScript frontends, Docker containerization, "
+                    "and deployment on Vercel and Supabase. [[ ## completed ## ]]"
+                )
+            }
+        )
+
+        self.assertLessEqual(len(payload.summary), 300)
+        self.assertNotIn("[[ ## completed ## ]]", payload.summary)
+        self.assertIn("Backend Developer", payload.summary)
+
+    def test_schema_does_not_leave_dangling_sentence_fragment(self):
+        payload = CvLibrarySummaryAIOutput.model_validate(
+            {
+                "summary": (
+                    "Full Stack Developer focused on Python and FastAPI, with expertise in building "
+                    "AI-powered backends using DSPy and responsive frontends with React and TypeScript. "
+                    "Experienced in building multi-tenant systems and end-to-end product delivery across SaaS platforms."
+                )
+            }
+        )
+
+        self.assertNotIn("Experienced in.", payload.summary)
+
+    def test_normalize_library_summary_prefers_complete_sentences(self):
+        normalized = _normalize_library_summary(
+            "Full Stack Developer focused on Python backend services with FastAPI, experienced in building "
+            "scalable microservices, REST APIs, and containerized deployments using Docker, with strong "
+            "product delivery across SaaS platforms. Experienced in leading frontend work with React and TypeScript."
+        )
+
+        self.assertNotIn("with.", normalized)
+        self.assertNotIn("Experienced in.", normalized)
+        self.assertTrue(normalized.endswith("."))
 
 
 if __name__ == "__main__":

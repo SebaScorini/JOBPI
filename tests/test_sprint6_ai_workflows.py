@@ -90,7 +90,6 @@ def test_job_analysis_success_and_saved_listing(client, auth_headers, monkeypatc
 
     service = job_service_module.get_job_analyzer_service()
     service.analyzer = _StubJobAnalyzer()
-    service._cache.clear()
 
     response = client.post(
         "/jobs/analyze",
@@ -132,7 +131,7 @@ def test_job_analysis_rejects_oversized_description(client, auth_headers, monkey
     assert response.json()["error"]["code"] == "ERR_VALIDATION"
 
 
-def test_job_analysis_rejects_overlong_low_signal_description_for_reliable_ai(client, auth_headers, monkeypatch):
+def test_job_analysis_accepts_longer_description_when_within_hard_limit(client, auth_headers, monkeypatch):
     import app.api.routes.jobs as jobs_routes
     import app.core.rate_limit as rate_limit_module
 
@@ -153,9 +152,8 @@ def test_job_analysis_rejects_overlong_low_signal_description_for_reliable_ai(cl
         },
     )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "ERR_VALIDATION"
-    assert "reliable analysis" in response.json()["error"]["message"]
+    assert response.status_code == 200
+    assert response.json()["analysis_result"]["summary"] == "Concise backend analysis"
 
 
 def test_job_analysis_rate_limit_returns_429(client, auth_headers, monkeypatch):
@@ -171,7 +169,6 @@ def test_job_analysis_rate_limit_returns_429(client, auth_headers, monkeypatch):
 
     service = job_service_module.get_job_analyzer_service()
     service.analyzer = _StubJobAnalyzer()
-    service._cache.clear()
 
     headers = auth_headers()
     payload = {
@@ -221,7 +218,6 @@ def test_match_and_compare_cvs_are_deterministic(
 
     service = cv_library_service_module.get_cv_library_service()
     service.cv_analyzer = _StubCvAnalyzer()
-    service._analysis_cache.clear()
 
     headers = auth_headers(email=seeded_user.email)
 
@@ -253,7 +249,7 @@ def test_match_job_missing_cv_returns_404(client, auth_headers, seeded_job):
     assert response.json()["error"]["code"] == "ERR_CV_NOT_FOUND"
 
 
-def test_cover_letter_regenerate_overwrites_cached_value(
+def test_cover_letter_calls_ai_fresh_each_time_and_regenerate_still_overwrites_value(
     client,
     auth_headers,
     seeded_cv,
@@ -272,7 +268,7 @@ def test_cover_letter_regenerate_overwrites_cached_value(
     )
 
     service.generator = _StubCoverLetterGenerator("Regenerated draft for the role.")
-    cached = client.post(
+    second = client.post(
         f"/jobs/{seeded_job.id}/cover-letter",
         headers=auth_headers(),
         json={"selected_cv_id": seeded_cv.id},
@@ -284,8 +280,8 @@ def test_cover_letter_regenerate_overwrites_cached_value(
     )
 
     assert first.status_code == 200
-    assert cached.status_code == 200
+    assert second.status_code == 200
     assert regenerated.status_code == 200
     assert first.json()["generated_cover_letter"] == "First draft for the role."
-    assert cached.json()["generated_cover_letter"] == "First draft for the role."
+    assert second.json()["generated_cover_letter"] == "Regenerated draft for the role."
     assert regenerated.json()["generated_cover_letter"] == "Regenerated draft for the role."

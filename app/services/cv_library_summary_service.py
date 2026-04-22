@@ -9,17 +9,23 @@ configure_runtime_environment()
 import dspy
 from fastapi import HTTPException, status
 
-from app.core.ai import dspy_lm_override, looks_like_ai_auth_error, run_ai_call_with_circuit_breaker
+from app.core.ai import (
+    build_ai_failure_http_exception,
+    dspy_lm_override,
+    run_structured_ai_call,
+    use_provider_fallback_model,
+)
 from app.core.config import configure_dspy, get_settings
+from app.models.ai_schemas import CvLibrarySummaryAIOutput
 from app.services.job_analyzer import _normalize_text
+from app.services.job_preprocessing import build_cv_context
 
 
 # Keep the old symbol name available for tests and local monkeypatching.
-run_ai_call_with_timeout = run_ai_call_with_circuit_breaker
+run_ai_call_with_timeout = run_structured_ai_call
 
 
 MAX_LIBRARY_SUMMARY_CHARS = 180
-MAX_LIBRARY_CONTEXT_CHARS = 650
 SUMMARY_MAX_TOKENS = 400
 logger = logging.getLogger(__name__)
 ROLE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -73,11 +79,15 @@ class CvLibrarySummarySignature(dspy.Signature):
     Infer only what is clearly supported by the CV excerpt. Prefer role focus, seniority when
     obvious, and the most representative technologies or domains. Avoid filler, fragments,
     buzzwords, and invented claims.
+    Do not write generic adjectives, unsupported seniority, or role assumptions that are not
+    grounded in the CV. Do not repeat section labels or produce vague "experienced professional"
+    summaries. Favor a summary that sounds like a distinct profile snapshot rather than a generic
+    resume label.
     """
 
-    cv: str = dspy.InputField(desc="Compact CV excerpt with representative profile, experience, and technology lines")
+    cv: str = dspy.InputField(desc="Markdown CV context with summary signals and full useful CV content")
     summary: str = dspy.OutputField(
-        desc="1-2 short complete sentences. Mention role focus, seniority only if clear, and 2-4 representative technologies or domains only when evidenced."
+        desc="1-2 short complete sentences. Mention role focus, seniority only if clear, and 2-4 representative technologies, domains, or outcome areas only when evidenced. Prefer the most distinguishing signals over generic stack lists."
     )
 
 
@@ -86,7 +96,7 @@ class CvLibrarySummaryModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(CvLibrarySummarySignature)
 
-    def forward(self, cv: str, max_tokens: int | None = None):
+    def forward(self, cv: str, max_tokens: int | None = None, model: str | None = None):
         predict_kwargs = {
             "cv": cv,
             # Keep library summaries isolated per CV upload. Reusing cached LM
@@ -96,7 +106,7 @@ class CvLibrarySummaryModule(dspy.Module):
         if max_tokens is None:
             return self.predict(**predict_kwargs)
 
-        with dspy_lm_override(max_tokens=max_tokens):
+        with dspy_lm_override(max_tokens=max_tokens, model=model):
             return self.predict(**predict_kwargs)
 
 
@@ -117,7 +127,8 @@ class CvLibrarySummaryService:
         try:
             generator = self._create_generator()
             logger.info("ai_call operation=cv_library_summary")
-            result = run_ai_call_with_timeout(
+            parsed = run_ai_call_with_timeout(
+                schema=CvLibrarySummaryAIOutput,
                 executor=self._executor,
                 timeout_seconds=self.timeout_seconds,
                 operation="cv_library_summary",
@@ -126,26 +137,26 @@ class CvLibrarySummaryService:
                 lm_max_tokens=SUMMARY_MAX_TOKENS,
                 cv=context,
                 max_tokens=SUMMARY_MAX_TOKENS,
+                attempt_kwargs_builder_with_exception=lambda attempt, previous_exception: {
+                    "cv": context,
+                    "max_tokens": SUMMARY_MAX_TOKENS,
+                    "model": use_provider_fallback_model(attempt, previous_exception),
+                },
             )
-            summary = _normalize_library_summary(result.summary)
+            payload = getattr(parsed, "payload", parsed)
+            summary = _normalize_library_summary(getattr(payload, "summary", ""))
             if summary:
                 return summary
         except HTTPException:
-            logger.warning("cv_library_summary_failed reason=timeout_or_http")
+            logger.warning("cv_library_summary_failed reason=http_exception")
             raise
         except Exception as exc:
-            if looks_like_ai_auth_error(exc):
-                logger.warning("cv_library_summary_failed reason=auth")
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="AI analysis is not configured.",
-                ) from exc
-            else:
-                logger.exception("cv_library_summary_failed reason=unexpected_error")
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Failed to generate CV summary with AI. Please try again.",
-                ) from exc
+            raise build_ai_failure_http_exception(
+                exc=exc,
+                logger=logger,
+                operation="cv_library_summary",
+                default_detail="Failed to generate CV summary with AI. Please try again.",
+            ) from exc
 
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -164,27 +175,18 @@ class CvLibrarySummaryService:
 
 
 def _prepare_cv_context(clean_text: str) -> str:
-    parts: list[str] = []
-    seen: set[str] = set()
-    char_count = 0
-
-    for raw_line in clean_text.splitlines():
-        line = " ".join(raw_line.split()).strip(" -")
-        if not line:
-            continue
-        lowered = line.lower()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        next_count = char_count + len(line) + (1 if parts else 0)
-        if next_count > MAX_LIBRARY_CONTEXT_CHARS:
-            break
-        parts.append(line)
-        char_count = next_count
-        if len(parts) >= 10:
-            break
-
-    return "\n".join(parts).strip()
+    first_line = next(
+        (
+            " ".join(line.split()).strip(" -")
+            for line in clean_text.splitlines()
+            if " ".join(line.split()).strip(" -")
+        ),
+        "",
+    )
+    context = build_cv_context(clean_text, summary=first_line or None)
+    if first_line:
+        return f"{first_line}\n\n{context}"
+    return context
 
 
 def _normalize_library_summary(value: object) -> str:
@@ -197,7 +199,28 @@ def _normalize_library_summary(value: object) -> str:
 
     text = re.sub(r"\[\[[^\]]*\]\]", "", text).strip()
     text = re.sub(r"\s*\.\.\.\s*$", "", text).strip()
-    normalized = _normalize_text(text, MAX_LIBRARY_SUMMARY_CHARS).rstrip(" ,;:")
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if sentence.strip()
+    ]
+    if sentences:
+        selected: list[str] = []
+        for sentence in sentences:
+            candidate = " ".join(selected + [sentence]).strip()
+            if len(candidate) > MAX_LIBRARY_SUMMARY_CHARS:
+                break
+            selected.append(sentence)
+        normalized = " ".join(selected).rstrip(" ,;:") if selected else _normalize_text(text, MAX_LIBRARY_SUMMARY_CHARS).rstrip(" ,;:")
+    else:
+        normalized = _normalize_text(text, MAX_LIBRARY_SUMMARY_CHARS).rstrip(" ,;:")
+
+    normalized = re.sub(
+        r"\b(?:and|or|with|using|including|about|for|to|in|on|across|through|experienced in|skilled in)\s*$",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    ).rstrip(" ,;:")
     if normalized and normalized[-1] not in ".!?":
         normalized += "."
     return normalized

@@ -8,6 +8,11 @@ CONTEXT_BUILDER_VERSION = "2026-04-14"
 ESTIMATED_CHARS_PER_TOKEN = 4
 DEFAULT_JOB_EXCERPT_CHARS = 1800
 DEFAULT_CV_EXCERPT_CHARS = 1800
+# Hard ceilings applied AFTER noise-filtering to prevent silent AI-side
+# truncation, token budget overruns, and latency spikes on long inputs.
+# ~2 500 and ~2 000 tokens respectively — generous but bounded.
+MAX_JOB_CONTEXT_CHARS = 10_000
+MAX_CV_CONTEXT_CHARS = 8_000
 
 _NOISE_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
@@ -77,6 +82,18 @@ _CV_SECTION_PRIORITY = {
     "projects": 7,
     "education": 4,
 }
+_JOB_NOISE_SECTION_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"^(benefits|perks|compensation|salary|about the company|why join us|equal opportunity.*|eeo)$",
+    ]
+]
+_CV_NOISE_SECTION_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"^(hobbies|interests|volunteering|activities)$",
+    ]
+]
 
 _HIGH_SIGNAL_JOB_KEYWORDS = (
     "python",
@@ -150,25 +167,64 @@ _ROLE_KEYWORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#./-]{2,}\b")
 def clean_description(text: str) -> str:
     settings = get_settings()
     lines = _normalize_job_lines(text)
-    focused = _prioritize_job_lines(lines)
-    compact = "\n".join(focused or lines).strip()
+    compact = "\n".join(lines).strip()
+    return compact[: settings.max_job_description_chars].strip()
 
-    hard_limit = settings.max_job_description_chars
-    target_limit = min(hard_limit, settings.job_preprocess_target_chars)
-    long_desc_threshold = max(target_limit, 5000)
-    limit = target_limit if len(text or "") > long_desc_threshold else hard_limit
-    return _truncate_text(compact, limit)
+
+def build_job_context(
+    text: str,
+    *,
+    title: str | None = None,
+    company: str | None = None,
+    max_chars: int | None = None,
+) -> str:
+    lines = _normalize_job_lines(text)
+    description_body = "\n".join(_format_context_lines(lines)).strip()
+    # Apply a ceiling after filtering so callers and tests can override it,
+    # but production is always bounded to avoid silent AI-side truncation.
+    limit = max_chars if max_chars is not None else MAX_JOB_CONTEXT_CHARS
+    if len(description_body) > limit:
+        description_body = _truncate_at_boundary(description_body, limit)
+    sections: list[str] = []
+    if title and title.strip():
+        sections.append(f"## Job Title\n{title.strip()}")
+    if company and company.strip():
+        sections.append(f"## Company\n{company.strip()}")
+    sections.append(f"## Job Description\n{description_body}")
+    return "\n\n".join(section for section in sections if section.strip()).strip()
 
 
 def build_job_excerpt(text: str, *, max_chars: int | None = None) -> str:
-    settings = get_settings()
-    limit = min(
-        settings.max_job_description_chars,
-        max_chars if max_chars is not None else min(settings.job_preprocess_target_chars, DEFAULT_JOB_EXCERPT_CHARS),
-    )
-    lines = _normalize_job_lines(text)
-    excerpt = "\n".join(_prioritize_job_lines(lines) or lines)
-    return _truncate_text(excerpt, limit)
+    return build_job_context(text, max_chars=max_chars)
+
+
+def build_cv_context(
+    cv_text: str,
+    *,
+    summary: str | None = None,
+    library_summary: str | None = None,
+    max_chars: int | None = None,
+) -> str:
+    sections: list[str] = []
+    normalized_summary = _normalize_context_line(summary or "")
+    normalized_library_summary = _normalize_context_line(library_summary or "")
+
+    if normalized_summary:
+        sections.append(f"## CV Summary\n{normalized_summary}")
+    if normalized_library_summary and normalized_library_summary.lower() != normalized_summary.lower():
+        sections.append(f"## CV Library Summary\n{normalized_library_summary}")
+
+    lines = _normalize_cv_lines(cv_text)
+    body = "\n".join(_format_context_lines(lines)).strip()
+    # Apply ceiling to the body only (not to the summary headers) so that
+    # the most important structured sections are always present in full.
+    limit = max_chars if max_chars is not None else MAX_CV_CONTEXT_CHARS
+    if len(body) > limit:
+        body = _truncate_at_boundary(body, limit)
+    if body:
+        sections.append(f"## CV Content\n{body}")
+
+    return "\n\n".join(section for section in sections if section.strip()).strip()
 
 
 def build_cv_excerpt(
@@ -179,65 +235,13 @@ def build_cv_excerpt(
     job_description: str | None = None,
     max_chars: int | None = None,
 ) -> str:
-    settings = get_settings()
-    limit = min(
-        settings.max_cv_text_chars,
-        max_chars if max_chars is not None else DEFAULT_CV_EXCERPT_CHARS,
+    _ = job_description
+    return build_cv_context(
+        cv_text,
+        summary=summary,
+        library_summary=library_summary,
+        max_chars=max_chars,
     )
-    role_keywords = _extract_role_keywords(job_description or "")
-
-    candidates: list[tuple[int, int, str]] = []
-    seen: set[str] = set()
-    index = 0
-
-    for text_value, score in ((summary, 15), (library_summary, 14)):
-        normalized = _normalize_context_line(text_value or "")
-        if not normalized:
-            continue
-        key = normalized.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        candidates.append((score, index, normalized))
-        index += 1
-
-    current_section: str | None = None
-    for raw_line in (cv_text or "").splitlines():
-        line = _normalize_context_line(raw_line)
-        if not line:
-            continue
-
-        heading = _match_cv_section(line)
-        if heading is not None:
-            current_section = heading
-            if current_section in {"skills", "experience", "projects"}:
-                heading_line = line.rstrip(":")
-                key = heading_line.lower()
-                if key not in seen:
-                    seen.add(key)
-                    candidates.append((_CV_SECTION_PRIORITY[current_section] + 1, index, heading_line))
-                    index += 1
-            continue
-        if _looks_like_heading(line):
-            current_section = None
-            continue
-
-        if _is_noise(line):
-            continue
-
-        score = _score_cv_line(line, section=current_section, role_keywords=role_keywords)
-        if score <= 0:
-            continue
-
-        key = line.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        candidates.append((score, index, line))
-        index += 1
-
-    ordered = [line for _, _, line in sorted(candidates, key=lambda item: (-item[0], item[1]))]
-    return _join_lines_with_limit(ordered, limit)
 
 
 def estimate_text_tokens(text: str | None) -> int:
@@ -260,8 +264,41 @@ def build_context_fingerprint(*parts: object) -> str:
 def _normalize_job_lines(text: str) -> list[str]:
     normalized = re.sub(r"\r\n?", "\n", text or "")
     normalized = re.sub(r"[ \t]+", " ", normalized)
-    lines = [_normalize_context_line(line.strip(" -*\t")) for line in normalized.split("\n")]
-    return [line for line in _dedupe_lines(lines) if line and not _is_noise(line)]
+    lines: list[str] = []
+    skip_section = False
+    for raw_line in normalized.split("\n"):
+        line = _normalize_context_line(raw_line.strip(" -*\t"))
+        if not line:
+            continue
+        if _is_job_noise_section_heading(line):
+            skip_section = True
+            continue
+        if _looks_like_heading(line):
+            skip_section = False
+        if skip_section or _is_noise(line):
+            continue
+        lines.append(line)
+    return _dedupe_lines(lines)
+
+
+def _normalize_cv_lines(text: str) -> list[str]:
+    normalized = re.sub(r"\r\n?", "\n", text or "")
+    normalized = re.sub(r"[ \t]+", " ", normalized)
+    lines: list[str] = []
+    skip_section = False
+    for raw_line in normalized.split("\n"):
+        line = _normalize_context_line(raw_line.strip(" -*\t"))
+        if not line:
+            continue
+        if _is_cv_noise_section_heading(line):
+            skip_section = True
+            continue
+        if _looks_like_heading(line):
+            skip_section = False
+        if skip_section:
+            continue
+        lines.append(line)
+    return _dedupe_lines(lines)
 
 
 def _prioritize_job_lines(lines: list[str]) -> list[str]:
@@ -373,6 +410,48 @@ def _education_line_is_useful(line: str) -> bool:
 
 def _normalize_context_line(line: str) -> str:
     return " ".join((line or "").replace("\r", " ").replace("\t", " ").split()).strip(" -")
+
+
+def _format_context_lines(lines: list[str]) -> list[str]:
+    formatted: list[str] = []
+    for line in lines:
+        heading = _heading_title(line)
+        if heading is not None:
+            formatted.append(f"### {heading}")
+            continue
+        formatted.append(f"- {line}")
+    return formatted
+
+
+def _heading_title(line: str) -> str | None:
+    if not _looks_like_heading(line):
+        return None
+    cleaned = line.rstrip(":").strip()
+    if not cleaned:
+        return None
+    return " ".join(part.capitalize() for part in cleaned.split())
+
+
+def _is_job_noise_section_heading(line: str) -> bool:
+    cleaned = line.rstrip(":").strip()
+    return _looks_like_heading(line) and any(pattern.match(cleaned) for pattern in _JOB_NOISE_SECTION_PATTERNS)
+
+
+def _is_cv_noise_section_heading(line: str) -> bool:
+    cleaned = line.rstrip(":").strip()
+    return _looks_like_heading(line) and any(pattern.match(cleaned) for pattern in _CV_NOISE_SECTION_PATTERNS)
+
+
+def _truncate_at_boundary(text: str, limit: int) -> str:
+    """Truncate *text* to at most *limit* chars, preferring a clean newline boundary."""
+    if len(text) <= limit:
+        return text
+    cutoff = text.rfind("\n", 0, limit)
+    if cutoff < int(limit * 0.75):
+        # No newline in the last 25 % — fall back to the hard limit.
+        cutoff = limit
+    return text[:cutoff].strip()
+
 
 
 def _join_lines_with_limit(lines: list[str], limit: int) -> str:

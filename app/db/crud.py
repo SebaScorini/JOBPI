@@ -559,9 +559,9 @@ def get_cached_cover_letter(
         return None
 
     if (
-        job.cover_letter_cv_id == cv_id
-        and job.cover_letter_language == language
-        and isinstance(job.generated_cover_letter, str)
+        getattr(job, "cover_letter_cv_id", None) == cv_id
+        and getattr(job, "cover_letter_language", None) == language
+        and isinstance(getattr(job, "generated_cover_letter", None), str)
         and job.generated_cover_letter.strip()
     ):
         return job.generated_cover_letter
