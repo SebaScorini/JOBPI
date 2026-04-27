@@ -559,7 +559,7 @@ def _normalize_text(value: object, limit: int) -> str:
 
 
 def _clean_trailing_fragment(text: str) -> str:
-    cleaned = text.rstrip(" ,;:.")
+    cleaned = text.rstrip(" ,;:")
     if not cleaned:
         return ""
 
@@ -567,18 +567,19 @@ def _clean_trailing_fragment(text: str) -> str:
     cleaned = re.sub(r"\)\s*[,;:.]+$", ")", cleaned)
 
     # Remove dangling abbreviations often produced when truncation lands on "(e.g.".
-    cleaned = re.sub(r"(?:\(|\s)+(?:e\.g|i\.e)\.?$", "", cleaned, flags=re.IGNORECASE).rstrip(" ,;:.")
+    cleaned = re.sub(r"(?:\(|\s)+(?:e\.g|i\.e)\.?$", "", cleaned, flags=re.IGNORECASE).rstrip(" ,;:")
 
     # If truncation leaves an unmatched opening parenthesis at the tail, drop that tail.
     if cleaned.count("(") > cleaned.count(")"):
         last_open = cleaned.rfind("(")
         last_close = cleaned.rfind(")")
         if last_open > last_close:
-            cleaned = cleaned[:last_open].rstrip(" ,;:.")
+            cleaned = cleaned[:last_open].rstrip(" ,;:")
+        cleaned = cleaned[:last_open].rstrip(" ,;:")
 
     # If there are more closing than opening parentheses, trim unmatched trailing ")".
     while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
-        cleaned = cleaned[:-1].rstrip(" ,;:.")
+        cleaned = cleaned[:-1].rstrip(" ,;:")
 
     return cleaned
 

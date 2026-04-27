@@ -104,7 +104,7 @@ def _normalize_short_text(value: object, *, limit: int) -> str:
                 break
             selected.append(sentence)
         if selected:
-            return " ".join(selected).rstrip(" ,;:.")
+            return " ".join(selected).rstrip(" ,;:")
 
     cutoff = max(
         text.rfind(". ", 0, limit),
@@ -115,13 +115,13 @@ def _normalize_short_text(value: object, *, limit: int) -> str:
     )
     if cutoff < int(limit * 0.6):
         cutoff = limit
-    truncated = text[:cutoff].rstrip(" ,;:.")
+    truncated = text[:cutoff].rstrip(" ,;:")
     truncated = re.sub(
         r"\b(?:and|or|with|using|including|about|for|to|in|on|across|through|experienced in|skilled in)\s*$",
         "",
         truncated,
         flags=re.IGNORECASE,
-    ).rstrip(" ,;:.")
+    ).rstrip(" ,;:")
     return truncated
 
 
