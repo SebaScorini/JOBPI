@@ -73,15 +73,18 @@ class InMemoryRateLimiter:
 
 
 def _build_subjects(request: Request, user: User | None, email: str | None) -> list[str]:
-    if user is not None:
-        return [f"user:{user.id}"]
-
     subjects: list[str] = []
+    client_subject = _client_subject(request)
+    if user is not None:
+        subjects.append(f"user:{user.id}")
+        subjects.append(f"user_ip:{user.id}:{client_subject}")
+        return list(dict.fromkeys(subjects))
+
     normalized_email = _normalize_email(email)
     if normalized_email:
         subjects.append(f"email:{normalized_email}")
 
-    subjects.append(_client_subject(request))
+    subjects.append(client_subject)
     return list(dict.fromkeys(subjects))
 
 

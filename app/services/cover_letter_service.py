@@ -131,11 +131,6 @@ class CoverLetterService:
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        # NOTE (PII): build_job_context and build_cv_context pass content from
-        # the raw PDF text to the AI provider (OpenRouter). For CVs, this may
-        # include the candidate's name, address, phone number, and email from
-        # the document header. This is intentional for generation quality but
-        # should be reviewed if stricter data-handling requirements apply.
         job_context = build_job_context(
             job.clean_description,
             title=job.title,

@@ -4,6 +4,7 @@ import time
 from io import BytesIO
 
 from app.core.config import get_settings
+from app.core.privacy import sanitize_cv_text_for_ai
 
 logger = logging.getLogger(__name__)
 _FILLER_LINE_RE = re.compile(
@@ -70,7 +71,7 @@ def preprocess_cv_text(raw: str, max_chars: int | None = None) -> str:
 
 
 def _validate_magic_bytes(data: bytes) -> None:
-    if not data[:4] == b"%PDF":
+    if len(data) < 8 or not data[:4] == b"%PDF":
         raise ValueError("Uploaded file is not a valid PDF.")
 
 
@@ -80,6 +81,10 @@ def _extract_with_available_pdf_backend(file_bytes: bytes) -> str:
         from pypdf import PdfReader
 
         reader = PdfReader(BytesIO(file_bytes))
+        if getattr(reader, "is_encrypted", False):
+            raise ValueError("Encrypted PDFs are not supported.")
+        if len(reader.pages) == 0:
+            raise ValueError("Uploaded PDF has no readable pages.")
         return "\n".join((page.extract_text() or "") for page in reader.pages)
     except ImportError as exc:
         pypdf_import_error = exc
@@ -88,6 +93,11 @@ def _extract_with_available_pdf_backend(file_bytes: bytes) -> str:
         import fitz
 
         with fitz.open(stream=file_bytes, filetype="pdf") as document:
+            if getattr(document, "needs_pass", False):
+                raise ValueError("Encrypted PDFs are not supported.")
+            page_count = getattr(document, "page_count", None)
+            if page_count is not None and page_count <= 0:
+                raise ValueError("Uploaded PDF has no readable pages.")
             return "\n".join(page.get_text("text") or "" for page in document)
     except ImportError as exc:
         if pypdf_import_error is not None:
@@ -123,7 +133,7 @@ def _preprocess_cv(raw: str, max_chars: int | None = None) -> str:
         prev = line
 
     focused = _extract_relevant_cv_sections(deduped)
-    text = "\n".join(focused or deduped).strip()
+    text = sanitize_cv_text_for_ai("\n".join(focused or deduped).strip())
     return _truncate_cv(text, max_chars=max_chars)
 
 

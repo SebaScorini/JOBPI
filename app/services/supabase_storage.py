@@ -97,8 +97,7 @@ class SupabaseStorageService:
             with request.urlopen(req, timeout=20) as response:
                 payload = response.read()
         except error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            logger.warning("supabase_storage_http_error status=%s body=%s", exc.code, detail)
+            logger.warning("supabase_storage_http_error status=%s", exc.code)
             raise SupabaseStorageError(f"Supabase Storage request failed with status {exc.code}.") from exc
         except error.URLError as exc:
             raise SupabaseStorageError("Could not reach Supabase Storage.") from exc

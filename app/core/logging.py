@@ -5,6 +5,8 @@ import logging
 import sys
 from typing import Any
 
+from app.core.privacy import redact_pii
+
 try:
     from pythonjsonlogger.json import JsonFormatter
 except ModuleNotFoundError:  # pragma: no cover - local fallback when optional dependency is absent
@@ -19,13 +21,29 @@ USER_ID_CONTEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar("us
 
 class RequestContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = redact_pii(record.msg)
+        if record.args:
+            record.args = redact_pii(record.args)
         record.trace_id = getattr(record, "trace_id", None) or TRACE_ID_CONTEXT.get()
         record.path = getattr(record, "path", None) or REQUEST_PATH_CONTEXT.get()
         record.method = getattr(record, "method", None) or REQUEST_METHOD_CONTEXT.get()
         record.user_id = getattr(record, "user_id", None) or USER_ID_CONTEXT.get()
         record.status_code = getattr(record, "status_code", None)
         record.duration_ms = getattr(record, "duration_ms", None)
+        record.response_bytes = getattr(record, "response_bytes", None)
         return True
+
+
+class RedactingTextFormatter(logging.Formatter):
+    def formatException(self, ei) -> str:  # type: ignore[override]
+        return redact_pii(super().formatException(ei))
+
+
+if JsonFormatter is not None:
+    class RedactingJsonFormatter(JsonFormatter):  # type: ignore[misc, valid-type]
+        def formatException(self, ei) -> str:  # type: ignore[override]
+            return redact_pii(super().formatException(ei))
 
 
 def bind_request_context(trace_id: str, path: str, method: str) -> dict[str, contextvars.Token[Any]]:
@@ -65,14 +83,14 @@ def _build_handler() -> logging.Handler:
     handler = logging.StreamHandler(sys.stdout)
     if JsonFormatter is not None:
         handler.setFormatter(
-            JsonFormatter(
-                "%(asctime)s %(levelname)s %(name)s %(message)s %(trace_id)s %(user_id)s %(method)s %(path)s %(status_code)s %(duration_ms)s"
+            RedactingJsonFormatter(
+                "%(asctime)s %(levelname)s %(name)s %(message)s %(trace_id)s %(user_id)s %(method)s %(path)s %(status_code)s %(duration_ms)s %(response_bytes)s"
             )
         )
     else:
         handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s %(levelname)s %(name)s %(message)s trace_id=%(trace_id)s user_id=%(user_id)s method=%(method)s path=%(path)s status_code=%(status_code)s duration_ms=%(duration_ms)s"
+            RedactingTextFormatter(
+                "%(asctime)s %(levelname)s %(name)s %(message)s trace_id=%(trace_id)s user_id=%(user_id)s method=%(method)s path=%(path)s status_code=%(status_code)s duration_ms=%(duration_ms)s response_bytes=%(response_bytes)s"
             )
         )
     handler.addFilter(RequestContextFilter())

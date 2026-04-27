@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiService } from '../services/api';
+import { ApiError, apiService } from '../services/api';
 import { PaginationMeta, StoredCV } from '../types';
 import {
   FileText,
@@ -25,6 +25,19 @@ interface UploadFile {
   file: File;
   status: 'pending' | 'uploading' | 'success' | 'error';
   error?: string;
+}
+
+function withRetryAfterMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'ERR_RATE_LIMIT' && error.retryAfter) {
+      return `${error.message} Try again in ${error.retryAfter}s.`;
+    }
+    return error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export function CVLibraryPage() {
@@ -98,7 +111,7 @@ export function CVLibraryPage() {
         }, {} as Record<number, string>),
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedLoad');
+      const message = withRetryAfterMessage(err, t('library.failedLoad'));
       showToast(message, 'error');
     } finally {
       setIsLoading(false);
@@ -179,7 +192,7 @@ export function CVLibraryPage() {
         setSelectedFiles((prev) => prev.filter((file) => file.status === 'error'));
       }, 1800);
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.uploadFailed');
+      const message = withRetryAfterMessage(err, t('library.uploadFailed'));
       showToast(message, 'error');
       setSelectedFiles((prev) =>
         prev.map((file) => ({
@@ -215,7 +228,7 @@ export function CVLibraryPage() {
       }
       showToast('CV deleted.', 'success');
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedDelete');
+      const message = withRetryAfterMessage(err, t('library.failedDelete'));
       showToast(message, 'error');
     }
   };
@@ -272,7 +285,7 @@ export function CVLibraryPage() {
         result.failed > 0 ? 'warning' : 'success',
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedDelete');
+      const message = withRetryAfterMessage(err, t('library.failedDelete'));
       showToast(message, 'error');
     } finally {
       setIsBulkDeleting(false);
@@ -333,7 +346,7 @@ export function CVLibraryPage() {
         result.failed > 0 ? 'warning' : 'success',
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedBulkTag');
+      const message = withRetryAfterMessage(err, t('library.failedBulkTag'));
       showToast(message, 'error');
     } finally {
       setIsBulkTagging(false);
@@ -358,7 +371,7 @@ export function CVLibraryPage() {
         setActiveTagFilter('');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedSaveTags');
+      const message = withRetryAfterMessage(err, t('library.failedSaveTags'));
       showToast(message, 'error');
     } finally {
       setSavingTagCvId(null);
@@ -381,7 +394,7 @@ export function CVLibraryPage() {
       setTagInputs((prev) => ({ ...prev, [cvId]: updatedCv.tags.join(', ') }));
       showToast(updatedCv.is_favorite ? t('library.favoriteAdded') : t('library.favoriteRemoved'), 'success');
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedFavoriteToggle');
+      const message = withRetryAfterMessage(err, t('library.failedFavoriteToggle'));
       showToast(message, 'error');
     } finally {
       setTogglingFavoriteCvId(null);
@@ -394,7 +407,7 @@ export function CVLibraryPage() {
       const url = await apiService.downloadCV(cvId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('library.failedDownload');
+      const message = withRetryAfterMessage(err, t('library.failedDownload'));
       showToast(message, 'error');
     } finally {
       setDownloadingCvId(null);
