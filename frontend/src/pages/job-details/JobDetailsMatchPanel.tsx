@@ -49,7 +49,7 @@ interface MatchSectionProps {
 
 function MatchSection({ title, eyebrow, tone, icon, items }: MatchSectionProps) {
   return (
-    <section className={`improvement-panel-card improvement-panel-card-${tone} flex flex-col`}>
+    <section className={`improvement-panel-card improvement-panel-card-${tone} flex flex-col h-full`}>
       <div className="mb-4 flex items-start gap-3">
         <div className={`improvement-panel-icon improvement-panel-icon-${tone}`}>{icon}</div>
         <div>
@@ -344,7 +344,7 @@ export function JobDetailsMatchPanel({
                 {improvementSignals.map((item, index) => (
                   <article
                     key={`signal-${index}`}
-                    className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 dark:border-slate-800/80 dark:bg-slate-950/30"
+                    className="h-full rounded-2xl border border-slate-200/80 bg-white p-4 dark:border-slate-800/80 dark:bg-slate-950/30"
                   >
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                       {t('jobDetails.editCardLabel', { count: index + 1 })}
@@ -396,7 +396,7 @@ export function JobDetailsMatchPanel({
             </div>
 
             {comparisonExplanationBlocks.length > 0 ? (
-              <div className="rounded-2xl border border-white/80 bg-white/78 p-4 dark:border-slate-800/80 dark:bg-slate-950/30">
+              <div className="rounded-2xl border border-slate-100 bg-white p-4 dark:border-slate-800/80 dark:bg-slate-950/30">
                 {comparisonExplanationBlocks.length > 1 ? (
                   <ul className="space-y-3">
                     {comparisonExplanationBlocks.map((item, index) => (

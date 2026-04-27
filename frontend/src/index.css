@@ -41,7 +41,7 @@
   }
   
   .glass-card-solid {
-    @apply bg-slate-50/50 border border-slate-200/60 shadow-sm dark:bg-[#151B2B] dark:border-slate-800;
+    @apply bg-white/80 border border-slate-200/60 shadow-sm dark:bg-[#151B2B] dark:border-slate-800;
   }
 
   .interactive-card {
@@ -206,7 +206,7 @@
   }
 
   .improvement-panel-stat-card {
-    @apply rounded-2xl border border-white/80 bg-white/80 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none;
+    @apply rounded-2xl border border-white/80 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none;
   }
 
   .improvement-panel-stat-icon {
@@ -235,7 +235,7 @@
 
   .improvement-panel-card-slate,
   .improvement-panel-sidebar-card {
-    @apply rounded-[24px] border border-slate-200/80 bg-white/85 p-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35 dark:shadow-none;
+    @apply rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35 dark:shadow-none;
   }
 
   .improvement-panel-icon {
@@ -263,7 +263,7 @@
   }
 
   .improvement-panel-list-item {
-    @apply flex items-start gap-3 rounded-2xl border border-white/80 bg-white/70 px-3.5 py-3 shadow-sm dark:border-slate-800/80 dark:bg-slate-950/25;
+    @apply flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 shadow-sm dark:border-slate-800/80 dark:bg-slate-950/25;
   }
 
   .improvement-panel-bullet {

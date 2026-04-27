@@ -16,8 +16,8 @@ export default {
           primary: '#0369A1',
           secondary: '#0EA5E9',
           cta: '#22C55E',
-          background: '#F0F9FF',
-          text: '#0C4A6E',
+          background: '#F1F5F9',
+          text: '#0F172A',
         }
       }
     },

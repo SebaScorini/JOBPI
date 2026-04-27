@@ -26,7 +26,7 @@ export function JobDetailsCoverPanel({
 }: JobDetailsCoverPanelProps) {
   return (
     <div className="space-y-4">
-      <div className="space-y-4 rounded-2xl border border-slate-200/70 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/20">
+      <div className="space-y-4 rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/20">
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase text-slate-500">{t('jobDetails.targetCv')}</label>
           <select
@@ -50,7 +50,7 @@ export function JobDetailsCoverPanel({
       </div>
 
       {coverLetter && (
-        <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+        <div className="rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/40">
           <pre className="max-h-[min(65vh,48rem)] overflow-y-auto whitespace-pre-wrap break-words pr-1 font-sans text-sm leading-relaxed text-slate-700 dark:text-slate-300">
             {coverLetter}
           </pre>

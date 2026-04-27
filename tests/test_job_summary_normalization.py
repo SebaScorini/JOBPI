@@ -35,6 +35,32 @@ def test_normalize_summary_avoids_half_sentence_cutoffs():
     assert normalized[-1].isalnum()
 
 
+def test_normalize_summary_removes_dangling_parenthesis_fragment():
+    text = "This role values frontend frameworks (e.g., React, Angular) and close collaboration with product."
+
+    normalized = _normalize_summary_text(text, 43)
+
+    assert normalized
+    assert not normalized.endswith("(")
+    assert "(e.g" not in normalized.lower()
+
+
+def test_normalize_list_item_removes_truncated_eg_fragment():
+    normalized = _normalize_list(["Experience with JavaScript frameworks (e.g."])
+
+    assert len(normalized) == 1
+    assert not normalized[0].endswith("(")
+    assert "(e.g" not in normalized[0].lower()
+
+
+def test_normalize_list_item_removes_dangling_closing_parenthesis_fragment():
+    normalized = _normalize_list(["Improved model quality with 4% accuracy gain).,"])
+
+    assert len(normalized) == 1
+    assert normalized[0].endswith("gain")
+    assert not normalized[0].endswith(")")
+
+
 def test_normalize_list_keeps_more_actionable_detail_per_item():
     normalized = _normalize_list(
         [
