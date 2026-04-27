@@ -575,6 +575,7 @@ def _clean_trailing_fragment(text: str) -> str:
         last_close = cleaned.rfind(")")
         if last_open > last_close:
             cleaned = cleaned[:last_open].rstrip(" ,;:")
+        cleaned = cleaned[:last_open].rstrip(" ,;:")
 
     # If there are more closing than opening parentheses, trim unmatched trailing ")".
     while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
