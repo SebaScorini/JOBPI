@@ -550,12 +550,37 @@ def _normalize_text(value: object, limit: int) -> str:
 
     text = " ".join(value.replace("\r", " ").replace("\n", " ").split()).strip(" -")
     if len(text) <= limit:
-        return text
+        return _clean_trailing_fragment(text)
 
     cutoff = text.rfind(" ", 0, limit)
     if cutoff < int(limit * 0.6):
         cutoff = limit
-    return text[:cutoff].rstrip(" ,;:.")
+    return _clean_trailing_fragment(text[:cutoff])
+
+
+def _clean_trailing_fragment(text: str) -> str:
+    cleaned = text.rstrip(" ,;:.")
+    if not cleaned:
+        return ""
+
+    # Collapse endings like ").," or ").;" to ")" before parenthesis balancing.
+    cleaned = re.sub(r"\)\s*[,;:.]+$", ")", cleaned)
+
+    # Remove dangling abbreviations often produced when truncation lands on "(e.g.".
+    cleaned = re.sub(r"(?:\(|\s)+(?:e\.g|i\.e)\.?$", "", cleaned, flags=re.IGNORECASE).rstrip(" ,;:.")
+
+    # If truncation leaves an unmatched opening parenthesis at the tail, drop that tail.
+    if cleaned.count("(") > cleaned.count(")"):
+        last_open = cleaned.rfind("(")
+        last_close = cleaned.rfind(")")
+        if last_open > last_close:
+            cleaned = cleaned[:last_open].rstrip(" ,;:.")
+
+    # If there are more closing than opening parentheses, trim unmatched trailing ")".
+    while cleaned.endswith(")") and cleaned.count(")") > cleaned.count("("):
+        cleaned = cleaned[:-1].rstrip(" ,;:.")
+
+    return cleaned
 
 
 def _normalize_summary_text(value: object, limit: int) -> str:
@@ -589,7 +614,7 @@ def _normalize_summary_text(value: object, limit: int) -> str:
 
 def _truncate_summary_segment(text: str, limit: int) -> str:
     if len(text) <= limit:
-        return text.rstrip(" ,;:")
+        return _clean_trailing_fragment(text)
 
     cutoff = max(
         text.rfind(". ", 0, limit),
@@ -600,7 +625,7 @@ def _truncate_summary_segment(text: str, limit: int) -> str:
     )
     if cutoff < int(limit * 0.6):
         cutoff = limit
-    return text[:cutoff].rstrip(" ,;:")
+    return _clean_trailing_fragment(text[:cutoff])
 
 
 def _build_cache_key(title: str, company: str, description: str, language: AIResponseLanguage) -> str:

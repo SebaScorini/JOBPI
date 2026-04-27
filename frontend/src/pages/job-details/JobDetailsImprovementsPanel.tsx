@@ -180,7 +180,7 @@ export function JobDetailsImprovementsPanel({
             </div>
 
             {strengthsPreview.length > 0 ? (
-              <div className="rounded-2xl border border-white/70 bg-white/70 p-4 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35">
+              <div className="rounded-2xl border border-slate-100 bg-white p-4 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35">
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
                   {t('jobDetails.keepTheseSignals')}
                 </p>
@@ -226,211 +226,211 @@ export function JobDetailsImprovementsPanel({
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_320px]">
-        <div className="space-y-5">
-          <div className="space-y-4">
-            <ImprovementSection
-              eyebrow={t('jobDetails.atsChecklist')}
-              title={t('jobDetails.atsTitle')}
-              tone="amber"
-              icon={<SearchCheck size={18} />}
-              items={atsChecklist}
-              footer={
-                atsDirectImprovements.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      {t('jobDetails.aiBoost')}
-                    </p>
-                    <ul className="space-y-2">
-                      {atsDirectImprovements.map((item, index) => (
-                        <li key={`ats-direct-${index}`} className="improvement-panel-inline-item">
-                          <ArrowRight size={14} className="mt-1 shrink-0 text-amber-700 dark:text-amber-300" />
-                          <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null
-              }
-            />
+      <div className="columns-1 xl:columns-2 gap-5 [&>section]:break-inside-avoid [&>section]:mb-5">
+        {atsChecklist.length > 0 && (
+          <ImprovementSection
+            eyebrow={t('jobDetails.atsChecklist')}
+            title={t('jobDetails.atsTitle')}
+            tone="amber"
+            icon={<SearchCheck size={18} />}
+            items={atsChecklist}
+            footer={
+              atsDirectImprovements.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    {t('jobDetails.aiBoost')}
+                  </p>
+                  <ul className="space-y-2">
+                    {atsDirectImprovements.map((item, index) => (
+                      <li key={`ats-direct-${index}`} className="improvement-panel-inline-item">
+                        <ArrowRight size={14} className="mt-1 shrink-0 text-amber-700 dark:text-amber-300" />
+                        <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null
+            }
+          />
+        )}
 
-            <ImprovementSection
-              eyebrow={t('jobDetails.recruiterChecklist')}
-              title={t('jobDetails.recruiterTitle')}
-              tone="sky"
-              icon={<Target size={18} />}
-              items={recruiterChecklist}
-              footer={
-                recruiterDirectImprovements.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      {t('jobDetails.aiBoost')}
-                    </p>
-                    <ul className="space-y-2">
-                      {recruiterDirectImprovements.map((item, index) => (
-                        <li key={`recruiter-direct-${index}`} className="improvement-panel-inline-item">
-                          <ArrowRight size={14} className="mt-1 shrink-0 text-sky-700 dark:text-sky-300" />
-                          <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null
-              }
-            />
+        {recruiterChecklist.length > 0 && (
+          <ImprovementSection
+            eyebrow={t('jobDetails.recruiterChecklist')}
+            title={t('jobDetails.recruiterTitle')}
+            tone="sky"
+            icon={<Target size={18} />}
+            items={recruiterChecklist}
+            footer={
+              recruiterDirectImprovements.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    {t('jobDetails.aiBoost')}
+                  </p>
+                  <ul className="space-y-2">
+                    {recruiterDirectImprovements.map((item, index) => (
+                      <li key={`recruiter-direct-${index}`} className="improvement-panel-inline-item">
+                        <ArrowRight size={14} className="mt-1 shrink-0 text-sky-700 dark:text-sky-300" />
+                        <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null
+            }
+          />
+        )}
 
-            <ImprovementSection
-              eyebrow={t('jobDetails.executionPlan')}
-              title={t('jobDetails.executionTitle')}
-              tone="emerald"
-              icon={<LayoutList size={18} />}
-              items={actionPlan}
-            />
+        {rewrittenBullets.length > 0 ? (
+          <section className="improvement-panel-card improvement-panel-card-violet">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="improvement-panel-icon improvement-panel-icon-violet">
+                  <FilePenLine size={18} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                    {t('jobDetails.rewrittenBullets')}
+                  </p>
+                  <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {t('jobDetails.rewrittenBulletsTitle')}
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyBullets}
+                className="btn-secondary flex w-auto items-center justify-center gap-2 px-3 !py-1.5 text-xs"
+              >
+                {copiedBullets ? (
+                  <>
+                    <Check size={14} />
+                    {t('common.copied')}
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    {t('jobDetails.copyBullets')}
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="grid gap-3 grid-cols-1">
+              {rewrittenBullets.map((item, index) => (
+                <article
+                  key={`bullet-${index}`}
+                  className="rounded-2xl border border-violet-200/70 bg-white p-4 shadow-[0_18px_40px_rgba(91,33,182,0.08)] dark:border-violet-900/40 dark:bg-slate-950/45 dark:shadow-none"
+                >
+                  <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">
+                    <Sparkles size={13} />
+                    {t('jobDetails.pasteReadyBullet', { count: index + 1 })}
+                  </div>
+                  <p className="text-sm leading-7 text-slate-700 dark:text-slate-300">{item}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {actionPlan.length > 0 && (
+          <ImprovementSection
+            eyebrow={t('jobDetails.executionPlan')}
+            title={t('jobDetails.executionTitle')}
+            tone="emerald"
+            icon={<LayoutList size={18} />}
+            items={actionPlan}
+          />
+        )}
+
+        <section className="improvement-panel-sidebar-card">
+          <div className="mb-4 flex items-start gap-3">
+            <div className="improvement-panel-icon improvement-panel-icon-slate">
+              <Sparkles size={18} />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                {t('jobDetails.priorityEdits')}
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+                {t('jobDetails.prioritySnapshot')}
+              </h3>
+            </div>
           </div>
-        </div>
 
-        <aside className="space-y-5">
+          {matchSuggestions.length > 0 ? (
+            <ul className="space-y-3">
+              {matchSuggestions.map((item, index) => (
+                <li key={`suggestion-${index}`} className="improvement-panel-inline-item">
+                  <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white dark:bg-slate-100 dark:text-slate-950">
+                    {index + 1}
+                  </span>
+                  <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
+          )}
+        </section>
+
+        {additionalMissingKeywords.length > 0 ? (
           <section className="improvement-panel-sidebar-card">
             <div className="mb-4 flex items-start gap-3">
-              <div className="improvement-panel-icon improvement-panel-icon-slate">
-                <Sparkles size={18} />
+              <div className="improvement-panel-icon improvement-panel-icon-amber">
+                <SearchCheck size={18} />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                  {t('jobDetails.priorityEdits')}
+                  {t('jobDetails.keywordsToSurface')}
                 </p>
                 <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {t('jobDetails.prioritySnapshot')}
+                  {t('jobDetails.keywordBank')}
                 </h3>
               </div>
             </div>
 
-            {matchSuggestions.length > 0 ? (
-              <ul className="space-y-3">
-                {matchSuggestions.map((item, index) => (
-                  <li key={`suggestion-${index}`} className="improvement-panel-inline-item">
-                    <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white dark:bg-slate-100 dark:text-slate-950">
-                      {index + 1}
-                    </span>
-                    <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
-            )}
+            <div className="flex flex-wrap gap-2.5">
+              {additionalMissingKeywords.map((keyword) => (
+                <span
+                  key={keyword}
+                  className="rounded-full border border-amber-200/80 bg-amber-50/90 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200"
+                >
+                  {keyword}
+                </span>
+              ))}
+            </div>
           </section>
+        ) : null}
 
-          {additionalMissingKeywords.length > 0 ? (
-            <section className="improvement-panel-sidebar-card">
-              <div className="mb-4 flex items-start gap-3">
-                <div className="improvement-panel-icon improvement-panel-icon-amber">
-                  <SearchCheck size={18} />
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                    {t('jobDetails.keywordsToSurface')}
-                  </p>
-                  <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
-                    {t('jobDetails.keywordBank')}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5">
-                {additionalMissingKeywords.map((keyword) => (
-                  <span
-                    key={keyword}
-                    className="rounded-full border border-amber-200/80 bg-amber-50/90 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200"
-                  >
-                    {keyword}
-                  </span>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {matchResult.missing_skills?.length > 0 ? (
-            <section className="improvement-panel-sidebar-card">
-              <div className="mb-4 flex items-start gap-3">
-                <div className="improvement-panel-icon improvement-panel-icon-sky">
-                  <Target size={18} />
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                    {t('jobDetails.evidenceGaps')}
-                  </p>
-                  <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
-                    {t('jobDetails.proofToAdd')}
-                  </h3>
-                </div>
-              </div>
-
-              <ul className="space-y-3">
-                {matchResult.missing_skills.map((item, index) => (
-                  <li key={`gap-${index}`} className="improvement-panel-inline-item">
-                    <ArrowRight size={14} className="mt-1 shrink-0 text-sky-700 dark:text-sky-300" />
-                    <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </aside>
-      </div>
-
-      {rewrittenBullets.length > 0 ? (
-        <section className="improvement-panel-card improvement-panel-card-violet">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="improvement-panel-icon improvement-panel-icon-violet">
-                <FilePenLine size={18} />
+        {matchResult.missing_skills?.length > 0 ? (
+          <section className="improvement-panel-sidebar-card">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="improvement-panel-icon improvement-panel-icon-sky">
+                <Target size={18} />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
-                  {t('jobDetails.rewrittenBullets')}
+                  {t('jobDetails.evidenceGaps')}
                 </p>
                 <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {t('jobDetails.rewrittenBulletsTitle')}
+                  {t('jobDetails.proofToAdd')}
                 </h3>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleCopyBullets}
-              className="btn-secondary flex w-auto items-center justify-center gap-2 px-3 !py-1.5 text-xs"
-            >
-              {copiedBullets ? (
-                <>
-                  <Check size={14} />
-                  {t('common.copied')}
-                </>
-              ) : (
-                <>
-                  <Copy size={14} />
-                  {t('jobDetails.copyBullets')}
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {rewrittenBullets.map((item, index) => (
-              <article
-                key={`bullet-${index}`}
-                className="rounded-2xl border border-violet-200/70 bg-white/85 p-4 shadow-[0_18px_40px_rgba(91,33,182,0.08)] dark:border-violet-900/40 dark:bg-slate-950/45 dark:shadow-none"
-              >
-                <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">
-                  <Sparkles size={13} />
-                  {t('jobDetails.pasteReadyBullet', { count: index + 1 })}
-                </div>
-                <p className="text-sm leading-7 text-slate-700 dark:text-slate-300">{item}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+            <ul className="space-y-3">
+              {matchResult.missing_skills.map((item, index) => (
+                <li key={`gap-${index}`} className="improvement-panel-inline-item">
+                  <ArrowRight size={14} className="mt-1 shrink-0 text-sky-700 dark:text-sky-300" />
+                  <span className="break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
 
       {!hasRawSections && !hasGuidedSections ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">--</p>
