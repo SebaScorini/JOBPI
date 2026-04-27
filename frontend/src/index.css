@@ -170,7 +170,7 @@
       radial-gradient(circle at top right, rgba(14, 165, 233, 0.14), transparent 30%),
       linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.92));
     box-shadow: 0 26px 80px rgba(15, 23, 42, 0.08);
-    padding: 1.5rem;
+    padding: 1.25rem;
     @apply dark:border-slate-800/80 dark:bg-[linear-gradient(145deg,rgba(15,23,42,0.95),rgba(15,23,42,0.88))] dark:shadow-[0_26px_80px_rgba(2,6,23,0.45)];
   }
 
@@ -214,7 +214,7 @@
   }
 
   .improvement-panel-card {
-    @apply rounded-[24px] border p-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:shadow-none;
+    @apply rounded-[24px] border p-4 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:shadow-none;
   }
 
   .improvement-panel-card-amber {
@@ -235,7 +235,7 @@
 
   .improvement-panel-card-slate,
   .improvement-panel-sidebar-card {
-    @apply rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35 dark:shadow-none;
+    @apply rounded-[24px] border border-slate-200/80 bg-white p-4 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35 dark:shadow-none;
   }
 
   .improvement-panel-icon {
@@ -263,7 +263,7 @@
   }
 
   .improvement-panel-list-item {
-    @apply flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3.5 py-3 shadow-sm dark:border-slate-800/80 dark:bg-slate-950/25;
+    @apply flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 shadow-sm dark:border-slate-800/80 dark:bg-slate-950/25;
   }
 
   .improvement-panel-bullet {

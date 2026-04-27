@@ -25,10 +25,10 @@ from app.services.job_preprocessing import build_cv_context, build_job_context
 from app.services.response_language import language_instruction, normalize_language
 
 
-MAX_COVER_LETTER_CHARS = 1200
-MAX_COVER_LETTER_PARAGRAPHS = 3
-MAX_COVER_LETTER_PARAGRAPH_CHARS = 380
-DEFAULT_COVER_LETTER_MAX_TOKENS = 480
+MAX_COVER_LETTER_CHARS = 1600
+MAX_COVER_LETTER_PARAGRAPHS = 4
+MAX_COVER_LETTER_PARAGRAPH_CHARS = 480
+DEFAULT_COVER_LETTER_MAX_TOKENS = 800
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +52,7 @@ class CoverLetterSignature(dspy.Signature):
     cv_text: str = dspy.InputField(desc="Markdown CV context with the candidate's relevant evidence")
     response_language: str = dspy.InputField(desc="Language for the final cover letter")
     cover_letter: str = dspy.OutputField(
-        desc="Plain text only. Include greeting, 2-3 short paragraphs, and sign-off. Keep it specific to the role, concise, professional, and roughly under 180 words / about 1200 characters or less. Sound like a tailored application, not a generic template."
+        desc="Plain text only. Include greeting, 3-4 paragraphs, and sign-off. Keep it specific to the role, professional, and roughly 200-260 words / about 1400-1600 characters. Each paragraph must add distinct value: opening (hook + role connection), 1-2 body paragraphs (concrete overlaps between CV evidence and role requirements, naming specifics), closing (forward-looking, confident, no filler). Sound like a tailored application written by a real person, not a generic template."
     )
 
 

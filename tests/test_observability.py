@@ -41,7 +41,7 @@ def test_development_cover_letter_defaults():
 
     assert settings.cover_letter_limit == 6
     assert settings.cover_letter_window_seconds == 600
-    assert settings.cover_letter_max_tokens == 640
+    assert settings.cover_letter_max_tokens == 800
     assert settings.cv_match_max_tokens >= 100
     assert settings.cv_match_retry_max_tokens >= settings.cv_match_max_tokens
 
@@ -60,3 +60,35 @@ def test_settings_preserve_distinct_retry_token_budgets():
     assert settings.cv_match_retry_max_tokens == 1800
     assert settings.job_analysis_max_tokens == 900
     assert settings.job_analysis_retry_max_tokens == 1400
+
+
+def test_production_defaults_keep_rate_limits_enabled(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    for name in (
+        "RATE_LIMIT_ENABLED",
+        "AUTH_RATE_LIMIT_WINDOW_SECONDS",
+        "AUTH_REGISTER_RATE_LIMIT",
+        "AUTH_LOGIN_RATE_LIMIT",
+        "JOB_ANALYZE_RATE_LIMIT_WINDOW_SECONDS",
+        "JOB_ANALYZE_RATE_LIMIT",
+        "MATCH_CVS_RATE_LIMIT_WINDOW_SECONDS",
+        "MATCH_CVS_RATE_LIMIT",
+        "COVER_LETTER_RATE_LIMIT_WINDOW_SECONDS",
+        "COVER_LETTER_RATE_LIMIT",
+        "CV_UPLOAD_RATE_LIMIT_WINDOW_SECONDS",
+        "CV_UPLOAD_RATE_LIMIT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = Settings(
+        database_url="postgresql+psycopg://user:pass@localhost:5432/jobpi",
+        secret_key="prod-secret",
+    )
+
+    assert settings.rate_limit_enabled is True
+    assert settings.auth_register_limit == 3
+    assert settings.auth_login_limit == 5
+    assert settings.job_analyze_limit == 6
+    assert settings.match_cvs_limit == 8
+    assert settings.cover_letter_limit == 4
+    assert settings.cv_upload_limit == 5

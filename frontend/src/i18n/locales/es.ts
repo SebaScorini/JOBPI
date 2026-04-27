@@ -238,7 +238,7 @@ const es: TranslationNode = {
     notFound: 'No se encontro el empleo',
     returnToJobs: 'Volver a empleos',
     backToAnalysis: 'Volver al analisis',
-    executiveSummary: 'Resumen ejecutivo',
+    executiveSummary: 'Panorama del rol',
     requiredSkills: 'Habilidades requeridas',
     niceToHave: 'Deseables',
     responsibilities: 'Responsabilidades clave',
@@ -333,6 +333,9 @@ const es: TranslationNode = {
     failedCopy: 'No se pudo copiar la carta de presentacion.',
     noSummary: 'No hay resumen disponible.',
     noCvSelected: 'Elige un CV de la biblioteca para continuar.',
+    improveSubTabEdit: 'Editar CV',
+    improveSubTabKeywords: 'Keywords',
+    improveSubTabPlan: 'Plan de accion',
   },
   library: {
     title: 'Biblioteca de CVs',

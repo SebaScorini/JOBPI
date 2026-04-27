@@ -237,7 +237,7 @@ const en: TranslationNode = {
     notFound: 'Job Not Found',
     returnToJobs: 'Return to jobs',
     backToAnalysis: 'Back to Analysis',
-    executiveSummary: 'Executive Summary',
+    executiveSummary: 'Role Overview',
     requiredSkills: 'Required Skills',
     niceToHave: 'Nice To Have',
     responsibilities: 'Core Responsibilities',
@@ -332,6 +332,9 @@ const en: TranslationNode = {
     failedCopy: 'Failed to copy cover letter.',
     noSummary: 'No summary available.',
     noCvSelected: 'Choose a CV from the library to continue.',
+    improveSubTabEdit: 'Edit CV',
+    improveSubTabKeywords: 'Keywords',
+    improveSubTabPlan: 'Action Plan',
   },
   library: {
     title: 'CV Library',

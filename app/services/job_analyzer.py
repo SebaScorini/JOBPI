@@ -35,8 +35,8 @@ from app.services.response_language import language_instruction, normalize_langu
 
 
 MAX_LIST_ITEMS = 6
-MAX_ITEM_CHARS = 140
-MAX_SUMMARY_CHARS = 420
+MAX_ITEM_CHARS = 200
+MAX_SUMMARY_CHARS = 500
 JOB_ANALYSIS_RETRY_DESCRIPTION_CHARS = 5000
 NON_SIGNAL_ITEM_WORDS = {
     "candidate",
@@ -95,19 +95,24 @@ FALLBACK_ANALYSIS_MARKER = "_fallback"
 
 
 class LeanJobAnalysisSignature(dspy.Signature):
-    """Extract only the most decision-useful guidance from this job posting.
+    """Extract thorough, decision-useful guidance from this job posting.
 
     Base every field on explicit evidence in the posting or a very strong role-level inference.
     Prefer the concrete requirements, responsibilities, tools, seniority, and outcomes that will
-    help a candidate prepare. Be specific, but do not pad, repeat, generalize, or copy long
-    fragments from the posting. Prefer sharp, useful synthesis over longer text.
+    help a candidate prepare. Be specific; do not pad, repeat, generalize, or copy long
+    fragments from the posting. Prefer sharp, useful synthesis over filler text.
     Do not use generic buzzwords, vague career advice, unsupported claims, or tech-only framing
     when the posting is clearly non-technical. Do not repeat the prompt, do not restate section
     labels, and do not collapse distinct insights into generic filler.
-    Keep each output section meaningfully distinct: responsibilities should describe the work,
-    prep should focus on what to practice or gather, learning_path should focus on skills to build,
-    resume should focus on CV edits, interview should focus on live discussion topics, and projects
-    should propose portfolio ideas. Avoid reusing the same wording pattern across sections.
+    Keep each output section meaningfully distinct: responsibilities should describe the actual work,
+    prep should focus on what to practice or gather before applying, learning_path should name
+    specific skills to build tied to this posting, resume should focus on CV edits that improve
+    alignment, interview should cover live discussion topics with concrete angles, and projects
+    should propose realistic portfolio ideas that would increase fit. Avoid reusing the same
+    wording pattern across sections.
+    You have a generous output budget — fill every section to its maximum count with high-quality,
+    role-specific items. Do not stop early or truncate lists. Every item must be concise but
+    substantive; vague or generic items are worse than fewer specific ones.
     """
 
     title: str = dspy.InputField(desc="Job title for role framing")
@@ -115,7 +120,7 @@ class LeanJobAnalysisSignature(dspy.Signature):
     desc: str = dspy.InputField(desc="Cleaned, high-signal job description with requirements and responsibilities")
     response_language: str = dspy.InputField(desc="Language for every output field")
     summary: str = dspy.OutputField(
-        desc="1-2 concise sentences explaining what the role most needs, what success likely looks like, and one concrete signal that makes the role distinctive. Grounded only in the posting."
+        desc="2 compact sentences (40-80 words). First sentence: what the role needs and what success looks like. Second sentence: the ideal candidate profile and one distinctive signal from this posting. No filler."
     )
     seniority: str = dspy.OutputField(
         desc="Single label such as junior, mid, senior, lead, or unknown. Use unknown if the level is not reasonably clear."
@@ -124,31 +129,31 @@ class LeanJobAnalysisSignature(dspy.Signature):
         desc="Single short role family such as backend, full-stack, frontend, data, devops, mobile, qa, product, or generalist."
     )
     req_skills: list[str] = dspy.OutputField(
-        desc="Max 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short, high-signal phrases only. Avoid repeating role family or obvious duplicates."
+        desc="Exactly 5 must-have skills, tools, or knowledge areas explicitly required or strongly implied as core. Short, high-signal phrases only (5-15 words each). Avoid repeating role family or obvious duplicates."
     )
     nice_skills: list[str] = dspy.OutputField(
-        desc="Max 5 preferred or bonus skills that are helpful but not clearly mandatory. Only include items supported by the posting."
+        desc="Exactly 5 preferred or bonus skills that are helpful but not clearly mandatory. Only include items supported by the posting (5-15 words each)."
     )
     responsibilities: list[str] = dspy.OutputField(
-        desc="Max 5 core responsibilities rewritten into concise action-first items. Preserve meaning, remove boilerplate, and mention the real scope, systems, or stakeholders when the posting provides them."
+        desc="Exactly 5 core responsibilities rewritten into concise action-first items (10-25 words each). Preserve meaning, remove boilerplate, and mention the real scope, systems, or stakeholders when the posting provides them."
     )
     prep: list[str] = dspy.OutputField(
-        desc="Max 4 concrete preparation actions for applying or interviewing well for this specific role. Focus on what to study, practice, or gather before applying. Make each action role-specific and avoid generic advice like 'review the stack' or 'prepare examples'."
+        desc="Exactly 4 concrete preparation actions for applying or interviewing for this specific role (10-25 words each). Focus on what to study, practice, or gather before applying. Name the specific topic, tool, or evidence required — no generic advice like 'review the stack'."
     )
     learn: list[str] = dspy.OutputField(
-        desc="Max 4 focused learning priorities that would close common gaps for this exact posting. These should be skill-building priorities tied to tools, domains, or delivery expectations in the posting, not interview prep or resume edits."
+        desc="Exactly 4 focused learning priorities that would close common gaps for this exact posting (10-25 words each). Name the specific skill, tool, or domain to study and why it matters for this role. Not interview prep or resume edits."
     )
     gaps: list[str] = dspy.OutputField(
-        desc="Max 5 concrete candidate gaps suggested by the posting's expectations. Mention only requirements that appear important for fit."
+        desc="Exactly 5 concrete candidate gaps suggested by the posting's expectations (8-20 words each). Name the specific skill, experience, or domain that is likely missing in a typical applicant. Prioritize by impact on fit."
     )
     resume: list[str] = dspy.OutputField(
-        desc="Max 4 resume improvements that would better align a CV to this role. Each item must be directly actionable and role-specific. Focus only on CV content, ordering, and proof, and name the kind of evidence that should be added."
+        desc="Exactly 4 resume improvements that would better align a CV to this role (10-25 words each). Each item must be directly actionable, role-specific, and name the type of evidence or bullet change required. Focus only on CV content, ordering, and proof."
     )
     interview: list[str] = dspy.OutputField(
-        desc="Max 4 interview focus points the candidate should prepare for, based on the role's scope, tools, and expected outcomes. These are live discussion topics with concrete angles or tradeoffs, not resume edits or general prep reminders."
+        desc="Exactly 4 interview focus points the candidate should prepare for (10-25 words each), based on the role's scope, tools, and expected outcomes. Describe a specific angle, scenario, or technical tradeoff likely to be probed. Not resume edits or general prep reminders."
     )
     projects: list[str] = dspy.OutputField(
-        desc="Max 3 portfolio or project ideas that would increase fit for this exact role. Make them realistic, specific, and relevant to the posting, with a deliverable or scope that clearly differs from the learning and interview sections."
+        desc="Exactly 3 portfolio or project ideas that would increase fit for this exact role (10-25 words each). Make them realistic, scoped, and clearly tied to requirements in the posting. Each should differ meaningfully from the learning and interview sections."
     )
 
 
@@ -709,7 +714,7 @@ def _is_meaningful_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
 def _refine_job_analysis_payload(payload: JobAnalysisPayload) -> JobAnalysisPayload:
     required_skills = _dedupe_job_items(payload.required_skills, limit=5)
     nice_to_have_skills = _dedupe_job_items(payload.nice_to_have_skills, limit=4, blocked_items=required_skills)
-    responsibilities = _dedupe_job_items(payload.responsibilities, limit=4)
+    responsibilities = _dedupe_job_items(payload.responsibilities, limit=5)
     how_to_prepare = _dedupe_job_items(
         payload.how_to_prepare,
         limit=4,
@@ -761,7 +766,7 @@ def _dedupe_job_items(
     kept: list[str] = []
     kept_signatures: list[set[str]] = []
     for item in items:
-        normalized = _normalize_text(item, 180).strip()
+        normalized = _normalize_text(item, MAX_ITEM_CHARS).strip()
         if not normalized:
             continue
         signature = _job_item_signature(normalized)

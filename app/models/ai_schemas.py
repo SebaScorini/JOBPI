@@ -257,12 +257,12 @@ class JobAnalysisAIOutput(BaseModel):
 class CvAnalysisAIOutput(BaseModel):
     model_config = StrictModelConfig
 
-    fit_summary: str = Field(min_length=1, max_length=700)
+    fit_summary: str = Field(min_length=1, max_length=1200)
     strengths: list[str] = Field(default_factory=list, max_length=5)
     missing_skills: list[str] = Field(default_factory=list, max_length=5)
     likely_fit_level: str = Field(
         min_length=1,
-        max_length=20,
+        max_length=40,
         validation_alias=AliasChoices("likely_fit_level", "fit_level", "match_level"),
     )
     resume_improvements: list[str] = Field(default_factory=list, max_length=4)
@@ -279,7 +279,7 @@ class CvAnalysisAIOutput(BaseModel):
             return value
         normalized = dict(value)
         if "fit_summary" in normalized:
-            normalized["fit_summary"] = _normalize_short_text(normalized["fit_summary"], limit=700)
+            normalized["fit_summary"] = _normalize_short_text(normalized["fit_summary"], limit=1200)
         fit_level_key = None
         fit_level_value = None
         for key in ("likely_fit_level", "fit_level", "match_level"):
@@ -291,9 +291,9 @@ class CvAnalysisAIOutput(BaseModel):
             normalized["likely_fit_level"] = _normalize_enum_like_text(
                 fit_level_value,
                 mapping={
-                    "Strong": ("strong", "very strong", "high fit"),
-                    "Moderate": ("moderate", "medium", "mid", "partial fit"),
-                    "Weak": ("weak", "low fit", "poor fit"),
+                    "Strong": ("strong", "very strong", "high fit", "excellent", "great fit", "good fit"),
+                    "Moderate": ("moderate", "medium", "mid", "partial fit", "average", "decent", "fair"),
+                    "Weak": ("weak", "low fit", "poor fit", "not a fit", "mismatch", "poor", "low"),
                 },
             )
             if fit_level_key in {"fit_level", "match_level"}:

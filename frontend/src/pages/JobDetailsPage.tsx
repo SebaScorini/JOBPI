@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Bookmark, Briefcase, CheckCircle2, ChevronRight, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, CheckCircle2, ChevronRight, Loader2, SearchCheck, Trash2, Zap } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
   CVComparisonResult,
@@ -20,6 +20,9 @@ const JobDetailsMatchPanel = lazy(() =>
 const JobDetailsImprovementsPanel = lazy(() =>
   import('./job-details/JobDetailsImprovementsPanel').then((module) => ({ default: module.JobDetailsImprovementsPanel })),
 );
+const JobDetailsComparisonPanel = lazy(() =>
+  import('./job-details/JobDetailsComparisonPanel').then((module) => ({ default: module.JobDetailsComparisonPanel })),
+);
 const JobDetailsCoverPanel = lazy(() =>
   import('./job-details/JobDetailsCoverPanel').then((module) => ({ default: module.JobDetailsCoverPanel })),
 );
@@ -27,7 +30,7 @@ const JobDetailsTrackerPanel = lazy(() =>
   import('./job-details/JobDetailsTrackerPanel').then((module) => ({ default: module.JobDetailsTrackerPanel })),
 );
 
-type DetailsTab = 'overview' | 'match' | 'improvements' | 'cover' | 'tracker';
+type DetailsTab = 'overview' | 'match' | 'improvements' | 'comparison' | 'cover' | 'tracker';
 
 const statusBadgeMap: Record<JobApplicationStatus, string> = {
   saved: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -376,6 +379,7 @@ export function JobDetailsPage() {
       { id: 'overview', label: t('jobDetails.executiveSummary') },
       { id: 'match', label: t('jobDetails.matchTitle') },
       { id: 'improvements', label: t('jobDetails.improveCv') },
+      { id: 'comparison', label: t('jobDetails.compareTitle') },
       { id: 'cover', label: t('jobDetails.coverLetterTitle') },
       { id: 'tracker', label: t('jobDetails.trackerTitle') },
     ],
@@ -411,7 +415,7 @@ export function JobDetailsPage() {
         <ArrowLeft size={16} className="mr-2" /> {t('jobDetails.backToAnalysis')}
       </Link>
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0 space-y-4">
           <div className="glass-card rounded-3xl p-4 lg:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -554,20 +558,10 @@ export function JobDetailsPage() {
                 <JobDetailsMatchPanel
                   cvs={cvs}
                   selectedCvId={selectedCvId}
-                  compareCvIdA={compareCvIdA}
-                  compareCvIdB={compareCvIdB}
                   setSelectedCvId={(value) => setSelectedCvId(value)}
-                  setCompareCvIdA={(value) => setCompareCvIdA(value)}
-                  setCompareCvIdB={(value) => setCompareCvIdB(value)}
                   isMatchLoading={isMatchLoading}
-                  isCompareLoading={isCompareLoading}
                   handleMatch={handleMatch}
-                  handleCompare={handleCompare}
-                  comparisonResult={comparisonResult}
                   matchResult={matchResult}
-                  cvA={cvA}
-                  cvB={cvB}
-                  comparisonExplanationBlocks={comparisonExplanationBlocks}
                   matchWhyBlocks={matchWhyBlocks}
                   copiedSection={copiedSection}
                   handleCopyText={handleCopyText}
@@ -575,6 +569,27 @@ export function JobDetailsPage() {
                   displayMissingSkills={displayMissingSkills}
                   matchSuggestions={matchSuggestions}
                   matchReorderSuggestions={matchReorderSuggestions}
+                  t={t}
+                />
+              </Suspense>
+            )}
+
+            {activeTab === 'comparison' && (
+              <Suspense fallback={<JobDetailsTabFallback />}>
+                <JobDetailsComparisonPanel
+                  cvs={cvs}
+                  compareCvIdA={compareCvIdA}
+                  compareCvIdB={compareCvIdB}
+                  setCompareCvIdA={(value) => setCompareCvIdA(value)}
+                  setCompareCvIdB={(value) => setCompareCvIdB(value)}
+                  isCompareLoading={isCompareLoading}
+                  handleCompare={handleCompare}
+                  comparisonResult={comparisonResult}
+                  cvA={cvA}
+                  cvB={cvB}
+                  comparisonExplanationBlocks={comparisonExplanationBlocks}
+                  copiedSection={copiedSection}
+                  handleCopyText={handleCopyText}
                   t={t}
                 />
               </Suspense>
@@ -628,7 +643,7 @@ export function JobDetailsPage() {
           </div>
         </section>
 
-        <aside className="sticky top-[84px] hidden h-fit gap-4 2xl:flex 2xl:flex-col">
+        <aside className="sticky top-[84px] hidden h-fit gap-4 xl:flex xl:flex-col">
           <div className="glass-card rounded-2xl p-4">
             <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Insights</h3>
             <div className="space-y-3 text-sm">
@@ -643,6 +658,65 @@ export function JobDetailsPage() {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="improvement-panel-sidebar-card">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="improvement-panel-icon improvement-panel-icon-sky">
+                <SearchCheck size={18} />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                  {t('jobDetails.matchTitle')}
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {t('jobDetails.matchWorkspaceTitle')}
+                </h3>
+              </div>
+            </div>
+
+            {cvs.length === 0 ? (
+              <p className="text-sm text-slate-500">{t('jobDetails.uploadCvFirst')}</p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    {t('common.selectCv')}
+                  </label>
+                  <select
+                    value={selectedCvId}
+                    onChange={(e) => setSelectedCvId(Number(e.target.value))}
+                    className="input-field w-full !py-2.5 text-sm"
+                  >
+                    <option value="" disabled>
+                      {t('common.selectCv')}
+                    </option>
+                    {cvs.map((cv) => (
+                      <option key={cv.id} value={cv.id}>
+                        {cv.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={handleMatch}
+                  disabled={isMatchLoading || !selectedCvId}
+                  className="btn-primary flex w-full items-center justify-center gap-2 !py-2.5 text-sm"
+                >
+                  {isMatchLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      {t('jobDetails.evaluating')}
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={16} />
+                      {t('jobDetails.runAlgorithm')}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </aside>
       </div>

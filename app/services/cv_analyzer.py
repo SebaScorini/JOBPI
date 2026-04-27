@@ -22,8 +22,8 @@ from app.services.pdf_extractor import preprocess_cv_text
 from app.services.response_language import language_instruction, normalize_language
 
 
-MAX_SUMMARY_CHARS = 700
-DEFAULT_CV_MATCH_MAX_TOKENS = 1100
+MAX_SUMMARY_CHARS = 1200
+DEFAULT_CV_MATCH_MAX_TOKENS = 2400
 CV_MATCH_RETRY_MIN_EXCERPT_CHARS = 900
 logger = logging.getLogger(__name__)
 WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{2,}\b")
@@ -108,7 +108,7 @@ GENERIC_MISSING_SKILL_PHRASES = (
 
 
 class CvFitSignature(dspy.Signature):
-    """Compare CV evidence against job requirements and return high-signal fit guidance.
+    """Compare CV evidence against job requirements and return deep, high-signal fit guidance.
 
     Use only information supported by the provided CV excerpt and job excerpt. Prefer explicit
     matches, specific missing evidence, and concrete improvements over generic career advice.
@@ -121,9 +121,12 @@ class CvFitSignature(dspy.Signature):
     are wording and keyword alignment, recruiter_improvements are credibility and impact framing,
     interview_focus are discussion topics, and next_steps are immediate actions after reading the analysis.
     Avoid reusing the same phrase stem across multiple lists.
-    Prioritize filling these sections completely, in this order, if output budget gets tight:
-    rewritten_bullets, resume_improvements, ats_improvements, recruiter_improvements, strengths,
-    missing_skills. Interview focus and next steps are lowest priority.
+    You have a generous output budget — use it to produce thorough, specific guidance. Fill every
+    section to its maximum count with high-quality, role-specific items. Do not truncate, pad with
+    filler, or stop early. Prioritize filling these sections completely and with real substance:
+    rewritten_bullets first (these must be polished and ready to paste), then resume_improvements,
+    ats_improvements, recruiter_improvements, strengths, and missing_skills. Fill interview_focus
+    and next_steps last but still fully.
     """
 
     title: str = dspy.InputField(desc="Job title for role framing")
@@ -132,34 +135,34 @@ class CvFitSignature(dspy.Signature):
     response_language: str = dspy.InputField(desc="Language for every output field")
 
     fit_summary: str = dspy.OutputField(
-        desc="Exactly 2 concise sentences, ideally 45-80 words total, on overall fit, strongest CV evidence, biggest gap, and what that means for candidacy. Mention at least one specific capability, project type, or outcome evidenced in the CV when possible. Do not consume the budget with a long narrative."
+        desc="2-3 substantive sentences (60-120 words total) on overall fit, strongest CV evidence, biggest gap, and what that means for candidacy. Mention at least one specific capability, project type, or measurable outcome evidenced in the CV. Conclude with a clear, honest assessment of competitiveness for this role."
     )
     likely_fit_level: str = dspy.OutputField(
         desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
     )
     rewritten_bullets: list[str] = dspy.OutputField(
-        desc="Max 3 rewritten CV bullet examples tailored to this role. Each bullet should sound resume-ready, include action + context + measurable or concrete outcome, and stay grounded in the provided evidence."
+        desc="Exactly 3 rewritten CV bullet examples tailored to this role. Each must be polished and paste-ready: action verb + specific context tied to this job + a concrete, measurable outcome grounded in the CV evidence. These should noticeably improve on what is already in the CV."
     )
     resume_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 concrete CV-edit actions, ideally 5-12 words each. Focus only on changing bullet content, ordering, or proof in the resume itself. Name what evidence or bullet should change, and do not repeat ATS, recruiter, interview, or next-step guidance."
+        desc="Exactly 3 concrete CV-edit actions, each 8-18 words. Focus only on changing bullet content, ordering, or proof in the resume itself. Name the specific bullet, section, or evidence that should change. Do not repeat ATS, recruiter, interview, or next-step guidance."
     )
     ats_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 ATS-focused actions, ideally 5-12 words each, only about keyword wording, exact terminology, skills-section coverage, and alignment to the posting. Prefer exact posting language when possible and do not repeat resume bullets or recruiter advice."
+        desc="Exactly 3 ATS-focused actions, each 8-18 words, only about keyword wording, exact terminology from the posting, skills-section coverage, and title/header alignment. Prefer quoting exact posting language where possible. Do not repeat resume or recruiter advice."
     )
     recruiter_improvements: list[str] = dspy.OutputField(
-        desc="Max 3 recruiter-facing actions, ideally 5-12 words each, only about credibility, specificity, business impact, and narrative strength. Push for stronger proof and business framing, and do not repeat ATS or resume-edit advice."
+        desc="Exactly 3 recruiter-facing actions, each 8-18 words, only about credibility, specificity, business impact, and narrative strength. Reference the candidate's actual evidence when suggesting how to strengthen framing. Do not repeat ATS or resume-edit advice."
     )
     strengths: list[str] = dspy.OutputField(
-        desc="Max 4 substantive items, ideally 5-12 words each. Only include role-relevant evidence clearly supported by the CV. No advice, no missing items, and no restating the summary."
+        desc="Exactly 4 substantive items, each 8-18 words. Only include role-relevant evidence that is clearly supported by the CV text. Name the specific skill, outcome, or experience. No advice, no missing items, and no restating the summary."
     )
     missing_skills: list[str] = dspy.OutputField(
-        desc="Max 4 substantive items, ideally 5-12 words each, naming the most important missing skill, missing responsibility, or missing proof point. Each item must name a concrete technology, responsibility, domain, or evidence gap from the role. This section is diagnosis only: no advice, no action verbs, no generic filler like 'more experience', and no overlap with resume or ATS improvements."
+        desc="Exactly 4 substantive items, each 8-18 words, naming the most important missing skill, missing responsibility, or missing proof point. Each item must name a concrete technology, responsibility, domain, or evidence gap from the role. This section is diagnosis only: no action verbs, no generic filler like 'more experience', and no overlap with resume or ATS improvements."
     )
     interview_focus: list[str] = dspy.OutputField(
-        desc="Max 2 concrete interview prep topics, ideally 4-8 words each. These are live discussion topics to prepare for, not resume edits or ATS tweaks."
+        desc="Exactly 3 concrete interview prep topics, each 8-16 words. Describe a specific angle, tradeoff, or scenario the interviewer is likely to probe based on this role's scope and the CV's gaps. Not resume edits or generic advice."
     )
     next_steps: list[str] = dspy.OutputField(
-        desc="Max 2 immediate next steps, ideally 5-10 words each, for what the candidate should do next after reading this analysis. Keep them action-oriented, sequenced for near-term execution, and distinct from the resume, ATS, recruiter, and interview lists."
+        desc="Exactly 3 immediate next steps, each 8-16 words, for what the candidate should do right after reading this analysis. Sequence them for near-term execution and make each one role-specific and distinct from the resume, ATS, recruiter, and interview lists."
     )
 
 

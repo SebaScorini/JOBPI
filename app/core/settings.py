@@ -42,7 +42,6 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "job_analyze_limit": 30,
         "match_cvs_window_seconds": 300,
         "match_cvs_limit": 30,
-        # Development limits are intentionally looser than production for faster iteration.
         "cover_letter_window_seconds": 600,
         "cover_letter_limit": 6,
         "cv_upload_window_seconds": 300,
@@ -51,12 +50,12 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "max_cvs_per_upload": 10,
         "max_job_description_chars": 12000,
         "max_cv_text_chars": 8000,
-        "max_output_tokens": 900,
-        "job_analysis_max_tokens": 980,
-        "job_analysis_retry_max_tokens": 980,
-        "cv_match_max_tokens": 1200,
-        "cv_match_retry_max_tokens": 1200,
-        "cover_letter_max_tokens": 640,
+        "max_output_tokens": 3200,
+        "job_analysis_max_tokens": 3200,
+        "job_analysis_retry_max_tokens": 3200,
+        "cv_match_max_tokens": 3200,
+        "cv_match_retry_max_tokens": 3200,
+        "cover_letter_max_tokens": 800,
         "job_preprocess_target_chars": 5000,
         "ai_timeout_seconds": 60,
     },
@@ -69,21 +68,20 @@ ENV_DEFAULTS: dict[AppEnv, dict[str, object]] = {
         "job_analyze_limit": 6,
         "match_cvs_window_seconds": 3600,
         "match_cvs_limit": 8,
-        # Keep production cover-letter limits unchanged until real usage data justifies a bump.
         "cover_letter_window_seconds": 3600,
         "cover_letter_limit": 4,
         "cv_upload_window_seconds": 3600,
         "cv_upload_limit": 5,
-        "max_pdf_size_mb": 2,
-        "max_cvs_per_upload": 3,
-        "max_job_description_chars": 8000,
+        "max_pdf_size_mb": 5,
+        "max_cvs_per_upload": 5,
+        "max_job_description_chars": 5000,
         "max_cv_text_chars": 8000,
-        "max_output_tokens": 900,
-        "job_analysis_max_tokens": 2400,
-        "job_analysis_retry_max_tokens": 2400,
-        "cv_match_max_tokens": 1600,
-        "cv_match_retry_max_tokens": 1600,
-        "cover_letter_max_tokens": 700,
+        "max_output_tokens": 3200,
+        "job_analysis_max_tokens": 3200,
+        "job_analysis_retry_max_tokens": 3200,
+        "cv_match_max_tokens": 3200,
+        "cv_match_retry_max_tokens": 3200,
+        "cover_letter_max_tokens": 800,
         "job_preprocess_target_chars": 5000,
         "ai_timeout_seconds": 60,
     },
@@ -407,12 +405,12 @@ class Settings(BaseModel):
         self.max_cvs_per_upload = max(1, self.max_cvs_per_upload)
         self.max_job_description_chars = max(50, self.max_job_description_chars)
         self.max_cv_text_chars = max(500, self.max_cv_text_chars)
-        self.max_output_tokens = min(4000, max(50, self.max_output_tokens))
-        self.job_analysis_max_tokens = min(4000, max(100, self.job_analysis_max_tokens))
-        self.job_analysis_retry_max_tokens = min(4000, max(100, self.job_analysis_retry_max_tokens))
-        self.cv_match_max_tokens = min(4000, max(100, self.cv_match_max_tokens))
-        self.cv_match_retry_max_tokens = min(4000, max(100, self.cv_match_retry_max_tokens))
-        self.cover_letter_max_tokens = min(4000, max(100, self.cover_letter_max_tokens))
+        self.max_output_tokens = min(8000, max(50, self.max_output_tokens))
+        self.job_analysis_max_tokens = min(8000, max(100, self.job_analysis_max_tokens))
+        self.job_analysis_retry_max_tokens = min(8000, max(100, self.job_analysis_retry_max_tokens))
+        self.cv_match_max_tokens = min(8000, max(100, self.cv_match_max_tokens))
+        self.cv_match_retry_max_tokens = min(8000, max(100, self.cv_match_retry_max_tokens))
+        self.cover_letter_max_tokens = min(8000, max(100, self.cover_letter_max_tokens))
         self.job_preprocess_target_chars = min(
             self.max_job_description_chars,
             max(500, self.job_preprocess_target_chars),
