@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from '../services/api';
+import { ApiError, apiService } from '../services/api';
 import { Loader2, Zap } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -65,7 +65,11 @@ export function JobAnalysisPage() {
       showToast('Analysis complete.', 'success');
       navigate(`/jobs/${response.job_id}`);
     } catch (err: any) {
-      const message = err.message || t('jobAnalysis.unexpectedError');
+      const baseMessage = err.message || t('jobAnalysis.unexpectedError');
+      const message =
+        err instanceof ApiError && err.code === 'ERR_RATE_LIMIT' && err.retryAfter
+          ? `${baseMessage} Try again in ${err.retryAfter}s.`
+          : baseMessage;
       setError(message);
       showToast(message, 'error');
     } finally {

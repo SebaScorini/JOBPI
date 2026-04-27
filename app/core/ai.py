@@ -18,6 +18,7 @@ from json_repair import loads as repair_json_loads
 
 from app.core.circuit_breaker import AICircuitBreaker
 from app.core.config import build_dspy_lm_kwargs, get_settings, normalize_dspy_model
+from app.core.privacy import summarize_redacted_payload
 from app.models.ai_schemas import AIOutputValidationFailure, AIParsedResult, AIValidationIssue
 from app.services.job_preprocessing import estimate_payload_tokens
 
@@ -703,13 +704,8 @@ def _serialize_ai_output(value: object) -> object:
 
 
 def _safe_snapshot_preview(value: object, *, limit: int = 1600) -> str:
-    try:
-        serialized = json.dumps(value, ensure_ascii=True, sort_keys=True)
-    except TypeError:
-        serialized = json.dumps(_serialize_ai_output(value), ensure_ascii=True, sort_keys=True)
-    if len(serialized) <= limit:
-        return serialized
-    return serialized[:limit].rstrip() + "...<truncated>"
+    summary = summarize_redacted_payload(_serialize_ai_output(value))
+    return summary[:limit]
 
 
 _DSPY_SECTION_RE = re.compile(r"\[\[\s*##\s*(?P<field>[^#]+?)\s*##\s*\]\]", re.IGNORECASE)

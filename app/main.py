@@ -21,6 +21,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.matches import router as matches_router
 from app.core.config import get_settings
 from app.core.logging import bind_request_context, bind_user_context, reset_context, reset_user_context, setup_logging
+from app.core.privacy import redact_email_for_observability, redact_pii
 from app.db.migration_runner import ensure_database_schema
 from app.schemas.error import ErrorResponse
 
@@ -59,7 +60,7 @@ def _capture_exception_with_sentry(request: Request, exc: Exception) -> None:
         user_id = getattr(request.state, "user_id", None)
         user_email = getattr(request.state, "user_email", None)
         if user_id or user_email:
-            scope.user = {"id": user_id, "email": user_email}
+            scope.user = {"id": user_id, "email": redact_email_for_observability(user_email)}
         scope.set_tag("trace_id", getattr(request.state, "trace_id", None))
         scope.set_context(
             "request",
@@ -80,6 +81,7 @@ def _setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         traces_sample_rate=0.1,
+        before_send=lambda event, _hint: redact_pii(event),
     )
 
 

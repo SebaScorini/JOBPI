@@ -2,6 +2,7 @@ import hashlib
 import re
 
 from app.core.config import get_settings
+from app.core.privacy import sanitize_cv_text_for_ai
 
 
 CONTEXT_BUILDER_VERSION = "2026-04-14"
@@ -205,6 +206,7 @@ def build_cv_context(
     library_summary: str | None = None,
     max_chars: int | None = None,
 ) -> str:
+    cv_text = sanitize_cv_text_for_ai(cv_text)
     sections: list[str] = []
     normalized_summary = _normalize_context_line(summary or "")
     normalized_library_summary = _normalize_context_line(library_summary or "")

@@ -212,6 +212,7 @@ export class ApiError extends Error {
     public readonly status?: number,
     public readonly code?: string,
     public readonly details?: Array<{ loc?: Array<string | number>; msg?: string }>,
+    public readonly retryAfter?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -311,6 +312,8 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => null)) as BackendErrorResponse | null;
+  const retryAfterHeader = response.headers.get('Retry-After');
+  const retryAfter = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
 
   if (!response.ok) {
     const code = data?.error?.code;
@@ -321,7 +324,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
       details?.[0]?.msg ||
       `API error: ${response.status} ${response.statusText}`;
     const message = (code && FRIENDLY_ERROR_MESSAGES[code]) || rawMessage;
-    throw new ApiError(message, response.status, code, details);
+    throw new ApiError(message, response.status, code, details, Number.isFinite(retryAfter) ? retryAfter : undefined);
   }
 
   return data as T;

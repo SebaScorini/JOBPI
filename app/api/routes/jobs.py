@@ -198,11 +198,22 @@ def match_job_to_cvs(
 
 @router.post("/{job_id}/compare-cvs", response_model=CVComparisonResponse)
 def compare_cvs_for_job(
+    request: Request,
     job_id: int,
     payload: CVCompareRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVComparisonResponse:
+    settings = get_settings()
+    enforce_rate_limit(
+        request=request,
+        user=current_user,
+        policy=RateLimitPolicy(
+            name="compare_cvs",
+            limit=settings.match_cvs_limit,
+            window_seconds=settings.match_cvs_window_seconds,
+        ),
+    )
     return _get_cv_library_service().compare_cvs_for_job(
         session,
         current_user,
