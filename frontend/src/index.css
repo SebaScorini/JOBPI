@@ -1,23 +1,34 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+html {
+  font-size: 90%;
+}
+
 @layer base {
   body {
-    @apply bg-brand-background text-brand-text antialiased font-sans;
+    @apply bg-brand-background text-brand-text antialiased;
+    font-family: var(--user-font-family, "DM Sans", sans-serif);
   }
 
   body,
   #root {
     min-height: 100vh;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-heading tracking-tight;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply tracking-tight;
+    font-family: var(--user-font-family, "Space Grotesk", sans-serif);
   }
-  
+
   .dark body {
     @apply bg-[#0B0F19] text-slate-200;
   }
@@ -37,32 +48,25 @@
     backdrop-filter: blur(24px) saturate(150%);
     border: 1px solid rgba(255, 255, 255, 0.4);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-    @apply dark:bg-[#151B2B]/70 dark:border-slate-800/70 dark:shadow-[0_8px_32px_rgb(0,0,0,0.3)];
+    @apply dark:bg-[#151B2B]/70 dark:border-slate-800/70 dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)];
   }
-  
+
   .glass-card-solid {
     @apply bg-white/80 border border-slate-200/60 shadow-sm dark:bg-[#151B2B] dark:border-slate-800;
   }
 
   .interactive-card {
-    @apply cursor-pointer border border-transparent 
-           hover:border-brand-primary/50 dark:hover:border-brand-secondary/50 
-           hover:shadow-lg dark:hover:shadow-brand-secondary/10;
+    @apply cursor-pointer border border-transparent hover:border-brand-primary/50 dark:hover:border-brand-secondary/50 hover:shadow-lg dark:hover:shadow-brand-secondary/10;
   }
-  
+
   .btn-primary {
-    @apply w-full rounded-xl bg-brand-cta px-6 py-3 text-sm font-semibold text-white 
-           shadow-[0_4px_6px_rgba(0,0,0,0.1)] 
-           hover:opacity-90 
-           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+    @apply w-full rounded-xl bg-brand-cta px-6 py-3 text-sm font-semibold text-white shadow-[0_4px_6px_rgba(0,0,0,0.1)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
   }
 
   .btn-secondary {
-    @apply w-full rounded-xl bg-transparent border-2 border-brand-primary px-6 py-3 text-sm font-semibold text-brand-primary 
-           hover:bg-brand-primary/10 
-           disabled:opacity-50 disabled:cursor-not-allowed dark:border-brand-secondary dark:text-brand-secondary dark:hover:bg-brand-secondary/10;
+    @apply w-full rounded-xl bg-transparent border-2 border-brand-primary px-6 py-3 text-sm font-semibold text-brand-primary hover:bg-brand-primary/10 disabled:opacity-50 disabled:cursor-not-allowed dark:border-brand-secondary dark:text-brand-secondary dark:hover:bg-brand-secondary/10;
   }
-  
+
   .input-field {
     @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm transition-all focus:border-brand-primary focus:outline-none focus:ring-[3px] focus:ring-brand-primary/20 dark:border-slate-700 dark:bg-[#0B0F19] dark:text-slate-200 dark:focus:border-brand-secondary dark:focus:ring-brand-secondary/20 placeholder:text-slate-400 dark:placeholder:text-slate-500;
   }
@@ -322,6 +326,7 @@
 }
 
 @keyframes floatCore {
+
   0%,
   100% {
     transform: translateY(0px);
@@ -333,6 +338,7 @@
 }
 
 @keyframes drift {
+
   0%,
   100% {
     transform: translate3d(0, 0, 0) scale(1);
@@ -348,25 +354,31 @@
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 10px;
 }
+
 .dark ::-webkit-scrollbar-thumb {
   background: #334155;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
 
 /* Accessibility: respect reduced-motion preferences */
 @media (prefers-reduced-motion: reduce) {
+
   .theme-transition,
   .theme-transition *,
   .theme-transition *::before,

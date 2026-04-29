@@ -20,6 +20,7 @@ import { OnboardingOverlay } from '../OnboardingOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageTransition } from './PageTransition';
 import { useMotionPreferences } from '../../hooks/useMotionPreferences';
+import { AppearanceSettings } from '../AppearanceSettings';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -139,6 +140,7 @@ export function AppLayout() {
           </button>
           
           <div className="flex items-center gap-4 ml-auto">
+            <AppearanceSettings />
             <LanguageSelector
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-brand-primary focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
             />
