@@ -108,62 +108,25 @@ GENERIC_MISSING_SKILL_PHRASES = (
 
 
 class CvFitSignature(dspy.Signature):
-    """Compare CV evidence against job requirements and return deep, high-signal fit guidance.
-
-    Use only information supported by the provided CV excerpt and job excerpt. Prefer explicit
-    matches, specific missing evidence, and concrete improvements over generic career advice.
-    Do not invent experience, inflate fit, or mention irrelevant technologies. Be direct, specific,
-    and useful enough that the candidate can act on the analysis immediately.
-    Do not use generic buzzwords, empty praise, unsupported claims, or assume the role is technical
-    if the posting is not. Do not repeat the prompt, do not summarize the CV broadly, and do not
-    collapse different recommendation types into similar filler.
-    Keep the recommendation lists clearly separated: resume_improvements are CV edits, ats_improvements
-    are wording and keyword alignment, recruiter_improvements are credibility and impact framing,
-    interview_focus are discussion topics, and next_steps are immediate actions after reading the analysis.
-    Avoid reusing the same phrase stem across multiple lists.
-    You have a generous output budget — use it to produce thorough, specific guidance. Fill every
-    section to its maximum count with high-quality, role-specific items. Do not truncate, pad with
-    filler, or stop early. Prioritize filling these sections completely and with real substance:
-    rewritten_bullets first (these must be polished and ready to paste), then resume_improvements,
-    ats_improvements, recruiter_improvements, strengths, and missing_skills. Fill interview_focus
-    and next_steps last but still fully.
+    """Compare CV against job requirements to provide highly actionable, role-specific feedback.
+    Be direct, concrete, and avoid generic filler. Give clear examples and use facts from the CV.
     """
 
-    title: str = dspy.InputField(desc="Job title for role framing")
-    job: str = dspy.InputField(desc="Cleaned, high-signal job description emphasizing requirements, responsibilities, and tools")
-    cv: str = dspy.InputField(desc="Cleaned CV text emphasizing summary, skills, recent experience, and measurable evidence")
-    response_language: str = dspy.InputField(desc="Language for every output field")
+    title: str = dspy.InputField(desc="Job title")
+    job: str = dspy.InputField(desc="Job description")
+    cv: str = dspy.InputField(desc="CV text")
+    response_language: str = dspy.InputField(desc="Language for all outputs")
 
-    fit_summary: str = dspy.OutputField(
-        desc="2-3 substantive sentences (60-120 words total) on overall fit, strongest CV evidence, biggest gap, and what that means for candidacy. Mention at least one specific capability, project type, or measurable outcome evidenced in the CV. Conclude with a clear, honest assessment of competitiveness for this role."
-    )
-    likely_fit_level: str = dspy.OutputField(
-        desc="Exactly one of: Strong, Moderate, Weak. Be conservative if evidence is thin."
-    )
-    rewritten_bullets: list[str] = dspy.OutputField(
-        desc="Exactly 3 rewritten CV bullet examples tailored to this role. Each must be polished and paste-ready: action verb + specific context tied to this job + a concrete, measurable outcome grounded in the CV evidence. These should noticeably improve on what is already in the CV."
-    )
-    resume_improvements: list[str] = dspy.OutputField(
-        desc="Exactly 3 concrete CV-edit actions, each 8-18 words. Focus only on changing bullet content, ordering, or proof in the resume itself. Name the specific bullet, section, or evidence that should change. Do not repeat ATS, recruiter, interview, or next-step guidance."
-    )
-    ats_improvements: list[str] = dspy.OutputField(
-        desc="Exactly 3 ATS-focused actions, each 8-18 words, only about keyword wording, exact terminology from the posting, skills-section coverage, and title/header alignment. Prefer quoting exact posting language where possible. Do not repeat resume or recruiter advice."
-    )
-    recruiter_improvements: list[str] = dspy.OutputField(
-        desc="Exactly 3 recruiter-facing actions, each 8-18 words, only about credibility, specificity, business impact, and narrative strength. Reference the candidate's actual evidence when suggesting how to strengthen framing. Do not repeat ATS or resume-edit advice."
-    )
-    strengths: list[str] = dspy.OutputField(
-        desc="Exactly 4 substantive items, each 8-18 words. Only include role-relevant evidence that is clearly supported by the CV text. Name the specific skill, outcome, or experience. No advice, no missing items, and no restating the summary."
-    )
-    missing_skills: list[str] = dspy.OutputField(
-        desc="Exactly 4 substantive items, each 8-18 words, naming the most important missing skill, missing responsibility, or missing proof point. Each item must name a concrete technology, responsibility, domain, or evidence gap from the role. This section is diagnosis only: no action verbs, no generic filler like 'more experience', and no overlap with resume or ATS improvements."
-    )
-    interview_focus: list[str] = dspy.OutputField(
-        desc="Exactly 3 concrete interview prep topics, each 8-16 words. Describe a specific angle, tradeoff, or scenario the interviewer is likely to probe based on this role's scope and the CV's gaps. Not resume edits or generic advice."
-    )
-    next_steps: list[str] = dspy.OutputField(
-        desc="Exactly 3 immediate next steps, each 8-16 words, for what the candidate should do right after reading this analysis. Sequence them for near-term execution and make each one role-specific and distinct from the resume, ATS, recruiter, and interview lists."
-    )
+    fit_summary: str = dspy.OutputField(desc="2-3 sentences assessing overall fit, biggest strength, and main gap.")
+    likely_fit_level: str = dspy.OutputField(desc="One of: Strong, Moderate, Weak.")
+    rewritten_bullets: list[str] = dspy.OutputField(desc="Return 3 distinct items. Rewritten CV bullet points (paste-ready) incorporating action verbs and metrics from the CV tailored to the job. Avoid 'e.g.' or 'etc.'")
+    resume_improvements: list[str] = dspy.OutputField(desc="Return 3 distinct items. Specific advice to improve CV content and structure. Format as separate bullet points, never a comma-separated sentence.")
+    ats_improvements: list[str] = dspy.OutputField(desc="Return 3 distinct items. Specific keyword and formatting tips to pass ATS scans based on the job description. Format as separate bullet points, never a comma-separated sentence.")
+    recruiter_improvements: list[str] = dspy.OutputField(desc="Return 3 distinct items. Tips to make the CV more appealing to recruiters, focusing on impact. Avoid 'e.g.' or generic fluff.")
+    strengths: list[str] = dspy.OutputField(desc="Return 3-4 distinct items. Role-relevant strengths found in the CV. Format as separate points.")
+    missing_skills: list[str] = dspy.OutputField(desc="Return 3-4 distinct items. Most important missing skills or experiences. Format as separate points.")
+    interview_focus: list[str] = dspy.OutputField(desc="Return 3 distinct items. Likely interview questions or topics to prepare for. Format as separate points.")
+    next_steps: list[str] = dspy.OutputField(desc="Return 3 distinct items. Immediate next actions for the candidate. Format as separate points.")
 
 
 class CvFitModule(dspy.Module):
@@ -369,43 +332,15 @@ def looks_like_fallback_cv_analysis(response: CvAnalysisResponse) -> bool:
 def _refine_cv_analysis_response(response: CvAnalysisResponse) -> CvAnalysisResponse:
     strengths = _dedupe_items(response.strengths, limit=5)
     rewritten_bullets = _dedupe_items(response.rewritten_bullets, limit=4)
-    resume_improvements = _dedupe_items(
-        response.resume_improvements,
-        limit=4,
-        blocked_items=strengths + rewritten_bullets,
-    )
-    ats_improvements = _dedupe_items(
-        response.ats_improvements,
-        limit=4,
-        blocked_items=resume_improvements + rewritten_bullets,
-    )
-    recruiter_improvements = _dedupe_items(
-        response.recruiter_improvements,
-        limit=4,
-        blocked_items=resume_improvements + ats_improvements + rewritten_bullets,
-    )
-    interview_focus = _dedupe_items(
-        response.interview_focus,
-        limit=4,
-        blocked_items=resume_improvements + ats_improvements + recruiter_improvements,
-    )
-    next_steps = _dedupe_items(
-        response.next_steps,
-        limit=4,
-        blocked_items=resume_improvements + ats_improvements + recruiter_improvements + interview_focus,
-    )
+    resume_improvements = _dedupe_items(response.resume_improvements, limit=4)
+    ats_improvements = _dedupe_items(response.ats_improvements, limit=4)
+    recruiter_improvements = _dedupe_items(response.recruiter_improvements, limit=4)
+    interview_focus = _dedupe_items(response.interview_focus, limit=4)
+    next_steps = _dedupe_items(response.next_steps, limit=4)
     missing_skills = _dedupe_items(
         _filter_missing_skill_items(response.missing_skills),
         limit=5,
-        blocked_items=(
-            strengths
-            + rewritten_bullets
-            + resume_improvements
-            + ats_improvements
-            + recruiter_improvements
-            + interview_focus
-            + next_steps
-        ),
+        blocked_items=strengths,
     )
     return response.model_copy(
         update={

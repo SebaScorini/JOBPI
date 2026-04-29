@@ -21,7 +21,7 @@ from app.core.ai import (
 from app.core.config import configure_dspy, get_settings
 from app.db import crud
 from app.models.ai_schemas import JobAnalysisAIOutput
-from app.models import User
+from app.models import JobAnalysis, User
 from app.schemas.job import (
     AIResponseLanguage,
     JobAnalysisPayload,
@@ -30,7 +30,7 @@ from app.schemas.job import (
     JobRead,
     JobStatus,
 )
-from app.services.job_preprocessing import build_job_context, clean_description
+from app.services.job_preprocessing import build_context_fingerprint, build_job_context, clean_description
 from app.services.response_language import language_instruction, normalize_language
 
 
@@ -188,6 +188,17 @@ class JobAnalyzerModule(dspy.Module):
             )
 
 
+def _user_id(user: User) -> int:
+    """Narrow User.id from Optional[int] to int.
+
+    All User objects retrieved from the database have a non-None primary key.
+    This helper documents that invariant and satisfies the type checker without
+    adding any branching overhead at call sites.
+    """
+    assert user.id is not None, "User.id must not be None for a persisted user"
+    return user.id
+
+
 class JobAnalyzerService:
     def __init__(self) -> None:
         settings = get_settings()
@@ -222,16 +233,25 @@ class JobAnalyzerService:
             company=payload.company,
         )
         selected_language = normalize_language(payload.language)
+        stored: JobAnalysis | None = None
         if session is not None and user is not None and not payload.regenerate:
             stored = crud.get_matching_job_analysis(
                 session,
-                user_id=user.id,
+                user_id=_user_id(user),
                 title=payload.title,
                 company=payload.company,
                 clean_description=cleaned_description,
             )
             if stored is not None and _analysis_language(stored.analysis_result) != selected_language:
                 stored = None
+
+            # Return cached analysis immediately — skip AI call entirely
+            if stored is not None and _is_meaningful_stored_analysis(stored.analysis_result):
+                logger.info(
+                    "ai_cache_reuse operation=job_analysis source=db job_id=%s",
+                    stored.id,
+                )
+                return self._serialize_job(stored)
 
         response: JobAnalysisPayload | None = None
         try:
@@ -315,7 +335,7 @@ class JobAnalyzerService:
             if payload.regenerate:
                 stored = crud.get_matching_job_analysis(
                     session,
-                    user_id=user.id,
+                    user_id=_user_id(user),
                     title=payload.title,
                     company=payload.company,
                     clean_description=cleaned_description,
@@ -337,7 +357,7 @@ class JobAnalyzerService:
             else:
                 stored = crud.create_job_analysis(
                     session,
-                    user_id=user.id,
+                    user_id=_user_id(user),
                     title=payload.title,
                     company=payload.company,
                     description=payload.description,
@@ -364,11 +384,11 @@ class JobAnalyzerService:
         offset: int = 0,
         is_saved: bool | None = None,
     ) -> tuple[list[JobRead], int]:
-        jobs, total = crud.get_jobs_for_user(session, user.id, limit=limit, offset=offset, is_saved=is_saved)
+        jobs, total = crud.get_jobs_for_user(session, _user_id(user), limit=limit, offset=offset, is_saved=is_saved)
         return [self._serialize_job(job) for job in jobs], total
 
     def get_job(self, session: Session, user: User, job_id: int) -> JobRead:
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = crud.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
         return self._serialize_job(job)
@@ -403,7 +423,7 @@ class JobAnalyzerService:
         status_value: JobStatus,
         applied_date: datetime | None,
     ) -> JobRead:
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = crud.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
@@ -415,7 +435,7 @@ class JobAnalyzerService:
         return self._serialize_job(updated)
 
     def update_job_notes(self, session: Session, user: User, job_id: int, notes: str | None) -> JobRead:
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = crud.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
@@ -424,7 +444,7 @@ class JobAnalyzerService:
         return self._serialize_job(updated)
 
     def toggle_job_saved(self, session: Session, user: User, job_id: int) -> JobRead:
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = crud.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
@@ -533,10 +553,7 @@ def _normalize_list(value: object) -> list[str]:
             stripped = line.strip()
             if not stripped:
                 continue
-            if "," in stripped and not stripped.startswith("-"):
-                parts.extend(segment.strip(" -") for segment in stripped.split(",") if segment.strip(" -"))
-            else:
-                parts.append(stripped.strip(" -"))
+            parts.append(stripped.strip(" -"))
         items = parts
 
     cleaned: list[str] = []
@@ -687,6 +704,24 @@ def _is_fallback_job_analysis_payload(payload: JobAnalysisPayload) -> bool:
         for item in lowered_items
     )
     return formulaic_hits >= 2
+
+
+
+def _is_meaningful_stored_analysis(analysis_result: dict | None) -> bool:
+    """Check whether a persisted analysis_result dict has enough content to be
+    served from cache (i.e. it was not a fallback/stub)."""
+    if not isinstance(analysis_result, dict):
+        return False
+    summary = analysis_result.get("summary", "")
+    if not isinstance(summary, str) or len(summary.strip()) < 20:
+        return False
+    populated = sum(
+        1
+        for key in ("required_skills", "responsibilities", "how_to_prepare",
+                     "resume_tips", "interview_tips", "learning_path")
+        if isinstance(analysis_result.get(key), list) and analysis_result[key]
+    )
+    return populated >= 4
 
 
 def _is_meaningful_job_analysis_payload(payload: JobAnalysisPayload) -> bool:

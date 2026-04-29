@@ -11,7 +11,6 @@ DEFAULT_JOB_EXCERPT_CHARS = 1800
 DEFAULT_CV_EXCERPT_CHARS = 1800
 # Hard ceilings applied AFTER noise-filtering to prevent silent AI-side
 # truncation, token budget overruns, and latency spikes on long inputs.
-# ~2 500 and ~2 000 tokens respectively — generous but bounded.
 MAX_JOB_CONTEXT_CHARS = 10_000
 MAX_CV_CONTEXT_CHARS = 8_000
 

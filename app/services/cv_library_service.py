@@ -397,6 +397,8 @@ class CvLibraryService:
             regenerate=regenerate,
         )
 
+        result_dict = result.model_dump() if hasattr(result, "model_dump") else {}
+
         if existing_match is None:
             existing_match = crud.create_match(
                 session,
@@ -408,6 +410,7 @@ class CvLibraryService:
                 strengths=result.strengths,
                 missing_skills=result.missing_skills,
                 recommended=False,
+                result=result_dict,
             )
         elif self._match_needs_refresh(existing_match, result):
             existing_match = crud.update_match_analysis(
@@ -417,6 +420,7 @@ class CvLibraryService:
                 fit_summary=result.fit_summary,
                 strengths=result.strengths,
                 missing_skills=result.missing_skills,
+                result=result_dict,
             )
 
         return self._serialize_match_detail(existing_match, result, heuristic_score, language)
@@ -467,7 +471,26 @@ class CvLibraryService:
         existing_match: object | None,
         regenerate: bool = False,
     ) -> CvAnalysisResponse:
-        _ = (existing_match, regenerate)
+        # Return cached result from DB when available and not regenerating
+        if existing_match is not None and not regenerate:
+            cached_result = getattr(existing_match, "result", None)
+            if isinstance(cached_result, dict) and cached_result.get("fit_summary"):
+                logger.info(
+                    "ai_cache_reuse operation=cv_match_analysis source=db user_id=%s job_id=%s cv_id=%s",
+                    user_id,
+                    job_id,
+                    cv_id,
+                )
+                try:
+                    return CvAnalysisResponse(**cached_result)
+                except Exception:
+                    logger.warning(
+                        "ai_cache_invalid operation=cv_match_analysis cv_id=%s job_id=%s",
+                        cv_id,
+                        job_id,
+                        exc_info=True,
+                    )
+
         logger.info(
             "ai_call operation=cv_match_analysis user_id=%s job_id=%s cv_id=%s regenerate=%s",
             user_id,

@@ -8,9 +8,9 @@ from typing import Any, Callable
 
 @dataclass(frozen=True)
 class CircuitBreakerConfig:
-    max_retries: int = 3
-    initial_backoff_ms: int = 100
-    max_backoff_ms: int = 5000
+    max_retries: int = 1
+    initial_backoff_ms: int = 50
+    max_backoff_ms: int = 2000
 
 
 class CircuitBreakerOpenError(RuntimeError):

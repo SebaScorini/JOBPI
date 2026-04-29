@@ -1,28 +1,89 @@
 # JOBPI
 
-JOBPI is an AI-powered job application assistant for analyzing roles, managing a CV library, matching resumes to jobs, generating cover letters, and tracking application progress.
+**JOBPI** is a production-grade AI-powered job application assistant that centralizes and optimizes the job search process. The platform helps users analyze job postings, organize and manage CV libraries, evaluate fit between profiles and positions, generate tailored cover letters, and track application progress—all in a single, unified workflow.
+
+**Status**: Version 1.0 live and operational on Vercel.
 
 ## Overview
 
-The backend is a FastAPI service with SQLModel persistence, Supabase Auth and Storage integration, and DSPy-powered AI workflows through OpenRouter or any OpenAI-compatible provider (including Groq). The frontend is a React + Vite SPA that provides the dashboard, job analysis, CV library, match views, and application tracker.
+The system is architected as a full-stack application with a FastAPI modular backend and a React SPA frontend, both deployed to Vercel. Authentication and file storage are handled by Supabase (Auth + Storage). AI analysis workflows use DSPy with OpenRouter or OpenAI-compatible providers, backed by structured output schemas, quality gates, and response normalization to ensure consistency and reliability.
 
-## Features
+## Core Features
 
-- Supabase-backed sign up, login, password reset, and session handling.
-- Single and batch CV upload with PDF storage and signed download links.
-- CV library management with search, tags, favorites, bulk delete, and bulk tagging.
-- Job analysis with structured AI output, saved jobs, status updates, notes, and soft delete.
-- CV-to-job match analysis, CV comparison, and tailored cover letter generation.
-- Match list and tracker views for reviewing application progress.
-- English and Spanish UI plus matching AI response language.
+**User & Auth**
+- Secure registration, login, password reset, and session management via Supabase Auth.
+- Email-based user lookup with automatic account linking for legacy users.
+- Per-user RLS (Row-Level Security) policies at the database layer for data isolation.
+
+**CV Library**
+- Single and batch PDF upload with secure storage in Supabase Storage buckets.
+- Signed download links for persistent access without exposing storage URLs.
+- CV tagging, favorites, bulk operations (delete, tag), and flexible filtering.
+- Per-CV detail views with summaries and match history.
+
+**Job Analysis**
+- Structured AI analysis with explicit field validation (seniority, role type, required/nice-to-have skills, responsibilities, interview tips, resume improvements, project ideas, learning paths).
+- Intelligent fallback mode when AI analysis fails (pattern-based skill extraction, heuristic role detection).
+- Job caching by context fingerprint to avoid redundant AI calls.
+- Soft-delete support with recovery options.
+- Job status tracking (saved, applied, interviewing, rejected, offer, archived) with applied-date recording.
+
+**Matching & Comparison**
+- CV-to-job fit scoring with actionable gap analysis.
+- CV-to-CV comparison for a single job position (helps select which resume to use).
+- Weighted compatibility scoring based on skill overlap, seniority fit, and role type alignment.
+
+**Cover Letter Generation**
+- AI-generated tailored cover letters using CV + job context.
+- Language support (English & Spanish) with matching AI output.
+- Rate-limited to prevent abuse; regeneration supported.
+
+**Application Tracker**
+- Unified view of all jobs with status, applied date, and notes.
+- Match list showing CV-job pairs with compatibility scores.
+- Soft-delete and recovery for deleted records.
+
+**Multilingual Support**
+- Full English and Spanish UI with matching AI response language.
+- Localized error messages and helper text.
 
 ## Tech Stack
 
-- Backend: FastAPI, SQLModel, Alembic, PostgreSQL, SQLite fallback for development.
-- AI: DSPy, OpenRouter, token clamping, circuit breaker retries, and response normalization.
-- Auth and storage: Supabase Auth, Supabase Storage, legacy JWT bridge support.
-- Frontend: React 18, TypeScript, Vite, React Router, Tailwind CSS, Framer Motion, Supabase JS.
-- Ops: Redis optional for shared rate limiting, Sentry optional for error tracking, Vercel deployment support.
+**Backend**
+- **Framework**: FastAPI with Pydantic V2 for validation and serialization.
+- **ORM & Schema**: SQLModel for type-safe database models; Alembic for migrations.
+- **Database**: PostgreSQL in production, SQLite fallback for development.
+- **Auth**: Supabase Auth (JWT-based sessions) with legacy JWT bridge for backward compatibility.
+- **Storage**: Supabase Storage (private PDF buckets) with signed download URL generation.
+
+**AI & Quality**
+- **Framework**: DSPy for structured AI workflows.
+- **Providers**: OpenRouter with fallback to Groq and OpenAI-compatible endpoints.
+- **Resilience**: Circuit breaker pattern, request-level timeouts, token clamping, and automatic retries.
+- **Output Quality**: Structured Pydantic schemas, response normalization (punctuation cleanup, parenthesis balancing, truncation handling), deduplication, and fallback analysis for AI failures.
+
+**Frontend**
+- **Framework**: React 18 with TypeScript and Vite for fast dev server + production builds.
+- **Routing**: React Router for navigation and lazy-loaded pages.
+- **Styling**: Tailwind CSS v4 with modern design token architecture.
+- **Animations**: Framer Motion for entrance animations and micro-interactions.
+- **API Integration**: Supabase JS client with async token retrieval; native Fetch API.
+- **State Management**: React Context API for auth state and session management.
+
+**Infrastructure & DevOps**
+- **Deployment**: Vercel (both frontend and backend via serverless functions).
+- **Rate Limiting**: Redis (optional) for distributed rate limiting; in-memory fallback for development.
+- **Error Tracking**: Sentry (optional) for production error aggregation and alerting.
+- **Observability**: Structured JSON logging with trace IDs for request correlation.
+
+## Quality Commitment
+
+JOBPI prioritizes **output consistency and reliability** over speed. The system:
+- Uses **strict typed schemas** for all AI outputs to guarantee consistency.
+- Implements **intelligent text normalization** to remove truncation artifacts, dangling abbreviations, and unbalanced punctuation.
+- Employs **deduplication** logic to eliminate redundant items across recommendation lists.
+- Includes **quality gates** (context fingerprints, fallback detection, meaningful-content validation) to avoid storing incomplete or formulaic results.
+- Provides **graceful degradation**: when AI fails, the system serves pattern-based fallback analysis rather than errors or stale data.
 
 ## Setup
 

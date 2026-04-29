@@ -595,6 +595,7 @@ def create_match(
     strengths: list[str],
     missing_skills: list[str],
     recommended: bool = False,
+    result: dict | None = None,
 ) -> CVJobMatch:
     match = CVJobMatch(
         user_id=user_id,
@@ -605,6 +606,7 @@ def create_match(
         strengths=strengths,
         missing_skills=missing_skills,
         recommended=recommended,
+        result=result,
     )
     session.add(match)
     try:
@@ -626,11 +628,14 @@ def update_match_analysis(
     fit_summary: str,
     strengths: list[str],
     missing_skills: list[str],
+    result: dict | None = None,
 ) -> CVJobMatch:
     match.fit_level = fit_level
     match.fit_summary = fit_summary
     match.strengths = strengths
     match.missing_skills = missing_skills
+    if result is not None:
+        match.result = result
     session.add(match)
     session.commit()
     session.refresh(match)

@@ -134,6 +134,7 @@ class CVJobMatch(SQLModel, table=True):
     fit_summary: str = Field(sa_column=Column(Text, nullable=False))
     strengths: list[str] = Field(sa_column=Column(JSON_FIELD, nullable=False))
     missing_skills: list[str] = Field(sa_column=Column(JSON_FIELD, nullable=False))
+    result: dict | None = Field(default=None, sa_column=Column(JSON_FIELD, nullable=True))
     recommended: bool = Field(sa_column=Column(Boolean, nullable=False, default=False), default=False)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),

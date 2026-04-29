@@ -82,3 +82,4 @@ copilot-instructions.md
 tests/fixtures/ai_quality_live/runs/
 tests/fixtures/*.pdf
 tests/fixtures/ai_quality_live/cvs/
+.github/prompts/implementation_plan.md

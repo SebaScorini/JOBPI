@@ -53,8 +53,6 @@ def _normalize_string_list(value: object, *, limit: int) -> list[str]:
                 return []
             if "\n" in text:
                 return [part.strip(" -•\t") for part in text.splitlines() if part.strip(" -•\t")]
-            if ", " in text:
-                return [part.strip(" -•\t") for part in text.split(",") if part.strip(" -•\t")]
             return [text]
         if isinstance(item, (list, tuple, set)):
             flattened: list[str] = []

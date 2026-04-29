@@ -1,24 +1,124 @@
 # CONTEXT
 
-JOBPI is an authenticated AI job application assistant. It helps users analyze job postings, organize CVs, compare fit across multiple resumes, generate cover letters, and track application progress. The backend is a FastAPI modular monolith and the frontend is a React SPA.
+## Project Overview
 
-## Tech Stack
+**JOBPI** is a production-grade AI job application assistant that centralizes the entire job search workflow. Users can upload and organize CVs, analyze job postings, evaluate fit, generate cover letters, and track applications—all with AI-powered insights and a focus on output quality and reliability.
 
-- Backend: FastAPI, SQLModel, Alembic, PostgreSQL in production, SQLite fallback in development.
-- Auth and storage: Supabase Auth, Supabase Storage, legacy JWT bridge support for older sessions.
-- AI: DSPy with OpenRouter models, circuit breaker retries, token clamping, and request-level timeouts.
-- Frontend: React 18, TypeScript, Vite, React Router, Tailwind CSS, Framer Motion, Supabase JS.
-- Infra: Redis optional for distributed rate limiting, Sentry optional for error tracking, Vercel deployment support.
+**Current Status**: Version 1.0 live and operational.
 
-## Core Features
+## Value Proposition
 
-- User registration, login, profile lookup, logout, password reset, and session recovery through Supabase.
-- Single and batch PDF CV upload with Supabase Storage-backed downloads.
-- CV tagging, favorites, bulk delete, bulk tag, list filtering, and per-CV detail views.
-- Job posting analysis with structured AI output, saved state, notes, and application status tracking.
-- CV-to-job matching, CV comparison for a job, and AI-generated cover letters.
-- Match listing and tracker views for application progress.
-- English and Spanish UI plus matching AI response language.
+- **CV Organization**: Upload multiple CVs, tag them, mark favorites, and manage in one place.
+- **Deep Job Analysis**: AI-driven breakdown of roles (seniority, skills, responsibilities, interview prep, learning paths, portfolio ideas).
+- **Smart Matching**: Compare CVs against jobs; identify skill gaps and compatibility scores.
+- **Tailored Outreach**: Generate cover letters customized to both CV and job context.
+- **Application Tracking**: Unified tracker for job statuses, dates applied, and personal notes.
+- **Multi-Language**: Full English and Spanish support with matching AI output.
+
+## Tech Stack Summary
+
+**Backend Architecture**
+- **Framework**: FastAPI with Pydantic V2 for type-safe request/response handling.
+- **Data Layer**: SQLModel (TypeScript-inspired ORM) with Alembic migrations on PostgreSQL (production) or SQLite (dev).
+- **Auth**: Supabase Auth (JWT sessions) + legacy JWT bridge for older users.
+- **Storage**: Supabase Storage (private PDF buckets) with signed URL generation for downloads.
+
+**AI & Quality Systems**
+- **DSPy Framework**: Structured AI workflows with explicit Pydantic output schemas.
+- **Model Providers**: OpenRouter (primary), Groq, OpenAI-compatible endpoints.
+- **Resilience**: Circuit breaker, request-level timeouts, token clamping, automatic retries.
+- **Output Quality**: Response normalization, deduplication, fallback analysis mode, context fingerprinting.
+
+**Frontend Architecture**
+- **Stack**: React 18 + TypeScript + Vite + React Router + Tailwind CSS + Framer Motion.
+- **Auth State**: React Context with Supabase session management.
+- **API Layer**: Fetch API with async token retrieval; Supabase JS client.
+
+**Infrastructure**
+- **Deployment**: Vercel (both frontend and backend serverless).
+- **Rate Limiting**: Redis (distributed, optional) or in-memory (dev).
+- **Observability**: JSON logging with trace IDs, Sentry for error aggregation (optional).
+
+## Core Services
+
+### Authentication & Authorization
+- `app/dependencies/auth.py` - JWT verification, Supabase token validation, user resolution.
+- `app/core/supabase_auth.py` - Token parsing, email-based user lookup, auto-linking for legacy users.
+- **RLS Policies**: Row-level security at the database ensures users can only access their own jobs, CVs, and matches.
+
+### CV Management
+- `app/services/pdf_extractor.py` - PDF text extraction with fallback for scanned documents.
+- `app/services/cv_library_service.py` - CV persistence, tagging, favorites, bulk operations, library summaries.
+- `app/services/supabase_storage.py` - Secure PDF upload, signed download URL generation, storage cleanup.
+
+### Job Analysis
+- `app/services/job_preprocessing.py` - Job description cleaning, context building, token estimation, context fingerprinting.
+- `app/services/job_analyzer.py` - AI analysis generation with structured output schema, fallback mode, caching, soft-delete.
+  - **Structured Output**: Seniority, role type, required skills, nice-to-have skills, responsibilities, interview tips, resume tips, learning path, gaps, project ideas.
+  - **Quality Gates**: Validates content completeness, detects formulaic outputs, filters cached results.
+  - **Response Normalization**: Cleans punctuation, balances parentheses, removes truncation artifacts, deduplicates items.
+
+### Matching & Comparison
+- `app/services/cv_library_service.py` - CV-to-job fit scoring, gap analysis, CV comparison.
+- Weighted scoring based on skill overlap, seniority alignment, role type match.
+
+### Cover Letter Generation
+- `app/services/cover_letter_service.py` - AI-generated tailored cover letters using CV + job context.
+- Language-aware and rate-limited.
+
+### AI & Quality
+- `app/core/ai.py` - Timeout wrapper, circuit breaker, truncation detection, token clamping.
+- `app/models/ai_schemas.py` - Pydantic models for all AI outputs.
+
+### Data Persistence & Soft Deletes
+- `app/db/crud.py` - All CRUD operations filter `deleted_at IS NULL` to support soft-delete recovery.
+- Migrations in `app/db/migrations/` manage schema versioning (Alembic).
+
+## AI Output Quality Strategy
+
+The system prioritizes **consistency, reliability, and signal-heavy recommendations** over brevity:
+
+1. **Strict Schemas**: All AI outputs adhere to explicit Pydantic models with field type validation.
+2. **Response Normalization**: 
+   - Removes unnecessary punctuation, balances parentheses.
+   - Strips dangling abbreviations (e.g., "e.g." at truncation).
+   - Cleans unmatched closing parentheses.
+3. **Deduplication**: Prevents redundant recommendations across lists using semantic signatures.
+4. **Quality Gates**: 
+   - Rejects incomplete or formulaic responses based on heuristic detection.
+   - Requires minimum content thresholds before caching.
+5. **Fallback Mode**: If AI fails, the system provides pattern-based analysis (skill extraction, heuristic seniority/role detection) rather than errors.
+6. **Context Fingerprints**: Caching by content hash avoids re-running identical analyses.
+
+## Known Limitations
+
+- AI output can be generic or repetitive if the provider returns weak content.
+- PDF extraction fails on scanned/image-only PDFs (fallback is manual text entry).
+- Cached results remain stale until user regenerates or input changes.
+- Language limited to English and Spanish.
+- Rate limiting is per-process (in-memory) by default; Redis required for distributed rate limiting.
+
+## Database Schema
+
+**Users** - Authentication + profile (supabase_user_id, email, name, created_at, updated_at, deleted_at).
+**CVs** - Resume storage (user_id, title, content_text, storage_path, is_favorite, tags, created_at, updated_at, deleted_at).
+**Jobs** - Job postings + analysis (user_id, title, company, description, clean_description, analysis_result, status, notes, is_saved, applied_date, created_at, updated_at, deleted_at).
+**JobMatches** - CV-to-job fit (user_id, job_id, cv_id, match_score, gaps, created_at, updated_at, deleted_at).
+
+## Deployment
+
+- **Frontend**: Deployed to Vercel, served from CDN.
+- **Backend**: Deployed to Vercel as serverless functions (`api/index.py`).
+- **Database**: PostgreSQL hosted on Supabase.
+- **Storage**: Supabase Storage buckets for PDFs.
+- **Environment Config**: `.env` for local, `.config/.env.docker` for Docker, Vercel env vars for production.
+
+## Development
+
+- **Backend**: `uvicorn app.main:app --reload` (local) or `make up` (Docker).
+- **Frontend**: `npm run dev` in `/frontend` (Vite dev server on localhost:5173).
+- **Tests**: `pytest tests/` (backend) or `npm run test` (frontend).
+- **Migrations**: `alembic upgrade head` or handled automatically on deployment.
 
 ## Service Map
 

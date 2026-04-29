@@ -1,0 +1,9 @@
+# Pyrefly type-checker configuration
+# https://pyrefly.org/en/stable/configuration/
+
+# Point Pyrefly at the project venv so it resolves third-party packages
+# (dspy, sqlmodel, fastapi, etc.) and the local `app` package correctly.
+python_interpreter = ".venv/Scripts/python.exe"
+
+# Make the repo root a search root so `from app.xxx import ...` resolves.
+search_path = ["."]
