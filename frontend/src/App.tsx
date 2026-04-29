@@ -43,6 +43,9 @@ const JobAnalysisPage = lazy(() =>
 const JobDetailsPage = lazy(() =>
   import('./pages/JobDetailsPage').then((module) => ({ default: module.JobDetailsPage })),
 );
+const InterviewPrepPage = lazy(() =>
+  import('./pages/InterviewPrepPage').then((module) => ({ default: module.InterviewPrepPage })),
+);
 const MatchesPage = lazy(() =>
   import('./pages/MatchesPage').then((module) => ({ default: module.MatchesPage })),
 );
@@ -62,6 +65,9 @@ function getRouteTitle(pathname: string): string {
   if (pathname === '/login') return `Login | ${SITE_NAME}`;
   if (pathname === '/register') return `Register | ${SITE_NAME}`;
   if (pathname === '/jobs') return `Jobs | ${SITE_NAME}`;
+  if (pathname.startsWith('/jobs/') && pathname.endsWith('/interview')) {
+    return `Interview Prep | ${SITE_NAME}`;
+  }
   if (pathname.startsWith('/jobs/')) {
     const jobId = pathname.split('/').filter(Boolean).pop();
     return jobId ? `Job ${jobId} | ${SITE_NAME}` : `Job Details | ${SITE_NAME}`;
@@ -69,6 +75,7 @@ function getRouteTitle(pathname: string): string {
   if (pathname === '/forgot-password') return `Forgot Password | ${SITE_NAME}`;
   if (pathname === '/reset-password') return `Reset Password | ${SITE_NAME}`;
   if (pathname === '/matches') return `Matches | ${SITE_NAME}`;
+  if (pathname === '/interviews') return `Interview Simulator | ${SITE_NAME}`;
   return DEFAULT_TITLE;
 }
 
@@ -230,6 +237,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/jobs/:jobId/interview"
+            element={
+              <LazyRoute variant="app">
+                <InterviewPrepPage />
+              </LazyRoute>
+            }
+          />
+          <Route
             path="/library"
             element={
               <LazyRoute variant="app">
@@ -250,6 +265,14 @@ function AppRouter() {
             element={
               <LazyRoute variant="app">
                 <TrackerPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/interviews"
+            element={
+              <LazyRoute variant="app">
+                <InterviewPrepPage />
               </LazyRoute>
             }
           />

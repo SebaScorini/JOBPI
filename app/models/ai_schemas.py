@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import re
 from typing import Generic, TypeVar
 
@@ -53,6 +54,10 @@ def _normalize_string_list(value: object, *, limit: int) -> list[str]:
                 return []
             if "\n" in text:
                 return [part.strip(" -•\t") for part in text.splitlines() if part.strip(" -•\t")]
+            if "," in text:
+                parts = [part.strip(" -•\t") for part in text.split(",") if part.strip(" -•\t")]
+                if len(parts) > 1:
+                    return parts
             return [text]
         if isinstance(item, (list, tuple, set)):
             flattened: list[str] = []
@@ -332,3 +337,199 @@ class CvLibrarySummaryAIOutput(BaseModel):
         if "summary" in normalized:
             normalized["summary"] = _normalize_short_text(normalized["summary"], limit=300)
         return normalized
+
+
+class InterviewQuestionItem(BaseModel):
+    model_config = StrictModelConfig
+
+    question: str = Field(min_length=1, max_length=500)
+    category: str = Field(min_length=1, max_length=40)
+    difficulty: str = Field(min_length=1, max_length=20)
+    rationale: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_question(cls, value: object) -> object:
+        if isinstance(value, str):
+            parsed = _parse_interview_question_string(value)
+            if parsed is not None:
+                return parsed
+            return {
+                "question": _normalize_short_text(value, limit=500),
+                "category": "behavioral",
+                "difficulty": "medium",
+                "rationale": "Assessed from the job and CV context.",
+            }
+        if not isinstance(value, dict):
+            return value
+
+        normalized = dict(value)
+        if "question" in normalized:
+            normalized["question"] = _normalize_short_text(normalized["question"], limit=500)
+        if "category" in normalized:
+            normalized["category"] = _normalize_interview_category(normalized["category"])
+        if "difficulty" in normalized:
+            normalized["difficulty"] = _normalize_interview_difficulty(normalized["difficulty"])
+        if "rationale" in normalized:
+            normalized["rationale"] = _normalize_short_text(normalized["rationale"], limit=500)
+        return normalized
+
+
+class InterviewQuestionsAIOutput(BaseModel):
+    model_config = StrictModelConfig
+
+    questions: list[InterviewQuestionItem] = Field(default_factory=list, min_length=5, max_length=7)
+    focus_areas: list[str] = Field(default_factory=list, min_length=2, max_length=5)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_questions(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "questions" in normalized:
+            normalized["questions"] = _normalize_interview_question_items(normalized["questions"])
+        if "focus_areas" in normalized:
+            normalized["focus_areas"] = _normalize_string_list(normalized["focus_areas"], limit=5)
+        return normalized
+
+
+class InterviewEvaluationAIOutput(BaseModel):
+    model_config = StrictModelConfig
+
+    score: int = Field(ge=1, le=10)
+    feedback: str = Field(min_length=1, max_length=1200)
+    ideal_answer: str = Field(min_length=1, max_length=1500)
+    improvement_tips: list[str] = Field(default_factory=list, min_length=2, max_length=3)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_evaluation(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "score" in normalized:
+            normalized["score"] = _normalize_interview_score(normalized["score"])
+        if "feedback" in normalized:
+            normalized["feedback"] = _normalize_short_text(normalized["feedback"], limit=1200)
+        if "ideal_answer" in normalized:
+            normalized["ideal_answer"] = _normalize_short_text(normalized["ideal_answer"], limit=1500)
+        if "improvement_tips" in normalized:
+            normalized["improvement_tips"] = _normalize_string_list(normalized["improvement_tips"], limit=3)
+        return normalized
+
+
+def _normalize_interview_question_items(value: object) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    if isinstance(value, str):
+        value = [value]
+
+    if not isinstance(value, list):
+        return items
+
+    for item in value:
+        parsed = _coerce_interview_question_item(item)
+        if parsed is None:
+            continue
+        normalized_question = parsed.get("question", "")
+        if not normalized_question:
+            continue
+        key = normalized_question.lower().strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(parsed)
+        if len(items) >= 7:
+            break
+    return items
+
+
+def _coerce_interview_question_item(item: object) -> dict[str, str] | None:
+    if isinstance(item, InterviewQuestionItem):
+        return item.model_dump()
+    if isinstance(item, dict):
+        return {
+            "question": _normalize_short_text(item.get("question", ""), limit=500),
+            "category": _normalize_interview_category(item.get("category", "behavioral")),
+            "difficulty": _normalize_interview_difficulty(item.get("difficulty", "medium")),
+            "rationale": _normalize_short_text(item.get("rationale", ""), limit=500),
+        }
+    if not isinstance(item, str):
+        return None
+
+    parsed = _parse_interview_question_string(item)
+    if parsed is not None:
+        return parsed
+    return {
+        "question": _normalize_short_text(item, limit=500),
+        "category": "behavioral",
+        "difficulty": "medium",
+        "rationale": "Assessed from the job and CV context.",
+    }
+
+
+def _parse_interview_question_string(value: str) -> dict[str, str] | None:
+    text = value.strip()
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return _coerce_interview_question_item(parsed)
+    if "|" in text:
+        parts = [part.strip() for part in text.split("|")]
+        if len(parts) >= 4:
+            return {
+                "question": _normalize_short_text(parts[0], limit=500),
+                "category": _normalize_interview_category(parts[1]),
+                "difficulty": _normalize_interview_difficulty(parts[2]),
+                "rationale": _normalize_short_text(" | ".join(parts[3:]), limit=500),
+            }
+    return None
+
+
+def _normalize_interview_category(value: object) -> str:
+    text = _normalize_ai_text(value)
+    lowered = text.lower()
+    if any(token in lowered for token in ("technical", "system design", "coding", "debug", "architecture")):
+        return "technical"
+    if any(token in lowered for token in ("situational", "scenario", "case", "problem solving")):
+        return "situational"
+    if any(token in lowered for token in ("culture", "fit", "values", "team", "collaboration")):
+        return "culture_fit"
+    if lowered in {"behavioral", "behavioural"} or not lowered:
+        return "behavioral"
+    return "behavioral"
+
+
+def _normalize_interview_difficulty(value: object) -> str:
+    text = _normalize_ai_text(value)
+    lowered = text.lower()
+    if any(token in lowered for token in ("hard", "senior", "advanced")):
+        return "hard"
+    if any(token in lowered for token in ("easy", "basic", "simple", "junior")):
+        return "easy"
+    if lowered == "medium" or not lowered:
+        return "medium"
+    return "medium"
+
+
+def _normalize_interview_score(value: object) -> int:
+    try:
+        if value is None:
+            return 1
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+        elif isinstance(value, str):
+            numeric = float(value)
+        else:
+            return 1
+        score = int(numeric)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, min(10, score))

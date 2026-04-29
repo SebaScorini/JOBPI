@@ -38,6 +38,7 @@ export function AppLayout() {
     { to: '/jobs', icon: Briefcase, label: t('nav.jobAnalysis') },
     { to: '/library', icon: FileText, label: t('nav.cvLibrary') },
     { to: '/tracker', icon: ClipboardList, label: t('nav.tracker') },
+    { to: '/interviews', icon: ClipboardList, label: t('interviewPrep.title', { defaultValue: 'Interview Simulator' }) },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
@@ -162,3 +163,4 @@ export function AppLayout() {
     </div>
   );
 }
+

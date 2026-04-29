@@ -122,7 +122,9 @@ export function JobDetailsMatchPanel({
                   {t('jobDetails.matchResults')}
                 </span>
                 <span className={`improvement-panel-badge improvement-panel-badge-muted ${matchLevelTextClasses[matchResult.match_level]}`}>
-                  {t('jobDetails.matchLevelLabel', { level: matchResult.match_level })}
+                  {t('jobDetails.matchLevelLabel', { 
+                    level: t(`jobDetails.matchLevel${matchResult.match_level.charAt(0).toUpperCase()}${matchResult.match_level.slice(1)}`) 
+                  })}
                 </span>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">

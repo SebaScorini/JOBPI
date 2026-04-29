@@ -265,7 +265,7 @@ export function JobDetailsPage() {
       const updated = await apiService.updateJobStatus(Number(jobId), status, payloadDate);
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
-      showToast('Job status updated.', 'success');
+      showToast(t('jobDetails.statusUpdated'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedStatus');
       setError(message);
@@ -283,7 +283,7 @@ export function JobDetailsPage() {
       const updated = await apiService.updateJobNotes(Number(jobId), notesDraft.trim() || null);
       setJob(updated);
       setNotesDraft(updated.notes ?? '');
-      showToast('Notes saved.', 'success');
+      showToast(t('jobDetails.notesSaved'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedNotes');
       setError(message);
@@ -304,7 +304,7 @@ export function JobDetailsPage() {
       const result = await apiService.generateCoverLetter(parseInt(jobId), Number(selectedCvId), aiLanguage);
       setCoverLetter(result.generated_cover_letter);
       setActiveTab('cover');
-      showToast('Cover letter generated.', 'success');
+      showToast(t('jobDetails.coverLetterGenerated'), 'success');
     } catch (err: any) {
       const message = err.message || t('jobDetails.failedCoverLetter');
       setError(message);
@@ -343,7 +343,7 @@ export function JobDetailsPage() {
     setError(null);
     try {
       await apiService.deleteJob(Number(jobId));
-      showToast('Job deleted.', 'success');
+      showToast(t('jobDetails.jobDeleted'), 'success');
       navigate('/jobs');
     } catch (err: any) {
       const message = err.message || t('jobs.failedDelete');
@@ -452,6 +452,7 @@ export function JobDetailsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+
                 <button
                   type="button"
                   onClick={handleToggleSaved}
@@ -645,7 +646,7 @@ export function JobDetailsPage() {
 
         <aside className="sticky top-[84px] hidden h-fit gap-4 xl:flex xl:flex-col">
           <div className="glass-card rounded-2xl p-4">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Insights</h3>
+            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">{t('jobDetails.insights')}</h3>
             <div className="space-y-3 text-sm">
               <div className="rounded-xl bg-slate-100 px-3 py-2 dark:bg-slate-800">
                 <p className="mb-1 text-xs uppercase tracking-wider text-slate-500">{t('jobDetails.recommendedCv')}</p>
@@ -654,7 +655,9 @@ export function JobDetailsPage() {
               <div className="rounded-xl bg-slate-100 px-3 py-2 dark:bg-slate-800">
                 <p className="mb-1 text-xs uppercase tracking-wider text-slate-500">{t('jobDetails.matchLevel')}</p>
                 <p className={`font-semibold ${matchResult ? matchLevelTextClasses[matchResult.match_level] : 'text-slate-500'}`}>
-                  {matchResult ? matchResult.match_level : '--'}
+                  {matchResult ? 
+                    t(`jobDetails.matchLevel${matchResult.match_level.charAt(0).toUpperCase()}${matchResult.match_level.slice(1)}`) : 
+                    '--'}
                 </p>
               </div>
             </div>

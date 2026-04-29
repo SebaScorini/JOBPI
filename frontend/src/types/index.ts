@@ -21,6 +21,8 @@ export interface JobAnalysisRequest {
 }
 
 export type JobApplicationStatus = 'saved' | 'applied' | 'interview' | 'rejected' | 'offer';
+export type InterviewSessionType = 'mixed' | 'behavioral' | 'technical';
+export type InterviewSessionStatus = 'in_progress' | 'completed';
 
 export interface JobAnalysisResponse {
   id: number;
@@ -130,4 +132,73 @@ export interface Recommendation {
   };
   score: number;
   matches: RecommendationMatch[];
+}
+
+export interface InterviewQuestion {
+  index: number;
+  question: string;
+  category: string;
+  difficulty: string;
+  rationale: string;
+}
+
+export interface InterviewAnswer {
+  question_index: number;
+  answer_text: string;
+  answered_at: string;
+}
+
+export interface InterviewEvaluation {
+  question_index: number;
+  score: number;
+  feedback: string;
+  ideal_answer: string;
+  improvement_tips: string[];
+  evaluated_at: string;
+}
+
+export interface InterviewSessionSummary {
+  focus_areas: string[];
+  overall_score: number | null;
+  strong_areas: string[];
+  weak_areas: string[];
+  next_steps: string[];
+}
+
+export interface InterviewSession {
+  id: number;
+  user_id: number;
+  job_id: number;
+  cv_id: number;
+  session_type: InterviewSessionType;
+  language: AIResponseLanguage;
+  status: InterviewSessionStatus;
+  questions: InterviewQuestion[];
+  answers: InterviewAnswer[];
+  evaluations: InterviewEvaluation[];
+  summary: InterviewSessionSummary | null;
+  current_question_index: number;
+  next_question_index: number | null;
+  is_complete: boolean;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface InterviewSessionCreate {
+  cv_id: number;
+  session_type: InterviewSessionType;
+  language: AIResponseLanguage;
+}
+
+export interface InterviewAnswerSubmit {
+  question_index: number;
+  answer_text: string;
+}
+
+export interface InterviewFeedback extends InterviewEvaluation {
+  session_id: number;
+  answer_text: string;
+  is_complete: boolean;
+  next_question_index: number | null;
+  summary: InterviewSessionSummary | null;
 }

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime, Float, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -152,3 +152,42 @@ class CVJobMatch(SQLModel, table=True):
     user: Optional[User] = Relationship(back_populates="matches")
     cv: Optional[CV] = Relationship(back_populates="matches")
     job: Optional[JobAnalysis] = Relationship(back_populates="matches")
+
+
+class InterviewSession(SQLModel, table=True):
+    __tablename__ = "interview_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "session_type IN ('mixed', 'behavioral', 'technical')",
+            name="ck_interview_sessions_session_type_valid",
+        ),
+        CheckConstraint(
+            "status IN ('in_progress', 'completed')",
+            name="ck_interview_sessions_status_valid",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, nullable=False)
+    job_id: int = Field(foreign_key="job_analyses.id", index=True, nullable=False)
+    cv_id: int = Field(foreign_key="cvs.id", index=True, nullable=False)
+    session_type: str = Field(sa_column=Column(String(30), nullable=False, default="mixed"), default="mixed")
+    questions: list[dict] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
+    answers: list[dict] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
+    evaluations: list[dict] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
+    overall_score: Optional[float] = Field(default=None, sa_column=Column(Float, nullable=True))
+    summary: Optional[dict] = Field(default=None, sa_column=Column(JSON_FIELD, nullable=True))
+    status: str = Field(sa_column=Column(String(20), nullable=False, default="in_progress"), default="in_progress")
+    language: str = Field(sa_column=Column(String(20), nullable=False, default="english"), default="english")
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
+        default_factory=utc_now,
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=True, default=utc_now, onupdate=utc_now),
+        default_factory=utc_now,
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )

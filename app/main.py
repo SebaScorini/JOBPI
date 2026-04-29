@@ -17,6 +17,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional in local environments
 
 from app.api.routes.auth import router as auth_router
 from app.api.routes.cvs import router as cvs_router
+from app.api.routes.interviews import router as interviews_router
 from app.api.routes.jobs import router as jobs_router
 from app.api.routes.matches import router as matches_router
 from app.core.config import get_settings
@@ -254,6 +255,7 @@ def create_app() -> FastAPI:
 
     application.include_router(auth_router)
     application.include_router(cvs_router)
+    application.include_router(interviews_router)
     application.include_router(jobs_router)
     application.include_router(matches_router)
 

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import load_only
 from sqlmodel import Session, select
 
-from app.models import CV, CVJobMatch, JobAnalysis, User
+from app.models import CV, CVJobMatch, InterviewSession, JobAnalysis, User
 from app.services.supabase_storage import SupabaseStorageError, get_supabase_storage_service
 
 
@@ -728,3 +728,109 @@ def get_matches_for_job(session: Session, user_id: int, job_id: int) -> list[CVJ
         CVJobMatch.deleted_at.is_(None),
     )
     return list(session.exec(statement).all())
+
+
+def create_interview_session(
+    session: Session,
+    user_id: int,
+    job_id: int,
+    cv_id: int,
+    session_type: str,
+    language: str,
+    questions: list[dict],
+    summary: dict | None = None,
+) -> InterviewSession:
+    interview_session = InterviewSession(
+        user_id=user_id,
+        job_id=job_id,
+        cv_id=cv_id,
+        session_type=session_type,
+        questions=questions,
+        answers=[],
+        evaluations=[],
+        overall_score=None,
+        summary=summary,
+        status="in_progress",
+        language=language,
+    )
+    session.add(interview_session)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
+    session.refresh(interview_session)
+    return interview_session
+
+
+def get_interview_session_for_user(session: Session, user_id: int, session_id: int) -> InterviewSession | None:
+    statement = select(InterviewSession).where(
+        InterviewSession.id == session_id,
+        InterviewSession.user_id == user_id,
+        InterviewSession.deleted_at.is_(None),
+    )
+    return session.exec(statement).first()
+
+
+def get_interview_sessions_for_user(
+    session: Session,
+    user_id: int,
+    *,
+    job_id: int | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[InterviewSession], int]:
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    count_statement = select(func.count()).select_from(InterviewSession).where(
+        InterviewSession.user_id == user_id,
+        InterviewSession.deleted_at.is_(None),
+    )
+    statement = select(InterviewSession).where(
+        InterviewSession.user_id == user_id,
+        InterviewSession.deleted_at.is_(None),
+    )
+    if job_id is not None:
+        count_statement = count_statement.where(InterviewSession.job_id == job_id)
+        statement = statement.where(InterviewSession.job_id == job_id)
+    total = int(session.exec(count_statement).one())
+    items = list(session.exec(statement.order_by(InterviewSession.created_at.desc()).offset(offset).limit(limit)).all())
+    return items, total
+
+
+def update_interview_session_answers(session: Session, interview_session: InterviewSession, answers: list[dict]) -> InterviewSession:
+    interview_session.answers = answers
+    session.add(interview_session)
+    session.commit()
+    session.refresh(interview_session)
+    return interview_session
+
+
+def update_interview_session_evaluations(
+    session: Session,
+    interview_session: InterviewSession,
+    evaluations: list[dict],
+) -> InterviewSession:
+    interview_session.evaluations = evaluations
+    session.add(interview_session)
+    session.commit()
+    session.refresh(interview_session)
+    return interview_session
+
+
+def update_interview_session_summary(
+    session: Session,
+    interview_session: InterviewSession,
+    summary: dict | None,
+    *,
+    overall_score: float | None = None,
+    status: str | None = None,
+) -> InterviewSession:
+    interview_session.summary = summary
+    interview_session.overall_score = overall_score
+    if status is not None:
+        interview_session.status = status
+    session.add(interview_session)
+    session.commit()
+    session.refresh(interview_session)
+    return interview_session

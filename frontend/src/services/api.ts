@@ -4,6 +4,10 @@ import {
   CVComparisonResult,
   CVJobMatch,
   CvAnalysisResponse,
+  InterviewAnswerSubmit,
+  InterviewFeedback,
+  InterviewSession,
+  InterviewSessionCreate,
   JobApplicationStatus,
   JobAnalysisRequest,
   JobAnalysisResponse,
@@ -569,6 +573,36 @@ export const apiService = {
   async getJob(jobId: number): Promise<JobAnalysisResponse> {
     const job = await request<BackendJobRead>(`/jobs/${jobId}`, { auth: true });
     return mapJob(job);
+  },
+
+  async listInterviewSessions(jobId: number): Promise<InterviewSession[]> {
+    return await request<InterviewSession[]>(`/jobs/${jobId}/interview`, { auth: true });
+  },
+
+  async getInterviewSession(jobId: number, sessionId: number): Promise<InterviewSession> {
+    return await request<InterviewSession>(`/jobs/${jobId}/interview/${sessionId}`, { auth: true });
+  },
+
+  async startInterviewSession(jobId: number, payload: InterviewSessionCreate): Promise<InterviewSession> {
+    return await request<InterviewSession>(`/jobs/${jobId}/interview/start`, {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async submitInterviewAnswer(
+    jobId: number,
+    sessionId: number,
+    payload: InterviewAnswerSubmit,
+  ): Promise<InterviewFeedback> {
+    return await request<InterviewFeedback>(`/jobs/${jobId}/interview/${sessionId}/answer`, {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
   },
 
   async toggleSavedJob(jobId: number): Promise<JobAnalysisResponse> {
