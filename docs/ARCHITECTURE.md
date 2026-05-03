@@ -8,7 +8,7 @@ JOBPI is a modular monolith with a React SPA on the client, a FastAPI backend on
 | --- | --- |
 | `frontend/` | React SPA, auth/session handling, routing, page transitions, and API calls. |
 | `app/main.py` | FastAPI application setup, CORS, request logging, error shaping, health check. |
-| `app/api/routes/` | HTTP endpoints for auth, CVs, jobs, and matches. |
+| `app/api/routes/` | HTTP endpoints for auth, CVs, jobs, interviews, and matches. |
 | `app/services/` | PDF extraction, preprocessing, job analysis, CV analysis, summaries, matches, cover letters, storage integration. |
 | `app/db/` | SQLModel CRUD, session handling, and migrations. |
 | `app/core/` | Settings, AI execution, rate limiting, auth verification, logging, runtime setup. |
@@ -24,6 +24,7 @@ The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI ap
 - `app/api/routes/auth.py` exposes `/auth/register`, `/auth/login`, and `/auth/me`.
 - `app/api/routes/cvs.py` exposes upload, batch upload, list, detail, download, tag, favorite, bulk delete, and bulk tag flows.
 - `app/api/routes/jobs.py` exposes job analysis, list, detail, delete, status updates, notes, saved toggles, match generation, compare flows, and cover letter generation.
+- `app/api/routes/interviews.py` exposes interview session start, answer submission, and session retrieval/listing per job.
 - `app/api/routes/matches.py` exposes match listing and match detail.
 - `app/models/entities.py` contains the SQLModel tables for users, CVs, job analyses, and CV-job matches.
 - `app/db/crud.py` owns persistence logic, soft deletes, deduplication helpers, and storage cleanup.
@@ -79,6 +80,13 @@ The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI ap
 - `POST /jobs/{job_id}/compare-cvs`
 - `POST /jobs/{job_id}/cover-letter`
 
+### Interviews
+
+- `GET /jobs/{job_id}/interview`
+- `GET /jobs/{job_id}/interview/{session_id}`
+- `POST /jobs/{job_id}/interview/start`
+- `POST /jobs/{job_id}/interview/{session_id}/answer`
+
 ### Matches
 
 - `GET /matches`
@@ -111,6 +119,13 @@ The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI ap
 2. `cv_library_service.py` loads the job and selected CVs, reuses valid cached results where possible, and computes a heuristic score for match ordering.
 3. `cv_analyzer.py` produces the structured fit analysis used by match and comparison views.
 4. `cover_letter_service.py` generates a short cover letter, normalizes it, and persists the result on the job row.
+
+### Interview Session Flow
+
+1. The frontend opens Interview Simulator and selects a job, CV, session type, and output language.
+2. `POST /jobs/{job_id}/interview/start` creates a new session with generated questions and initial progress markers.
+3. The user can load existing sessions via `GET /jobs/{job_id}/interview` and `GET /jobs/{job_id}/interview/{session_id}`.
+4. Each answer is submitted to `POST /jobs/{job_id}/interview/{session_id}/answer`, which stores evaluation feedback and updates `next_question_index` and completion status.
 
 ## Service Interactions
 

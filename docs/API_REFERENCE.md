@@ -1,6 +1,6 @@
 # API REFERENCE
 
-Backend base resources: `/auth`, `/cvs`, `/jobs`, `/matches`, `/health`.
+Backend base resources: `/auth`, `/cvs`, `/jobs`, `/jobs/{job_id}/interview`, `/matches`, `/health`.
 
 Authentication is required for all endpoints except `/auth/register`, `/auth/login`, and `/health`.
 
@@ -788,6 +788,192 @@ Example response:
 ```json
 {
   "generated_cover_letter": "Dear Hiring Team, ..."
+}
+```
+
+## Interview Endpoints
+
+### Start Interview Session
+
+- Method: `POST`
+- Route: `/jobs/{job_id}/interview/start`
+- Description: Create a new interview prep session for a specific job and CV.
+- Auth required: Yes
+
+Example request:
+
+```json
+{
+  "cv_id": 10,
+  "session_type": "mixed",
+  "language": "english"
+}
+```
+
+Example response:
+
+```json
+{
+  "id": 301,
+  "user_id": 1,
+  "job_id": 20,
+  "cv_id": 10,
+  "session_type": "mixed",
+  "language": "english",
+  "status": "in_progress",
+  "questions": [
+    {
+      "index": 0,
+      "question": "Tell me about a time you improved API reliability.",
+      "category": "technical",
+      "difficulty": "medium",
+      "rationale": "Evaluates production debugging and reliability ownership."
+    }
+  ],
+  "answers": [],
+  "evaluations": [],
+  "summary": null,
+  "current_question_index": 0,
+  "next_question_index": 0,
+  "is_complete": false,
+  "created_at": "2026-04-30T12:00:00Z",
+  "updated_at": null
+}
+```
+
+### List Interview Sessions
+
+- Method: `GET`
+- Route: `/jobs/{job_id}/interview`
+- Description: List all interview sessions for one job and the authenticated user.
+- Auth required: Yes
+
+Example request:
+
+```text
+GET /jobs/20/interview
+Authorization: Bearer <token>
+```
+
+Example response:
+
+```json
+[
+  {
+    "id": 301,
+    "user_id": 1,
+    "job_id": 20,
+    "cv_id": 10,
+    "session_type": "mixed",
+    "language": "english",
+    "status": "in_progress",
+    "questions": [],
+    "answers": [],
+    "evaluations": [],
+    "summary": null,
+    "current_question_index": 0,
+    "next_question_index": 0,
+    "is_complete": false,
+    "created_at": "2026-04-30T12:00:00Z",
+    "updated_at": null
+  }
+]
+```
+
+### Get Interview Session Detail
+
+- Method: `GET`
+- Route: `/jobs/{job_id}/interview/{session_id}`
+- Description: Return one interview session with questions, submitted answers, and evaluations.
+- Auth required: Yes
+
+Example request:
+
+```text
+GET /jobs/20/interview/301
+Authorization: Bearer <token>
+```
+
+Example response:
+
+```json
+{
+  "id": 301,
+  "user_id": 1,
+  "job_id": 20,
+  "cv_id": 10,
+  "session_type": "mixed",
+  "language": "english",
+  "status": "in_progress",
+  "questions": [
+    {
+      "index": 0,
+      "question": "Tell me about a time you improved API reliability.",
+      "category": "technical",
+      "difficulty": "medium",
+      "rationale": "Evaluates production debugging and reliability ownership."
+    }
+  ],
+  "answers": [
+    {
+      "question_index": 0,
+      "answer_text": "I reduced API error rates by introducing retries and observability.",
+      "answered_at": "2026-04-30T12:05:00Z"
+    }
+  ],
+  "evaluations": [
+    {
+      "question_index": 0,
+      "score": 86,
+      "feedback": "Good structure, add more measurable impact.",
+      "ideal_answer": "A concise STAR answer with quantified impact.",
+      "improvement_tips": ["Add concrete metrics"],
+      "evaluated_at": "2026-04-30T12:05:10Z"
+    }
+  ],
+  "summary": null,
+  "current_question_index": 0,
+  "next_question_index": 1,
+  "is_complete": false,
+  "created_at": "2026-04-30T12:00:00Z",
+  "updated_at": "2026-04-30T12:05:10Z"
+}
+```
+
+### Submit Interview Answer
+
+- Method: `POST`
+- Route: `/jobs/{job_id}/interview/{session_id}/answer`
+- Description: Submit and evaluate one answer in an interview session.
+- Auth required: Yes
+
+Example request:
+
+```json
+{
+  "question_index": 0,
+  "answer_text": "In my previous role, I led an API reliability initiative..."
+}
+```
+
+Example response:
+
+```json
+{
+  "question_index": 0,
+  "score": 86,
+  "feedback": "Strong STAR structure. Add business impact metrics.",
+  "ideal_answer": "A focused STAR response with quantified outcomes and reflection.",
+  "improvement_tips": [
+    "Add one metric tied to latency or error-rate reduction.",
+    "Connect the action to job requirements."
+  ],
+  "evaluated_at": "2026-04-30T12:05:10Z",
+  "session_id": 301,
+  "answer_text": "In my previous role, I led an API reliability initiative...",
+  "is_complete": false,
+  "next_question_index": 1,
+  "summary": null
 }
 ```
 

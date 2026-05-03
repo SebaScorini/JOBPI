@@ -26,13 +26,13 @@ JOBPI/
 `app/` contains the production backend code.
 
 - `app/main.py`: FastAPI app creation, middleware, exception handling, startup lifecycle
-- `app/api/routes/`: HTTP routes for auth, CVs, jobs, and matches
+- `app/api/routes/`: HTTP routes for auth, CVs, jobs, interviews, and matches
 - `app/core/`: settings, logging, security, validation, AI helpers, and rate limiting
 - `app/db/`: engine setup, CRUD helpers, migration runner, and Alembic migrations
 - `app/dependencies/`: FastAPI dependencies such as current-user resolution
 - `app/models/`: SQLModel entities
 - `app/schemas/`: request and response models
-- `app/services/`: business workflows for uploads, analysis, matching, and cover letters
+- `app/services/`: business workflows for uploads, analysis, interview prep, matching, and cover letters
 
 ## Frontend
 

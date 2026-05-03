@@ -45,13 +45,28 @@ function buildStarGuide(question: InterviewQuestion, job: JobAnalysisResponse | 
   const coreSkills = job?.required_skills?.slice(0, 3) ?? [];
   const skillHint = coreSkills.length ? coreSkills.join(', ') : t('interviewPrep.coreSkillsFromRole');
   const roleHint = job?.title || job?.role_type || t('interviewPrep.theRole');
+  const category = question.category ? question.category.toLowerCase() : '';
 
-  return {
-    situation: t('interviewPrep.starSituationDesc', { roleHint }),
-    task: t('interviewPrep.starTaskDesc'),
-    action: t('interviewPrep.starActionDesc', { skillHint }),
-    result: t('interviewPrep.starResultDesc'),
-  };
+  // Base guide
+  let situation = t('interviewPrep.starSituationDesc', { roleHint });
+  let task = t('interviewPrep.starTaskDesc');
+  let action = t('interviewPrep.starActionDesc', { skillHint });
+  let result = t('interviewPrep.starResultDesc');
+
+  // Personalize based on question category
+  if (category.includes('leadership') || category.includes('conflict') || category.includes('team')) {
+    action = t('interviewPrep.starLeadershipAction');
+    result = t('interviewPrep.starLeadershipResult');
+  } else if (category.includes('technical') || category.includes('problem') || category.includes('system')) {
+    action = t('interviewPrep.starTechnicalAction');
+    result = t('interviewPrep.starTechnicalResult');
+  } else if (category.includes('failure') || category.includes('mistake') || category.includes('challenge')) {
+    situation = t('interviewPrep.starFailureSituation', { roleHint });
+    action = t('interviewPrep.starFailureAction');
+    result = t('interviewPrep.starFailureResult');
+  }
+
+  return { situation, task, action, result };
 }
 
 function buildMarkdownExport(
@@ -181,11 +196,9 @@ export function InterviewPrepPage() {
         );
         setJob(jobData);
         setSessions(orderedSessions);
-        if (orderedSessions.length > 0) {
-          setActiveSession(orderedSessions[0]);
-        } else {
-          setActiveSession(null);
-        }
+        // Do not auto-open existing sessions when the user selects a job.
+        // Let the user start a new session or explicitly load a previous one.
+        setActiveSession(null);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : t('interviewPrep.errorSession');
@@ -373,7 +386,11 @@ export function InterviewPrepPage() {
         <select
           id={`cv-select-${isSidebar ? 'side' : 'main'}`}
           value={selectedCvId}
-          onChange={(event) => setSelectedCvId(Number(event.target.value))}
+          onChange={(event) => {
+            const v = event.target.value;
+            const parsed = v === '' ? '' : Number(v);
+            setSelectedCvId(Number.isNaN(parsed as number) ? '' : (parsed as number | ''));
+          }}
           className="input-field w-full text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
           aria-describedby={cvs.length === 0 ? `cv-help-${isSidebar ? 'side' : 'main'}` : undefined}
         >

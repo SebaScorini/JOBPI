@@ -4,7 +4,7 @@ The canonical API contract lives in [`docs/API_REFERENCE.md`](docs/API_REFERENCE
 
 Quick notes:
 
-- Base resources: `/auth`, `/cvs`, `/jobs`, `/matches`, `/health`.
+- Base resources: `/auth`, `/cvs`, `/jobs`, `/jobs/{job_id}/interview`, `/matches`, `/health`.
 - Bearer authentication is required for all endpoints except register, login, and health.
 - Error payloads use a structured envelope with code, message, request_id, and timestamp.
 

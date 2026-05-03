@@ -2,6 +2,17 @@
 
 All notable changes to JOBPI will be documented in this file.
 
+## [2026-04-30] - Interview Prep UX & Docs Refresh
+
+### Added
+- **Interview STAR Guidance Variants**: Added dedicated STAR helper copy for leadership, technical, and failure/challenge question categories in both English and Spanish locales.
+- **API Documentation Coverage**: Added full interview session endpoint documentation under `docs/API_REFERENCE.md`.
+
+### Changed
+- **Interview Session UX**: Selecting a job no longer auto-opens the latest historical interview session; users now explicitly start or load sessions.
+- **CV Selector Resilience**: Hardened CV select parsing in Interview Simulator to safely handle empty and non-numeric values.
+- **Canonical Docs**: Refreshed README and architecture/context docs to include Interview Simulator capabilities and interview API surface.
+
 ## [2026-04-15] - Sprint 8 Polish & Supabase Migration
 
 ### Added

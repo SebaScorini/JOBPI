@@ -38,6 +38,12 @@ The system is architected as a full-stack application with a FastAPI modular bac
 - Language support (English & Spanish) with matching AI output.
 - Rate-limited to prevent abuse; regeneration supported.
 
+**Interview Preparation**
+- Interview Simulator sessions per job and CV (`mixed`, `behavioral`, `technical`).
+- STAR framework guidance generated per question, with category-aware hints (leadership, technical, failure/challenge).
+- Session history by job, manual session loading, and markdown export for offline practice.
+- Localized coaching copy in English and Spanish.
+
 **Application Tracker**
 - Unified view of all jobs with status, applied date, and notes.
 - Match list showing CV-job pairs with compatibility scores.
@@ -69,6 +75,7 @@ The system is architected as a full-stack application with a FastAPI modular bac
 - **Animations**: Framer Motion for entrance animations and micro-interactions.
 - **API Integration**: Supabase JS client with async token retrieval; native Fetch API.
 - **State Management**: React Context API for auth state and session management.
+- **Interview UX**: Session setup, STAR answer drafting, markdown export, and category-aware interview guidance.
 
 **Infrastructure & DevOps**
 - **Deployment**: Vercel (both frontend and backend via serverless functions).
@@ -174,7 +181,8 @@ The backend can fall back to SQLite in development when `DATABASE_URL` is omitte
 3. Go to Job Analysis, paste a job description, and generate a structured analysis.
 4. Open the resulting job detail page to match a CV, compare two CVs, or generate a cover letter.
 5. Update the job status, save notes, or toggle the saved flag as your application progresses.
-6. Review the Matches and Tracker views to monitor fit and application status across saved jobs.
+6. Use Interview Simulator to start a prep session, draft STAR responses, and export your prep notes.
+7. Review the Matches and Tracker views to monitor fit and application status across saved jobs.
 
 ## Notes
 

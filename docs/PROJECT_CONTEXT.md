@@ -17,6 +17,7 @@ JOBPI is an authenticated AI job application assistant. It helps users analyze j
 - CV tagging, favorites, bulk delete, bulk tag, list filtering, and per-CV detail views.
 - Job posting analysis with structured AI output, saved state, notes, and application status tracking.
 - CV-to-job matching, CV comparison for a job, and AI-generated cover letters.
+- Interview prep sessions per job and CV with structured questions, answer capture, and AI feedback support.
 - Match listing and tracker views for application progress.
 - English and Spanish UI plus matching AI response language.
 
@@ -26,6 +27,7 @@ JOBPI is an authenticated AI job application assistant. It helps users analyze j
 - `app/api/routes/auth.py` - `/auth/register`, `/auth/login`, `/auth/me`.
 - `app/api/routes/cvs.py` - CV upload, batch upload, list, detail, download, tags, favorites, bulk actions.
 - `app/api/routes/jobs.py` - Job analysis, list, detail, delete, status, notes, saved toggle, match, compare, cover letter.
+- `app/api/routes/interviews.py` - Interview session start, answer submission, session detail, and list by job.
 - `app/api/routes/matches.py` - Match list and match detail.
 - `app/services/pdf_extractor.py` - PDF text extraction and CV preprocessing.
 - `app/services/job_preprocessing.py` - Job and CV excerpt building, noise removal, token estimation, context fingerprints.
@@ -34,6 +36,7 @@ JOBPI is an authenticated AI job application assistant. It helps users analyze j
 - `app/services/cv_analyzer.py` - CV-to-job fit analysis.
 - `app/services/cv_library_summary_service.py` - Compact CV library summaries.
 - `app/services/cover_letter_service.py` - Cover letter generation.
+- `app/services/interview_service.py` - Interview question generation, answer evaluation, and session state updates.
 - `app/services/supabase_storage.py` - Signed download URLs and PDF storage operations.
 - `app/core/ai.py` - AI timeout wrapper, circuit breaker, truncation detection, token clamping.
 - `app/core/supabase_auth.py` and `app/dependencies/auth.py` - Token verification and current-user resolution.
