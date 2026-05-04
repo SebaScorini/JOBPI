@@ -9,6 +9,8 @@ import { SkeletonCard, SkeletonLoader } from '../components/SkeletonLoader';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useMotionPreferences } from '../hooks/useMotionPreferences';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -26,6 +28,7 @@ const itemVariants: Variants = {
 };
 
 const MotionLink = motion.create(Link);
+const MotionCard = motion(Card);
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -119,7 +122,7 @@ export function DashboardPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-4">
             <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-4">
-              <motion.div variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl flex flex-col justify-between interactive-card">
+              <MotionCard variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl flex flex-col justify-between interactive-card">
                 <div>
                   <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 mb-3">
                     <Briefcase size={20} />
@@ -127,9 +130,9 @@ export function DashboardPage() {
                   <h3 className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">{t('dashboard.analyzedRoles')}</h3>
                   <p className="text-3xl font-heading font-bold text-slate-900 dark:text-white">{jobCount}</p>
                 </div>
-              </motion.div>
+              </MotionCard>
 
-              <motion.div variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl flex flex-col justify-between interactive-card">
+              <MotionCard variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl flex flex-col justify-between interactive-card">
                 <div>
                   <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-3">
                     <FileText size={20} />
@@ -137,9 +140,9 @@ export function DashboardPage() {
                   <h3 className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">{t('dashboard.storedCvs')}</h3>
                   <p className="text-3xl font-heading font-bold text-slate-900 dark:text-white">{cvCount}</p>
                 </div>
-              </motion.div>
+              </MotionCard>
 
-              <motion.div variants={motionItemVariants} className="glass-card p-5 rounded-2xl border-brand-primary/20 dark:border-brand-primary/20 flex flex-col justify-center items-start bg-brand-primary/5">
+              <MotionCard variants={motionItemVariants} className="glass-card p-5 rounded-2xl border-brand-primary/20 dark:border-brand-primary/20 flex flex-col justify-center items-start bg-brand-primary/5">
                 <Target size={24} className="text-brand-primary mb-3" />
                 <h3 className="text-base font-bold text-brand-text dark:text-white mb-1">{t('dashboard.targetRole')}</h3>
                 <p className="text-xs text-slate-500 mb-3">{t('dashboard.targetRoleDesc')}</p>
@@ -151,10 +154,10 @@ export function DashboardPage() {
                 >
                   {t('dashboard.startAnalysis')}
                 </MotionLink>
-              </motion.div>
+              </MotionCard>
             </section>
 
-            <motion.section variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl min-h-[360px] flex flex-col overflow-hidden">
+            <MotionCard variants={motionItemVariants} className="glass-card-solid p-5 rounded-2xl min-h-[360px] flex flex-col overflow-hidden">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-heading font-bold text-slate-900 dark:text-white">{t('dashboard.recentJobs')}</h2>
                 <Link to="/jobs" className="text-sm font-semibold text-brand-primary hover:text-brand-secondary flex items-center gap-1">
@@ -198,7 +201,7 @@ export function DashboardPage() {
                   ))}
                 </motion.div>
               )}
-            </motion.section>
+            </MotionCard>
           </div>
         </motion.div>
       )}

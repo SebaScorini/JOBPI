@@ -13,6 +13,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RouteFallback } from '../components/RouteFallback';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 
 const JobDetailsMatchPanel = lazy(() =>
   import('./job-details/JobDetailsMatchPanel').then((module) => ({ default: module.JobDetailsMatchPanel })),
@@ -417,7 +419,7 @@ export function JobDetailsPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0 space-y-4">
-          <div className="glass-card rounded-3xl p-4 lg:p-5">
+          <Card className="rounded-3xl p-4 lg:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
@@ -452,8 +454,7 @@ export function JobDetailsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-
-                <button
+                <Button
                   type="button"
                   onClick={handleToggleSaved}
                   disabled={isTogglingSaved}
@@ -469,8 +470,8 @@ export function JobDetailsPage() {
                     <Bookmark size={16} className={job.is_saved ? 'fill-current' : ''} />
                   )}
                   {job.is_saved ? t('jobs.unsaveAction') : t('jobs.saveAction')}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={handleDeleteJob}
                   disabled={isDeletingJob}
@@ -478,10 +479,10 @@ export function JobDetailsPage() {
                 >
                   {isDeletingJob ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                   {t('jobs.deleteAction')}
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
+          </Card>
 
           <div className="glass-card rounded-2xl p-3">
             <div className="flex gap-2 overflow-x-auto">
@@ -507,7 +508,7 @@ export function JobDetailsPage() {
             </div>
           )}
 
-          <div className="glass-card min-h-[460px] rounded-3xl p-4 lg:p-5">
+          <Card className="min-h-[460px] rounded-3xl p-4 lg:p-5">
             {activeTab === 'overview' && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div className="space-y-4">
@@ -641,7 +642,7 @@ export function JobDetailsPage() {
                 />
               </Suspense>
             )}
-          </div>
+          </Card>
         </section>
 
         <aside className="sticky top-[84px] hidden h-fit gap-4 xl:flex xl:flex-col">

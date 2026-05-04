@@ -509,6 +509,26 @@ const es: TranslationNode = {
     completed: 'Completado',
     in_progress: 'En progreso',
   },
+  appearance: {
+    title: 'Apariencia Visual',
+    subtitle: 'Personaliza la lectura a tu gusto',
+    textSize: 'Tamaño de texto',
+    typography: 'Tipografía',
+    compact: 'Compacto',
+    compactDesc: 'Más contenido en pantalla',
+    standard: 'Estándar',
+    standardDesc: 'Equilibrio perfecto',
+    comfortable: 'Cómodo',
+    comfortableDesc: 'Lectura relajada',
+    large: 'Grande',
+    largeDesc: 'Máxima legibilidad',
+    fontDefaultDesc: 'Por defecto',
+    fontCleanDesc: 'Limpia y neutral',
+    fontModernDesc: 'Moderna y geométrica',
+    fontPremiumDesc: 'Premium y legible',
+    settingsAria: 'Ajustes de apariencia',
+    settingsTitle: 'Apariencia',
+  },
 };
 
 export default es;

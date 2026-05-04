@@ -507,6 +507,26 @@ const en: TranslationNode = {
     completed: 'Completed',
     in_progress: 'In Progress',
   },
+  appearance: {
+    title: 'Visual Appearance',
+    subtitle: 'Customize reading to your liking',
+    textSize: 'Text size',
+    typography: 'Typography',
+    compact: 'Compact',
+    compactDesc: 'More content on screen',
+    standard: 'Standard',
+    standardDesc: 'Perfect balance',
+    comfortable: 'Comfortable',
+    comfortableDesc: 'Relaxed reading',
+    large: 'Large',
+    largeDesc: 'Maximum readability',
+    fontDefaultDesc: 'Default',
+    fontCleanDesc: 'Clean and neutral',
+    fontModernDesc: 'Modern and geometric',
+    fontPremiumDesc: 'Premium and readable',
+    settingsAria: 'Appearance settings',
+    settingsTitle: 'Appearance',
+  },
 };
 
 export default en;

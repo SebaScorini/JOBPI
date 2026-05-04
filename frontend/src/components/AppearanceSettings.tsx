@@ -2,23 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppearance } from '../hooks/useAppearance';
 import { Type, Check, TypeOutline, Monitor, Expand, Shrink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLanguage } from '../context/LanguageContext';
 
 const FONT_SIZES = [
-  { id: '85%', label: 'Compacto', icon: Shrink, description: 'Más contenido en pantalla' },
-  { id: '90%', label: 'Estándar', icon: Monitor, description: 'Equilibrio perfecto' },
-  { id: '100%', label: 'Cómodo', icon: Expand, description: 'Lectura relajada' },
-  { id: '110%', label: 'Grande', icon: Type, description: 'Máxima legibilidad' },
+  { id: '85%', labelKey: 'appearance.compact', icon: Shrink, descriptionKey: 'appearance.compactDesc' },
+  { id: '90%', labelKey: 'appearance.standard', icon: Monitor, descriptionKey: 'appearance.standardDesc' },
+  { id: '100%', labelKey: 'appearance.comfortable', icon: Expand, descriptionKey: 'appearance.comfortableDesc' },
+  { id: '110%', labelKey: 'appearance.large', icon: Type, descriptionKey: 'appearance.largeDesc' },
 ] as const;
 
 const FONT_FAMILIES = [
-  { id: 'DM Sans', label: 'DM Sans', description: 'Por defecto' },
-  { id: 'Inter', label: 'Inter', description: 'Limpia y neutral' },
-  { id: 'Outfit', label: 'Outfit', description: 'Moderna y geométrica' },
-  { id: 'Plus Jakarta Sans', label: 'Plus Jakarta', description: 'Premium y legible' },
+  { id: 'DM Sans', label: 'DM Sans', descriptionKey: 'appearance.fontDefaultDesc' },
+  { id: 'Inter', label: 'Inter', descriptionKey: 'appearance.fontCleanDesc' },
+  { id: 'Outfit', label: 'Outfit', descriptionKey: 'appearance.fontModernDesc' },
+  { id: 'Plus Jakarta Sans', label: 'Plus Jakarta', descriptionKey: 'appearance.fontPremiumDesc' },
 ] as const;
 
 export function AppearanceSettings() {
   const { fontSize, setFontSize, fontFamily, setFontFamily } = useAppearance();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -44,8 +46,8 @@ export function AppearanceSettings() {
             ? 'bg-brand-primary/10 text-brand-primary dark:bg-brand-secondary/10 dark:text-brand-secondary' 
             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-brand-primary dark:hover:text-brand-secondary hover:bg-slate-200 dark:hover:bg-slate-700'
         }`}
-        aria-label="Ajustes de apariencia"
-        title="Apariencia"
+        aria-label={t('appearance.settingsAria')}
+        title={t('appearance.settingsTitle')}
       >
         <Type size={18} />
       </button>
@@ -61,17 +63,17 @@ export function AppearanceSettings() {
           >
             <div className="p-4 border-b border-slate-100 dark:border-slate-800/80">
               <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm mb-1">
-                Apariencia Visual
+                {t('appearance.title')}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personaliza la lectura a tu gusto
+                {t('appearance.subtitle')}
               </p>
             </div>
 
             <div className="p-3 max-h-[60vh] overflow-y-auto">
               <div className="mb-4">
                 <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-1">
-                  Tamaño de texto
+                  {t('appearance.textSize')}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {FONT_SIZES.map((size) => {
@@ -88,7 +90,7 @@ export function AppearanceSettings() {
                         }`}
                       >
                         <Icon size={18} className="mb-1.5 opacity-80" />
-                        <span className="text-xs font-semibold">{size.label}</span>
+                        <span className="text-xs font-semibold">{t(size.labelKey)}</span>
                       </button>
                     );
                   })}
@@ -97,7 +99,7 @@ export function AppearanceSettings() {
 
               <div>
                 <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-1">
-                  Tipografía
+                  {t('appearance.typography')}
                 </p>
                 <div className="space-y-1">
                   {FONT_FAMILIES.map((font) => {
@@ -115,7 +117,7 @@ export function AppearanceSettings() {
                       >
                         <div className="flex flex-col items-start">
                           <span className="text-sm font-medium">{font.label}</span>
-                          <span className="text-[10px] opacity-70 mt-0.5">{font.description}</span>
+                          <span className="text-[10px] opacity-70 mt-0.5">{t(font.descriptionKey)}</span>
                         </div>
                         {isSelected && <Check size={16} />}
                       </button>
