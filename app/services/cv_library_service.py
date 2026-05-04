@@ -7,7 +7,7 @@ from sqlalchemy.exc import NoInspectionAvailable
 from sqlmodel import Session
 
 from app.core.config import get_settings
-from app.db import crud
+from app.repositories import CvLibraryRepository, MatchRepository
 from app.models import User
 from app.schemas.cv import CVDetailRead, CVRead, CvAnalysisResponse
 from app.schemas.job import AIResponseLanguage
@@ -46,10 +46,21 @@ WORD_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+#.-]{1,}\b")
 logger = logging.getLogger(__name__)
 
 
+def _user_id(user: User) -> int:
+    assert user.id is not None, "User.id must not be None for a persisted user"
+    return user.id
+
+
 class CvLibraryService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        repository: CvLibraryRepository | None = None,
+        match_repository: MatchRepository | None = None,
+    ) -> None:
         self.cv_analyzer = None
         self.storage_service = get_supabase_storage_service()
+        self._repository = repository or CvLibraryRepository()
+        self._match_repository = match_repository or MatchRepository()
 
     def upload_cv(
         self,
@@ -71,13 +82,14 @@ class CvLibraryService:
         # Extract and clean text once to save on downstream processing
         settings = get_settings()
         max_cv_chars = None if settings.should_bypass_user_limits(user.email) else settings.max_cv_text_chars
+        uid = _user_id(user)
         raw_text = extract_raw_pdf_text(file_bytes)
         cleaned_text = preprocess_cv_text(raw_text, max_chars=max_cv_chars)
-        existing = crud.get_cv_for_user_by_clean_text(session, user.id, cleaned_text)
+        existing = self._repository.get_cv_for_user_by_clean_text(session, uid, cleaned_text)
         if existing is not None:
             if not getattr(existing, "library_summary", "").strip():
                 logger.info("ai_call operation=cv_library_summary reason=missing_summary cv_id=%s", existing.id)
-                existing = crud.update_cv_library_summary(
+                existing = self._repository.update_cv_library_summary(
                     session,
                     existing,
                     self._build_library_summary(cleaned_text),
@@ -91,9 +103,9 @@ class CvLibraryService:
         logger.info("ai_call operation=cv_library_summary reason=new_cv")
         library_summary = self._build_library_summary(cleaned_text)
         summary = library_summary
-        created = crud.create_cv(
+        created = self._repository.create_cv(
             session,
-            user_id=user.id,
+            user_id=uid,
             filename=normalized_filename,
             display_name=normalized_display_name,
             raw_text=raw_text,
@@ -111,7 +123,7 @@ class CvLibraryService:
         Returns:
             Tuple of (list of CVRead objects, total count)
         """
-        cvs, total = crud.get_cvs_for_user(session, user.id, limit=limit, offset=offset)
+        cvs, total = self._repository.get_cvs_for_user(session, _user_id(user), limit=limit, offset=offset)
         return [self._serialize_cv(session, cv) for cv in cvs], total
 
     def list_cvs_filtered(
@@ -124,9 +136,9 @@ class CvLibraryService:
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[CVRead], int]:
-        cvs, total = crud.get_filtered_cvs_for_user(
+        cvs, total = self._repository.get_filtered_cvs_for_user(
             session,
-            user.id,
+            _user_id(user),
             search=search,
             tags=self._normalize_tags(tags or []),
             limit=limit,
@@ -135,13 +147,13 @@ class CvLibraryService:
         return [self._serialize_cv(session, cv) for cv in cvs], total
 
     def get_cv(self, session: Session, user: User, cv_id: int) -> CVDetailRead:
-        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        cv = self._repository.get_cv_for_user(session, _user_id(user), cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
         return self._serialize_cv_detail(cv)
 
     def get_cv_download_url(self, session: Session, user: User, cv_id: int) -> str:
-        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        cv = self._repository.get_cv_for_user(session, _user_id(user), cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
         if not cv.storage_path:
@@ -165,26 +177,26 @@ class CvLibraryService:
             ) from exc
 
     def delete_cv(self, session: Session, user: User, cv_id: int) -> None:
-        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        cv = self._repository.get_cv_for_user(session, _user_id(user), cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
-        crud.delete_cv(session, cv)
+        self._repository.delete_cv(session, cv)
 
     def update_cv_tags(self, session: Session, user: User, cv_id: int, tags: list[str]) -> CVRead:
-        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        cv = self._repository.get_cv_for_user(session, _user_id(user), cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
         normalized_tags = self._normalize_tags(tags)
-        updated = crud.update_cv_tags(session, cv, normalized_tags)
+        updated = self._repository.update_cv_tags(session, cv, normalized_tags)
         return self._serialize_cv(session, updated)
 
     def toggle_cv_favorite(self, session: Session, user: User, cv_id: int) -> CVRead:
-        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        cv = self._repository.get_cv_for_user(session, _user_id(user), cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
-        updated = crud.update_cv_favorite(session, cv, not bool(cv.is_favorite))
+        updated = self._repository.update_cv_favorite(session, cv, not bool(cv.is_favorite))
         return self._serialize_cv(session, updated)
 
     def bulk_delete_cvs(self, session: Session, user: User, cv_ids: list[int]) -> dict[str, int]:
@@ -192,10 +204,10 @@ class CvLibraryService:
         if not normalized_ids:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide at least one CV id.")
 
-        cvs = crud.get_cvs_for_user_by_ids(session, user.id, normalized_ids)
+        cvs = self._repository.get_cvs_for_user_by_ids(session, _user_id(user), normalized_ids)
         found_ids = {cv.id for cv in cvs}
         failed = len({cv_id for cv_id in normalized_ids if cv_id not in found_ids})
-        deleted = crud.delete_multiple_cvs(session, cvs)
+        deleted = self._repository.delete_multiple_cvs(session, cvs)
         return {"deleted": deleted, "failed": failed}
 
     def bulk_tag_cvs(self, session: Session, user: User, cv_ids: list[int], tags: list[str]) -> dict[str, int]:
@@ -206,10 +218,10 @@ class CvLibraryService:
         if not normalized_tags:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide at least one tag.")
 
-        cvs = crud.get_cvs_for_user_by_ids(session, user.id, normalized_ids)
+        cvs = self._repository.get_cvs_for_user_by_ids(session, _user_id(user), normalized_ids)
         found_ids = {cv.id for cv in cvs}
         failed = len({cv_id for cv_id in normalized_ids if cv_id not in found_ids})
-        updated = crud.update_multiple_cv_tags(session, cvs, normalized_tags)
+        updated = self._repository.update_multiple_cv_tags(session, cvs, normalized_tags)
         return {"updated": updated, "failed": failed}
 
     def match_job_to_cv(
@@ -221,11 +233,11 @@ class CvLibraryService:
         language: AIResponseLanguage = "english",
         regenerate: bool = False,
     ) -> CVJobMatchDetailRead:
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = self._match_repository.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        cv = crud.get_cv_for_user(session, user.id, cv_id)
+        cv = self._match_repository.get_cv_for_user(session, _user_id(user), cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
@@ -254,12 +266,12 @@ class CvLibraryService:
                 detail="Select two different CVs to compare.",
             )
 
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = self._match_repository.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        cv_a = crud.get_cv_for_user(session, user.id, cv_id_a)
-        cv_b = crud.get_cv_for_user(session, user.id, cv_id_b)
+        cv_a = self._match_repository.get_cv_for_user(session, _user_id(user), cv_id_a)
+        cv_b = self._match_repository.get_cv_for_user(session, _user_id(user), cv_id_b)
         if cv_a is None or cv_b is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
@@ -300,11 +312,11 @@ class CvLibraryService:
         )
 
     def match_job_to_all_cvs(self, session: Session, user: User, job_id: int) -> list[CVJobMatchRead]:
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = self._match_repository.get_job_for_user(session, _user_id(user), job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        cvs, _ = crud.get_cvs_for_user(session, user.id, limit=10_000, offset=0)
+        cvs, _ = self._match_repository.get_cvs_for_user(session, _user_id(user), limit=10_000, offset=0)
         if not cvs:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -315,7 +327,13 @@ class CvLibraryService:
         scored_matches: list[tuple[float, object]] = []
 
         for cv in cvs:
-            existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
+            cv_id = getattr(cv, "id")
+            assert cv_id is not None, "CV.id must not be None"
+            job_id_local = getattr(job, "id")
+            assert job_id_local is not None, "Job.id must not be None"
+            existing_match = self._match_repository.get_match_for_user_by_cv_and_job(
+                session, _user_id(user), cv_id, job_id_local
+            )
             if existing_match is not None:
                 score = compute_heuristic_score(cv.clean_text, job.clean_description)
                 scored_matches.append((score, existing_match))
@@ -323,9 +341,9 @@ class CvLibraryService:
                 continue
 
             result = self._analyze_pair(
-                user_id=user.id,
-                job_id=job.id,
-                cv_id=cv.id,
+                user_id=_user_id(user),
+                job_id=job_id_local,
+                cv_id=cv_id,
                 job_title=job.title,
                 job_description=job.clean_description,
                 cv_text=cv.clean_text,
@@ -333,11 +351,11 @@ class CvLibraryService:
                 cv_library_summary=getattr(cv, "library_summary", ""),
             )
             score = compute_heuristic_score(cv.clean_text, job.clean_description)
-            created = crud.create_match(
+            created = self._match_repository.create_match(
                 session,
-                user_id=user.id,
-                cv_id=cv.id,
-                job_id=job.id,
+                user_id=_user_id(user),
+                cv_id=cv_id,
+                job_id=job_id_local,
                 fit_level=result.likely_fit_level,
                 fit_summary=result.fit_summary,
                 strengths=result.strengths,
@@ -350,7 +368,7 @@ class CvLibraryService:
         if scored_matches:
             # Highlight the mathematically best match based on keywords
             best_match = max(scored_matches, key=lambda item: item[0])[1]
-            crud.replace_recommended_match(session, best_match)
+            self._match_repository.replace_recommended_match(session, best_match)
             created_matches = [self._serialize_match(match) for _, match in scored_matches]
 
         return created_matches
@@ -363,11 +381,11 @@ class CvLibraryService:
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[CVJobMatchRead], int]:
-        matches, total = crud.get_matches_for_user(session, user.id, limit=limit, offset=offset)
+        matches, total = self._match_repository.get_matches_for_user(session, _user_id(user), limit=limit, offset=offset)
         return [self._serialize_match(match) for match in matches], total
 
     def get_match(self, session: Session, user: User, match_id: int) -> CVJobMatchRead:
-        match = crud.get_match_for_user(session, user.id, match_id)
+        match = self._match_repository.get_match_for_user(session, _user_id(user), match_id)
         if match is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
         return self._serialize_match(match)
@@ -381,12 +399,18 @@ class CvLibraryService:
         language: AIResponseLanguage,
         regenerate: bool = False,
     ) -> CVJobMatchDetailRead:
-        existing_match = crud.get_match_for_user_by_cv_and_job(session, user.id, cv.id, job.id)
+        cv_id = getattr(cv, "id")
+        assert cv_id is not None, "CV.id must not be None"
+        job_id_local = getattr(job, "id")
+        assert job_id_local is not None, "Job.id must not be None"
+        existing_match = self._match_repository.get_match_for_user_by_cv_and_job(
+            session, _user_id(user), cv_id, job_id_local
+        )
         heuristic_score = compute_heuristic_score(cv.clean_text, job.clean_description)
         result = self._get_pair_analysis_result(
-            user_id=user.id,
-            job_id=job.id,
-            cv_id=cv.id,
+            user_id=_user_id(user),
+            job_id=job_id_local,
+            cv_id=cv_id,
             job_title=job.title,
             job_description=job.clean_description,
             cv_text=cv.clean_text,
@@ -400,9 +424,9 @@ class CvLibraryService:
         result_dict = result.model_dump() if hasattr(result, "model_dump") else {}
 
         if existing_match is None:
-            existing_match = crud.create_match(
+            existing_match = self._match_repository.create_match(
                 session,
-                user_id=user.id,
+                user_id=_user_id(user),
                 cv_id=cv.id,
                 job_id=job.id,
                 fit_level=result.likely_fit_level,
@@ -413,7 +437,7 @@ class CvLibraryService:
                 result=result_dict,
             )
         elif self._match_needs_refresh(existing_match, result):
-            existing_match = crud.update_match_analysis(
+            existing_match = self._match_repository.update_match_analysis(
                 session,
                 existing_match,
                 fit_level=result.likely_fit_level,
@@ -861,15 +885,15 @@ class CvLibraryService:
     def _store_original_pdf(self, *, session: Session, user: User, cv: object, file_bytes: bytes) -> None:
         if cv.id is None:
             return
-        storage_path = build_cv_storage_path(user_id=user.id, cv_id=cv.id)
+        storage_path = build_cv_storage_path(user_id=_user_id(user), cv_id=cv.id)
         try:
             self.storage_service.upload_cv_pdf(path=storage_path, file_bytes=file_bytes)
-            crud.update_cv_storage_path(session, cv, storage_path)
+            self._repository.update_cv_storage_path(session, cv, storage_path)
         except SupabaseStorageError:
             logger.warning(
                 "cv_storage_upload_failed cv_id=%s user_id=%s storage_path=%s",
                 cv.id,
-                user.id,
+                _user_id(user),
                 storage_path,
                 exc_info=True,
             )
@@ -1111,3 +1135,4 @@ def get_cv_library_service() -> CvLibraryService:
     if _service is None:
         _service = CvLibraryService()
     return _service
+

@@ -16,9 +16,9 @@ from app.core.ai import (
     use_provider_fallback_model,
 )
 from app.core.config import configure_dspy, get_settings
-from app.db import crud
 from app.models.ai_schemas import CoverLetterAIOutput
 from app.models import User
+from app.repositories import CvLibraryRepository, JobRepository
 from app.schemas.job import AIResponseLanguage
 from app.services.job_analyzer import _normalize_text
 from app.services.job_preprocessing import build_cv_context, build_job_context
@@ -30,6 +30,11 @@ MAX_COVER_LETTER_PARAGRAPHS = 4
 MAX_COVER_LETTER_PARAGRAPH_CHARS = 480
 DEFAULT_COVER_LETTER_MAX_TOKENS = 800
 logger = logging.getLogger(__name__)
+
+
+def _user_id(user: User) -> int:
+    assert user.id is not None, "User.id must not be None for a persisted user"
+    return user.id
 
 
 class CoverLetterSignature(dspy.Signature):
@@ -94,12 +99,18 @@ class CoverLetterModule(dspy.Module):
 
 
 class CoverLetterService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        job_repository: JobRepository | None = None,
+        cv_repository: CvLibraryRepository | None = None,
+    ) -> None:
         settings = get_settings()
         self.generator: CoverLetterModule | None = None
         self.timeout_seconds = settings.ai_timeout_seconds
         self.max_tokens = getattr(settings, "cover_letter_max_tokens", DEFAULT_COVER_LETTER_MAX_TOKENS)
         self._executor = ThreadPoolExecutor(max_workers=2)
+        self._job_repository = job_repository or JobRepository()
+        self._cv_repository = cv_repository or CvLibraryRepository()
 
     def _get_generator(self) -> CoverLetterModule:
         if self.generator is None:
@@ -123,11 +134,11 @@ class CoverLetterService:
         regenerate: bool = False,
     ) -> str:
         selected_language = normalize_language(language)
-        job = crud.get_job_for_user(session, user.id, job_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        cv = crud.get_cv_for_user(session, user.id, selected_cv_id)
+        cv = self._cv_repository.get_cv_for_user(session, _user_id(user), selected_cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
@@ -195,7 +206,7 @@ class CoverLetterService:
                 detail="The generated cover letter was empty. Please try again.",
             )
 
-        crud.update_job_cover_letter(
+        self._job_repository.update_cover_letter(
             session=session,
             job=job,
             cv_id=selected_cv_id,

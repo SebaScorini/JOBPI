@@ -634,10 +634,21 @@ def test_cover_letter_generation_uses_full_context_and_cached_summary(monkeypatc
         """,
     )
 
-    monkeypatch.setattr(cover_letter_module.crud, "get_job_for_user", lambda session, user_id, job_id: job)
-    monkeypatch.setattr(cover_letter_module.crud, "get_cv_for_user", lambda session, user_id, cv_id: cv)
-    monkeypatch.setattr(cover_letter_module.crud, "get_cached_cover_letter", lambda **kwargs: None)
-    monkeypatch.setattr(cover_letter_module.crud, "update_job_cover_letter", lambda **kwargs: None)
+    monkeypatch.setattr(
+        cover_letter_module.JobRepository,
+        "get_for_user",
+        lambda self, session, *, user_id, job_id: job,
+    )
+    monkeypatch.setattr(
+        cover_letter_module.CvLibraryRepository,
+        "get_cv_for_user",
+        lambda self, session, user_id, cv_id: cv,
+    )
+    monkeypatch.setattr(
+        cover_letter_module.JobRepository,
+        "update_cover_letter",
+        lambda self, **kwargs: None,
+    )
 
     try:
         output = service.generate_cover_letter(
@@ -860,19 +871,21 @@ def test_cover_letter_generation_skips_cached_fallback_template(monkeypatch):
         clean_text="Built FastAPI services and SQL workflows with measurable impact.",
     )
 
-    monkeypatch.setattr(cover_letter_module.crud, "get_job_for_user", lambda session, user_id, job_id: job)
-    monkeypatch.setattr(cover_letter_module.crud, "get_cv_for_user", lambda session, user_id, cv_id: cv)
     monkeypatch.setattr(
-        cover_letter_module.crud,
-        "get_cached_cover_letter",
-        lambda **_kwargs: (
-            "Dear Acme team,\n\n"
-            "I am excited to apply for the Backend Engineer role. My experience with Python, FastAPI aligns well with the kind of work described for this position.\n\n"
-            "I have delivered practical work related to Python, FastAPI, and I would bring a clear, collaborative, and execution-focused approach from day one.\n\n"
-            "Thank you for your time and consideration."
-        ),
+        cover_letter_module.JobRepository,
+        "get_for_user",
+        lambda self, session, *, user_id, job_id: job,
     )
-    monkeypatch.setattr(cover_letter_module.crud, "update_job_cover_letter", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        cover_letter_module.CvLibraryRepository,
+        "get_cv_for_user",
+        lambda self, session, user_id, cv_id: cv,
+    )
+    monkeypatch.setattr(
+        cover_letter_module.JobRepository,
+        "update_cover_letter",
+        lambda self, **_kwargs: None,
+    )
 
     try:
         output = service.generate_cover_letter(

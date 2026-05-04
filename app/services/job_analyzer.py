@@ -19,9 +19,9 @@ from app.core.ai import (
     use_provider_fallback_model,
 )
 from app.core.config import configure_dspy, get_settings
-from app.db import crud
 from app.models.ai_schemas import JobAnalysisAIOutput
 from app.models import JobAnalysis, User
+from app.repositories import JobRepository
 from app.schemas.job import (
     AIResponseLanguage,
     JobAnalysisPayload,
@@ -200,13 +200,14 @@ def _user_id(user: User) -> int:
 
 
 class JobAnalyzerService:
-    def __init__(self) -> None:
+    def __init__(self, job_repository: JobRepository | None = None) -> None:
         settings = get_settings()
         self.analyzer: JobAnalyzerModule | None = None
         self.timeout_seconds = settings.ai_timeout_seconds
         self.max_tokens = settings.job_analysis_max_tokens
         self.retry_max_tokens = settings.job_analysis_retry_max_tokens
         self._executor = ThreadPoolExecutor(max_workers=4)
+        self._job_repository = job_repository or JobRepository()
 
     def _get_analyzer(self) -> JobAnalyzerModule:
         if self.analyzer is None:
@@ -235,7 +236,7 @@ class JobAnalyzerService:
         selected_language = normalize_language(payload.language)
         stored: JobAnalysis | None = None
         if session is not None and user is not None and not payload.regenerate:
-            stored = crud.get_matching_job_analysis(
+            stored = self._job_repository.find_matching_analysis(
                 session,
                 user_id=_user_id(user),
                 title=payload.title,
@@ -333,7 +334,7 @@ class JobAnalyzerService:
             )
         if session is not None and user is not None:
             if payload.regenerate:
-                stored = crud.get_matching_job_analysis(
+                stored = self._job_repository.find_matching_analysis(
                     session,
                     user_id=_user_id(user),
                     title=payload.title,
@@ -341,21 +342,21 @@ class JobAnalyzerService:
                     clean_description=cleaned_description,
                 )
                 if stored is not None:
-                    stored = crud.update_job_analysis_result(
+                    stored = self._job_repository.update_analysis_result(
                         session,
-                        stored,
-                        _serialize_job_analysis_result(response, selected_language),
+                        job=stored,
+                        analysis_result=_serialize_job_analysis_result(response, selected_language),
                     )
                     return self._serialize_job(stored)
 
             if stored is not None:
-                stored = crud.update_job_analysis_result(
+                stored = self._job_repository.update_analysis_result(
                     session,
-                    stored,
-                    _serialize_job_analysis_result(response, selected_language),
+                    job=stored,
+                    analysis_result=_serialize_job_analysis_result(response, selected_language),
                 )
             else:
-                stored = crud.create_job_analysis(
+                stored = self._job_repository.create_analysis(
                     session,
                     user_id=_user_id(user),
                     title=payload.title,
@@ -384,35 +385,41 @@ class JobAnalyzerService:
         offset: int = 0,
         is_saved: bool | None = None,
     ) -> tuple[list[JobRead], int]:
-        jobs, total = crud.get_jobs_for_user(session, _user_id(user), limit=limit, offset=offset, is_saved=is_saved)
+        jobs, total = self._job_repository.list_for_user(
+            session,
+            user_id=_user_id(user),
+            limit=limit,
+            offset=offset,
+            is_saved=is_saved,
+        )
         return [self._serialize_job(job) for job in jobs], total
 
     def get_job(self, session: Session, user: User, job_id: int) -> JobRead:
-        job = crud.get_job_for_user(session, _user_id(user), job_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
         return self._serialize_job(job)
 
     def delete_job(self, session: Session, user: User, job_id: int) -> JobDeleteResponse:
         # Fetch by primary key first so we can distinguish missing records from ownership violations.
-        job = crud.get_job_by_id(session, job_id)
+        job = self._job_repository.get_by_id(session, job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
-        if job.user_id != user.id:
+        if job.user_id != _user_id(user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to delete this job.",
             )
 
         try:
-            crud.delete_job(session, job)
+            self._job_repository.delete(session, job=job)
         except IntegrityError as exc:
-            logger.exception("job_delete_failed job_id=%s user_id=%s", job_id, user.id)
+            logger.exception("job_delete_failed job_id=%s user_id=%s", job_id, _user_id(user))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to delete job.",
             ) from exc
-        logger.info("job_deleted job_id=%s user_id=%s", job_id, user.id)
+        logger.info("job_deleted job_id=%s user_id=%s", job_id, _user_id(user))
         return JobDeleteResponse(success=True)
 
     def update_job_status(
@@ -423,7 +430,7 @@ class JobAnalyzerService:
         status_value: JobStatus,
         applied_date: datetime | None,
     ) -> JobRead:
-        job = crud.get_job_for_user(session, _user_id(user), job_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
@@ -431,24 +438,29 @@ class JobAnalyzerService:
         if status_value == "applied" and effective_applied_date is None and job.applied_date is None:
             effective_applied_date = datetime.now(timezone.utc)
 
-        updated = crud.update_job_status(session, job, status_value, effective_applied_date)
+        updated = self._job_repository.update_status(
+            session,
+            job=job,
+            status_value=status_value,
+            applied_date=effective_applied_date,
+        )
         return self._serialize_job(updated)
 
     def update_job_notes(self, session: Session, user: User, job_id: int, notes: str | None) -> JobRead:
-        job = crud.get_job_for_user(session, _user_id(user), job_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
         normalized_notes = notes.strip() if isinstance(notes, str) else None
-        updated = crud.update_job_notes(session, job, normalized_notes or None)
+        updated = self._job_repository.update_notes(session, job=job, notes=normalized_notes or None)
         return self._serialize_job(updated)
 
     def toggle_job_saved(self, session: Session, user: User, job_id: int) -> JobRead:
-        job = crud.get_job_for_user(session, _user_id(user), job_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        updated = crud.update_job_saved(session, job, not bool(job.is_saved))
+        updated = self._job_repository.update_saved(session, job=job, is_saved=not bool(job.is_saved))
         return self._serialize_job(updated)
 
     def _serialize_job(self, job) -> JobRead:

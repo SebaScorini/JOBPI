@@ -22,9 +22,9 @@ from app.core.ai import (
     use_provider_fallback_model,
 )
 from app.core.config import configure_dspy, get_settings
-from app.db import crud
 from app.models import User
 from app.models.ai_schemas import InterviewEvaluationAIOutput, InterviewQuestionsAIOutput
+from app.repositories import CvLibraryRepository, InterviewRepository, JobRepository
 from app.schemas.interview import (
     InterviewAnswerRead,
     InterviewAnswerSubmit,
@@ -168,7 +168,12 @@ def _user_id(user: User) -> int:
 
 
 class InterviewSessionService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        job_repository: JobRepository | None = None,
+        cv_repository: CvLibraryRepository | None = None,
+        interview_repository: InterviewRepository | None = None,
+    ) -> None:
         settings = get_settings()
         self.question_generator: InterviewQuestionModule | None = None
         self.evaluator: InterviewEvaluationModule | None = None
@@ -176,6 +181,9 @@ class InterviewSessionService:
         self.max_tokens = min(settings.job_analysis_max_tokens, DEFAULT_INTERVIEW_MAX_TOKENS)
         self.retry_max_tokens = min(settings.job_analysis_retry_max_tokens, DEFAULT_INTERVIEW_MAX_TOKENS)
         self._executor = ThreadPoolExecutor(max_workers=4)
+        self._job_repository = job_repository or JobRepository()
+        self._cv_repository = cv_repository or CvLibraryRepository()
+        self._interview_repository = interview_repository or InterviewRepository()
 
     def _get_question_generator(self) -> InterviewQuestionModule:
         if self.question_generator is None:
@@ -208,11 +216,11 @@ class InterviewSessionService:
         job_id: int,
         payload: InterviewSessionCreate,
     ) -> InterviewSessionRead:
-        job = crud.get_job_for_user(session, _user_id(user), job_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
 
-        cv = crud.get_cv_for_user(session, _user_id(user), payload.cv_id)
+        cv = self._cv_repository.get_cv_for_user(session, _user_id(user), payload.cv_id)
         if cv is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found.")
 
@@ -259,7 +267,7 @@ class InterviewSessionService:
 
         questions = [self._question_to_dict(question) for question in parsed.payload.questions]
         focus_areas = list(parsed.payload.focus_areas)
-        created = crud.create_interview_session(
+        created = self._interview_repository.create_session(
             session,
             user_id=_user_id(user),
             job_id=job_id,
@@ -279,7 +287,11 @@ class InterviewSessionService:
         session_id: int,
         answer_payload: InterviewAnswerSubmit,
     ) -> InterviewFeedbackRead:
-        interview_session = crud.get_interview_session_for_user(session, _user_id(user), session_id)
+        interview_session = self._interview_repository.get_session_for_user(
+            session,
+            user_id=_user_id(user),
+            session_id=session_id,
+        )
         if interview_session is None or interview_session.job_id != job_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview session not found.")
 
@@ -298,8 +310,8 @@ class InterviewSessionService:
         if next_question_index >= len(questions):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="All interview questions were already answered.")
 
-        job = crud.get_job_for_user(session, _user_id(user), job_id)
-        cv = crud.get_cv_for_user(session, _user_id(user), interview_session.cv_id)
+        job = self._job_repository.get_for_user(session, user_id=_user_id(user), job_id=job_id)
+        cv = self._cv_repository.get_cv_for_user(session, _user_id(user), interview_session.cv_id)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job analysis not found.")
         if cv is None:
@@ -371,29 +383,43 @@ class InterviewSessionService:
         evaluations = list(interview_session.evaluations or [])
         evaluations.append(evaluation_record)
 
-        crud.update_interview_session_answers(session, interview_session, answers)
-        crud.update_interview_session_evaluations(session, interview_session, evaluations)
+        self._interview_repository.update_answers(session, interview_session=interview_session, answers=answers)
+        self._interview_repository.update_evaluations(
+            session,
+            interview_session=interview_session,
+            evaluations=evaluations,
+        )
 
         is_complete = len(answers) >= len(questions)
         summary_model = self._build_summary(interview_session, evaluations) if is_complete else self._existing_summary(interview_session)
         summary_payload = summary_model.model_dump() if summary_model is not None else None
-        updated = crud.update_interview_session_summary(
+        updated = self._interview_repository.update_summary(
             session,
-            interview_session,
-            summary_payload,
+            interview_session=interview_session,
+            summary=summary_payload,
             overall_score=summary_model.overall_score if summary_model is not None else None,
             status="completed" if is_complete else interview_session.status,
         )
         return self._serialize_feedback(updated, answer_record, evaluation_record)
 
     def get_session(self, session: Session, user: User, job_id: int, session_id: int) -> InterviewSessionRead:
-        interview_session = crud.get_interview_session_for_user(session, _user_id(user), session_id)
+        interview_session = self._interview_repository.get_session_for_user(
+            session,
+            user_id=_user_id(user),
+            session_id=session_id,
+        )
         if interview_session is None or interview_session.job_id != job_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview session not found.")
         return self._serialize_session(interview_session)
 
     def list_sessions(self, session: Session, user: User, job_id: int) -> list[InterviewSessionRead]:
-        sessions, _ = crud.get_interview_sessions_for_user(session, _user_id(user), job_id=job_id, limit=100, offset=0)
+        sessions, _ = self._interview_repository.list_sessions_for_user(
+            session,
+            user_id=_user_id(user),
+            job_id=job_id,
+            limit=100,
+            offset=0,
+        )
         return [self._serialize_session(interview_session) for interview_session in sessions]
 
     def _serialize_session(self, interview_session) -> InterviewSessionRead:

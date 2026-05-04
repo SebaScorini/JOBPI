@@ -57,6 +57,15 @@ def analyze_job(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> JobRead:
+    _preflight_analyze(request, payload, current_user)
+    return _get_job_analyzer_service().analyze(payload, session=session, user=current_user)
+
+
+def _preflight_analyze(request: Request, payload: JobAnalysisRequest, current_user: User) -> None:
+    """Perform request-size and rate-limit checks for job analysis routes.
+
+    Extracted so the route handler remains thin and easy to test.
+    """
     settings = get_settings()
     is_trusted_user = settings.should_bypass_user_limits(current_user.email)
     if not is_trusted_user:
@@ -84,7 +93,6 @@ def analyze_job(
                 f"Job description must be {settings.max_job_description_chars} characters or fewer."
             ),
         )
-    return _get_job_analyzer_service().analyze(payload, session=session, user=current_user)
 
 
 @router.get("", response_model=JobListResponse)
@@ -176,16 +184,7 @@ def match_job_to_cvs(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVJobMatchDetailRead:
-    settings = get_settings()
-    enforce_rate_limit(
-        request=request,
-        user=current_user,
-        policy=RateLimitPolicy(
-            name="match_cvs",
-            limit=settings.match_cvs_limit,
-            window_seconds=settings.match_cvs_window_seconds,
-        ),
-    )
+    _preflight_match(request, current_user)
     return _get_cv_library_service().match_job_to_cv(
         session,
         current_user,
@@ -204,16 +203,7 @@ def compare_cvs_for_job(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CVComparisonResponse:
-    settings = get_settings()
-    enforce_rate_limit(
-        request=request,
-        user=current_user,
-        policy=RateLimitPolicy(
-            name="compare_cvs",
-            limit=settings.match_cvs_limit,
-            window_seconds=settings.match_cvs_window_seconds,
-        ),
-    )
+    _preflight_compare(request, current_user)
     return _get_cv_library_service().compare_cvs_for_job(
         session,
         current_user,
@@ -232,6 +222,45 @@ def generate_cover_letter(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> CoverLetterGenerateResponse:
+    _preflight_cover_letter(request, current_user)
+    generated_cover_letter = _get_cover_letter_service().generate_cover_letter(
+        session=session,
+        user=current_user,
+        job_id=job_id,
+        selected_cv_id=payload.selected_cv_id,
+        language=payload.language,
+        regenerate=payload.regenerate,
+    )
+    return CoverLetterGenerateResponse(generated_cover_letter=generated_cover_letter)
+
+
+def _preflight_match(request: Request, current_user: User) -> None:
+    settings = get_settings()
+    enforce_rate_limit(
+        request=request,
+        user=current_user,
+        policy=RateLimitPolicy(
+            name="match_cvs",
+            limit=settings.match_cvs_limit,
+            window_seconds=settings.match_cvs_window_seconds,
+        ),
+    )
+
+
+def _preflight_compare(request: Request, current_user: User) -> None:
+    settings = get_settings()
+    enforce_rate_limit(
+        request=request,
+        user=current_user,
+        policy=RateLimitPolicy(
+            name="compare_cvs",
+            limit=settings.match_cvs_limit,
+            window_seconds=settings.match_cvs_window_seconds,
+        ),
+    )
+
+
+def _preflight_cover_letter(request: Request, current_user: User) -> None:
     settings = get_settings()
     enforce_rate_limit(
         request=request,
@@ -242,12 +271,3 @@ def generate_cover_letter(
             window_seconds=settings.cover_letter_window_seconds,
         ),
     )
-    generated_cover_letter = _get_cover_letter_service().generate_cover_letter(
-        session=session,
-        user=current_user,
-        job_id=job_id,
-        selected_cv_id=payload.selected_cv_id,
-        language=payload.language,
-        regenerate=payload.regenerate,
-    )
-    return CoverLetterGenerateResponse(generated_cover_letter=generated_cover_letter)
