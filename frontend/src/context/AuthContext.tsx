@@ -68,6 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setIsLoading(false);
       }
+    }).catch((error) => {
+      console.warn('Failed to get Supabase session:', error);
+      if (!cancelled) setIsLoading(false);
     });
 
     // Listen for auth state changes (login, logout, token refresh)
