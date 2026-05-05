@@ -9,6 +9,8 @@
 - **CV Library**: Upload, organize, tag, and manage multiple PDF resumes with secure cloud storage.
 - **Job Analysis**: AI-driven structured analysis of job postings (seniority, skills, responsibilities, interview prep, resume tips, project ideas).
 - **Smart Matching**: Compare CVs to jobs, identify skill gaps, and score compatibility.
+- **LinkedIn Optimizer**: AI-driven profile audit and tailored networking message generator.
+- **Interview Prep**: Dedicated simulator with STAR technique guidance and session tracking.
 - **Cover Letters**: Generate tailored cover letters using CV + job context with language matching.
 - **Application Tracking**: Unified tracker for job statuses, applied dates, and personal notes.
 - **Multilingual**: Full English and Spanish support with AI output in matching language.
@@ -29,8 +31,9 @@
 - **Architecture**: Modular services (job_analyzer, cv_library_service, cover_letter_service, etc.)
 - **Auth**: Supabase Auth (JWT sessions) with legacy JWT bridge
 - **Storage**: Supabase Storage (private PDF buckets) with signed URLs
-- **AI**: DSPy workflows with structured Pydantic output schemas
-- **Quality**: Response normalization, deduplication, fallback mode, context fingerprinting
+- **AI**: DSPy workflows with structured Pydantic output schemas (Job Analysis, Match, Cover Letter, LinkedIn, Interviews)
+- **Quality**: Response normalization, deduplication, fallback mode, context fingerprinting, circuit breaker retries
+- **Testing**: Playwright "Critical Path" E2E suite for core workflows
 - **Deployment**: Vercel serverless functions (`api/index.py` entrypoint)
 
 ### Data Layer

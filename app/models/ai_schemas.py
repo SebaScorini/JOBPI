@@ -41,7 +41,7 @@ class AIOutputValidationFailure(Exception):
         return f"{self.operation} failed validation for {self.schema_name} ({self.failure_category})"
 
 
-def _normalize_string_list(value: object, *, limit: int) -> list[str]:
+def _normalize_string_list(value: object, *, limit: int, split_commas: bool = False) -> list[str]:
     if value is None:
         return []
 
@@ -54,7 +54,7 @@ def _normalize_string_list(value: object, *, limit: int) -> list[str]:
                 return []
             if "\n" in text:
                 return [part.strip(" -•\t") for part in text.splitlines() if part.strip(" -•\t")]
-            if "," in text:
+            if split_commas and "," in text:
                 parts = [part.strip(" -•\t") for part in text.split(",") if part.strip(" -•\t")]
                 if len(parts) > 1:
                     return parts
@@ -80,7 +80,7 @@ def _normalize_string_list(value: object, *, limit: int) -> list[str]:
 
 
 def _normalize_optimization_tips(value: object, *, limit: int) -> list[str]:
-    tips = _normalize_string_list(value, limit=limit)
+    tips = _normalize_string_list(value, limit=limit, split_commas=False)
     if not tips:
         return tips
 
@@ -283,7 +283,8 @@ class JobAnalysisAIOutput(BaseModel):
         }
         for key, limit in list_limits.items():
             if key in normalized:
-                normalized[key] = _normalize_string_list(normalized[key], limit=limit)
+                split_commas = key in {"req_skills", "required_skills", "nice_skills", "nice_to_have_skills", "gaps", "missing_skills"}
+                normalized[key] = _normalize_string_list(normalized[key], limit=limit, split_commas=split_commas)
         return normalized
 
 
@@ -343,7 +344,8 @@ class CvAnalysisAIOutput(BaseModel):
         }
         for key, limit in list_limits.items():
             if key in normalized:
-                normalized[key] = _normalize_string_list(normalized[key], limit=limit)
+                split_commas = key in {"missing_skills", "strengths"}
+                normalized[key] = _normalize_string_list(normalized[key], limit=limit, split_commas=split_commas)
         return normalized
 
 
@@ -372,7 +374,7 @@ class LinkedInProfileAIOutput(BaseModel):
         if "about_summary" in normalized:
             normalized["about_summary"] = _normalize_short_text(normalized["about_summary"], limit=2600)
         if "keywords" in normalized:
-            normalized["keywords"] = _normalize_string_list(normalized["keywords"], limit=10)
+            normalized["keywords"] = _normalize_string_list(normalized["keywords"], limit=10, split_commas=True)
         if "optimization_tips" in normalized:
             normalized["optimization_tips"] = _normalize_optimization_tips(normalized["optimization_tips"], limit=5)
         return normalized
@@ -396,6 +398,7 @@ class ColdOutreachAIOutput(BaseModel):
             normalized["personalization_notes"] = _normalize_string_list(
                 normalized["personalization_notes"],
                 limit=3,
+                split_commas=False
             )
         return normalized
 
@@ -467,7 +470,7 @@ class InterviewQuestionsAIOutput(BaseModel):
         if "questions" in normalized:
             normalized["questions"] = _normalize_interview_question_items(normalized["questions"])
         if "focus_areas" in normalized:
-            normalized["focus_areas"] = _normalize_string_list(normalized["focus_areas"], limit=5)
+            normalized["focus_areas"] = _normalize_string_list(normalized["focus_areas"], limit=5, split_commas=True)
         return normalized
 
 
@@ -492,7 +495,7 @@ class InterviewEvaluationAIOutput(BaseModel):
         if "ideal_answer" in normalized:
             normalized["ideal_answer"] = _normalize_short_text(normalized["ideal_answer"], limit=1500)
         if "improvement_tips" in normalized:
-            normalized["improvement_tips"] = _normalize_string_list(normalized["improvement_tips"], limit=3)
+            normalized["improvement_tips"] = _normalize_string_list(normalized["improvement_tips"], limit=3, split_commas=False)
         return normalized
 
 

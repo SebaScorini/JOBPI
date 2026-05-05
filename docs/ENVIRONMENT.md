@@ -23,6 +23,10 @@ This document lists all environment variables currently referenced in applicatio
 | `AI_TIMEOUT_SECONDS` | No | Timeout for AI operations | Fallback source: `DSPY_TIMEOUT_SECONDS` |
 | `DSPY_TIMEOUT_SECONDS` | No | Legacy AI-timeout fallback | Used only if `AI_TIMEOUT_SECONDS` is missing |
 | `SENTRY_DSN` | No | Enables Sentry error reporting | If unset, Sentry is disabled |
+| `SUPABASE_URL` | Yes | Supabase project URL | Used for Auth and Storage |
+| `SUPABASE_ANON_KEY` | Yes | Supabase public anonymous key | Used for client-side Auth |
+| `SUPABASE_JWT_SECRET` | Yes | Supabase JWT secret | Used to verify Supabase tokens in backend |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key | Used for administrative storage access |
 | `REDIS_URL` | No | Enables Redis-backed distributed rate limiting | In-memory fallback remains available |
 | `RATE_LIMIT_ENABLED` | No | Enables/disables rate limiting | Environment defaults differ by profile |
 | `TRUSTED_USER_EMAIL` | No | Allows user-limit bypass for one account | Case-insensitive comparison |
@@ -59,6 +63,8 @@ This document lists all environment variables currently referenced in applicatio
 | Variable | Required | Purpose | Notes |
 | --- | --- | --- | --- |
 | `VITE_API_URL` | Yes (prod frontend) | Backend base URL for SPA requests | Local fallback logic exists for localhost and default hosted API |
+| `VITE_SUPABASE_URL` | Yes | Supabase project URL for frontend | Must match backend value |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Supabase anon key for frontend | Must match backend value |
 | `VITE_SITE_URL` | No | Canonical site URL for frontend canonical URLs and password-reset redirects | Included in `.env.example` for hosted deployments; the frontend falls back to the browser origin when available |
 
 ## Example Sources

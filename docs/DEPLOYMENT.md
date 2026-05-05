@@ -60,6 +60,7 @@ Recommended production variables:
 
 - `REDIS_URL`
 - `SENTRY_DSN`
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
 - `FRONTEND_URL` or `CORS_ORIGINS` / `CORS_ORIGIN_REGEX`
 
 ## Vercel Deploy
@@ -72,6 +73,7 @@ Recommended production variables:
 6. Set `REDIS_URL` to enable shared rate limiting across multiple instances.
 7. Set `FRONTEND_URL` or `CORS_ORIGINS` for the deployed frontend domain.
 8. Set `VITE_API_URL` in the frontend project to the backend URL.
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the frontend project.
 9. Make sure the backend environment installs `alembic`; startup now upgrades the schema to `head`.
 10. Set `VITE_SITE_URL` when you want canonical URLs and password-reset redirects to point at a specific deployment origin; the frontend falls back to the browser origin when available.
 
@@ -145,6 +147,8 @@ python tests/benchmark.py
 cd frontend
 npm run test
 npm run build
+cd ..
+npx playwright test tests/e2e/critical-path.spec.ts
 ```
 
 Expected outcomes:

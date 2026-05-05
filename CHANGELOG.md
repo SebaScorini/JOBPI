@@ -2,6 +2,24 @@
 
 All notable changes to JOBPI will be documented in this file.
 
+## [2026-05-05] - LinkedIn Optimizer & Interview Prep
+
+### Added
+- **LinkedIn Optimizer**: AI-driven profile auditing and networking message generation services.
+- **Interview Preparation**: Dedicated simulator and prep guidance endpoints with STAR technique reinforcement.
+- **Critical Path E2E Suite**: Full-stack integration tests using Playwright covering registration, analysis, and matching flows.
+- **Appearance Customization**: User-controllable font scale and typeface settings via `AppearanceSettings`.
+- **Hybrid AuthContext**: Unified session management supporting both Supabase JS SDK and backend-native legacy tokens.
+
+### Changed
+- **Circuit Breaker**: Hardened retry logic with attempt-aware token budgets and improved provider error classification.
+- **I18n Coverage**: Expanded translations for appearance controls and interview guidance variants.
+- **CI Pipeline**: Integrated Supabase auth automated setup for isolated test environments.
+
+### Fixed
+- **Redirection Logic**: Resolved race conditions in unauthenticated user redirection during cold starts.
+- **Component Stability**: Fixed visibility issues for landing page primitives in headless test environments.
+
 ## [2026-04-30] - Interview Prep UX & Docs Refresh
 
 ### Added

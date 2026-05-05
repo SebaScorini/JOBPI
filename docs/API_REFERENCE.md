@@ -977,6 +977,73 @@ Example response:
 }
 ```
 
+## LinkedIn Endpoints
+
+### Generate LinkedIn Profile Audit
+
+- Method: `POST`
+- Route: `/linkedin/profile`
+- Description: Generate a LinkedIn profile audit and optimization suggestions.
+- Auth required: Yes
+
+Example request:
+
+```json
+{
+  "cv_id": 10,
+  "job_ids": [20, 21],
+  "language": "english",
+  "regenerate": false
+}
+```
+
+Example response:
+
+```json
+{
+  "cv_id": 10,
+  "audit": {
+    "headline": "...",
+    "about": "...",
+    "experience": "...",
+    "skills": "..."
+  },
+  "suggestions": [
+    "Use a more specific headline",
+    "Quantify impact in experience section"
+  ],
+  "created_at": "2026-05-05T12:00:00Z"
+}
+```
+
+### Generate Cold Outreach Message
+
+- Method: `POST`
+- Route: `/linkedin/outreach`
+- Description: Generate a tailored cold outreach message for a hiring manager.
+- Auth required: Yes
+
+Example request:
+
+```json
+{
+  "job_id": 20,
+  "cv_id": 10,
+  "hiring_manager_name": "Jane Doe",
+  "language": "english",
+  "regenerate": false
+}
+```
+
+Example response:
+
+```json
+{
+  "message": "Hi Jane, I saw your post for the Backend Engineer role...",
+  "created_at": "2026-05-05T12:00:00Z"
+}
+```
+
 ## Match Endpoints
 
 ### List Matches

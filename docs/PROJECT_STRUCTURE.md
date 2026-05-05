@@ -32,7 +32,7 @@ JOBPI/
 - `app/dependencies/`: FastAPI dependencies such as current-user resolution
 - `app/models/`: SQLModel entities
 - `app/schemas/`: request and response models
-- `app/services/`: business workflows for uploads, analysis, interview prep, matching, and cover letters
+- `app/services/`: business workflows for uploads, analysis, interview prep, matching, linkedin optimization, and cover letters
 
 ## Frontend
 

@@ -136,6 +136,10 @@ AI is invoked in four places:
    - Cover letter generation
 4. `app/services/cv_library_summary_service.py`
    - Compact CV library summary generation
+5. `app/services/linkedin_service.py`
+   - LinkedIn profile auditing and outreach message generation
+6. `app/services/interview_service.py`
+   - Interview question generation and STAR-based guidance
 
 There is no retrieval, vector database, embeddings pipeline, reranker, or RAG system in the backend code.
 
@@ -731,6 +735,56 @@ Extract and clean text from uploaded PDF resumes.
 
 - Logging only
 
+### `app/services/linkedin_service.py`
+
+#### Responsibility
+
+Audit a LinkedIn profile (as text) and generate tailored networking messages based on a job and CV.
+
+#### Inputs
+
+- profile text
+- optional job analysis
+- optional CV text
+- message type (connection, follow-up, referral)
+- language
+
+#### Outputs
+
+- `LinkedInAuditResponse` (strengths, gaps, improvements)
+- `LinkedInMessageResponse` (tailored message)
+
+#### Internal logic
+
+1. Prune profile text to high-signal sections (headline, about, experience)
+2. Run DSPy through the shared AI runtime
+3. Fallback to heuristic audit if AI fails
+
+### `app/services/interview_service.py`
+
+#### Responsibility
+
+Generate interview questions and provide STAR-based guidance for a specific job and CV.
+
+#### Inputs
+
+- job analysis
+- CV text
+- interview type (technical, behavioral, leadership)
+- language
+
+#### Outputs
+
+- list of tailored questions
+- STAR guidance (Situation, Task, Action, Result) for each question type
+
+#### Internal logic
+
+1. Load job and CV context
+2. Run DSPy through the shared AI runtime to generate questions
+3. Map questions to pre-defined STAR guidance variants based on category
+4. Fallback to generic interview prep on failure
+
 ### `app/services/response_language.py`
 
 #### Responsibility
@@ -1283,6 +1337,16 @@ Recommended structure:
 
 - `GET /matches`
 - `GET /matches/{match_id}`
+
+### LinkedIn Optimizer
+
+- `POST /linkedin/audit`
+- `POST /linkedin/message`
+
+### Interview Prep
+
+- `POST /interviews/questions`
+- `GET /interviews/guidance`
 
 ### Utility
 

@@ -33,6 +33,10 @@ The system is architected as a full-stack application with a FastAPI modular bac
 - CV-to-CV comparison for a single job position (helps select which resume to use).
 - Weighted compatibility scoring based on skill overlap, seniority fit, and role type alignment.
 
+**LinkedIn Optimizer**
+- AI-driven profile audit to align LinkedIn sections with specific roles and CVs.
+- Tailored cold outreach message generation for connection requests, follow-ups, and referrals.
+
 **Cover Letter Generation**
 - AI-generated tailored cover letters using CV + job context.
 - Language support (English & Spanish) with matching AI output.

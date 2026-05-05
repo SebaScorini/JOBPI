@@ -13,6 +13,8 @@ JOBPI now chooses its rate-limiter backend at runtime:
 | Auth register | 20 requests / 300 seconds | 3 requests / 600 seconds | Applied before duplicate-account checks |
 | Auth login | 30 requests / 300 seconds | 5 requests / 600 seconds | Uses the request subject or client IP |
 | Job analysis | 30 requests / 300 seconds | 6 requests / 3600 seconds | Protects AI analysis spend |
+| LinkedIn Optimizer | Shared | Shared | Uses the job analysis policy |
+| Interview simulator | Shared | Shared | Uses the job analysis policy |
 | Match CVs | 30 requests / 300 seconds | 8 requests / 3600 seconds | Covers fit-analysis requests |
 | Cover letter | 6 requests / 600 seconds | 4 requests / 3600 seconds | Development is intentionally looser for iteration |
 | CV upload | 20 requests / 300 seconds | 5 requests / 3600 seconds | Applies to upload endpoints |

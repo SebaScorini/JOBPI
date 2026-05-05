@@ -47,8 +47,10 @@ Record the printed benchmark timings so you can compare future changes against t
 
 1. Submit a representative job analysis request.
 2. Run a CV match request.
-3. Generate one cover letter if AI credentials are configured.
-4. Confirm responses succeed or fail gracefully without timeouts or malformed payloads.
+3. Generate one cover letter.
+4. Audit a LinkedIn profile or generate an outreach message.
+5. Start an interview session and submit one answer.
+6. Confirm responses succeed or fail gracefully without timeouts or malformed payloads.
 
 ## Rate Limiting
 

@@ -24,6 +24,8 @@ The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI ap
 - `app/api/routes/auth.py` exposes `/auth/register`, `/auth/login`, and `/auth/me`.
 - `app/api/routes/cvs.py` exposes upload, batch upload, list, detail, download, tag, favorite, bulk delete, and bulk tag flows.
 - `app/api/routes/jobs.py` exposes job analysis, list, detail, delete, status updates, notes, saved toggles, match generation, compare flows, and cover letter generation.
+- `app/api/routes/interviews.py` exposes interview session creation, question generation, and STAR-based guidance.
+- `app/api/routes/linkedin.py` exposes profile auditing and networking message generation.
 - `app/api/routes/matches.py` exposes match listing and match detail.
 - `app/models/entities.py` contains the SQLModel tables for users, CVs, job analyses, and CV-job matches.
 - `app/db/crud.py` owns persistence logic, soft deletes, deduplication helpers, and storage cleanup.
@@ -43,6 +45,8 @@ The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI ap
 - `app/services/cv_analyzer.py` compares a CV against a job description and returns fit summary, strengths, missing skills, improvements, rewritten bullets, interview focus, and next steps.
 - `app/services/cv_library_summary_service.py` creates compact library summaries for CV cards.
 - `app/services/cover_letter_service.py` generates a concise cover letter grounded in the selected job and CV.
+- `app/services/linkedin_service.py` audits LinkedIn profiles and generates context-aware outreach messages.
+- `app/services/interview_service.py` manages interview simulators and provides structured feedback.
 - `app/services/job_preprocessing.py` builds signal-heavy excerpts and fingerprints so analyses can be cached and retried deterministically.
 
 ## HTTP Surface
@@ -87,6 +91,14 @@ The Vercel backend entrypoint is `api/index.py`, which re-exports the FastAPI ap
 ### Health
 
 - `GET /health`
+
+## Testing Strategy
+
+JOBPI uses a multi-layered testing approach to ensure stability and reliability:
+
+- **Unit Tests**: Pytest for backend logic and Vitest for frontend components.
+- **Integration Tests**: Database-backed tests for CRUD and service layers.
+- **Critical Path E2E**: Playwright suite in `tests/e2e/critical-path.spec.ts` that validates the full stack from registration to job analysis and matching in a headless environment.
 
 ## Data Flow
 
