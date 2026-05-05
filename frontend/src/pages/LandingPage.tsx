@@ -118,7 +118,7 @@ export function LandingPage() {
           <div className="rounded-xl bg-brand-primary p-2 text-white shadow-lg shadow-brand-primary/20">
             <BrainCircuit size={24} />
           </div>
-          <span className="text-xl font-heading font-bold text-slate-900 dark:text-white">JOBPI</span>
+          <span className="text-xl font-heading font-bold text-slate-900 dark:text-white" data-testid="brand-name">JOBPI</span>
         </motion.div>
         
         <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
@@ -199,6 +199,7 @@ export function LandingPage() {
                 whileTap={allowRichMotion ? { scale: 0.95 } : undefined}
                 to="/register" 
                 className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-cta px-8 py-3.5 text-base font-semibold text-white shadow-[0_4px_12px_rgba(34,197,94,0.25)] transition-shadow hover:shadow-[0_6px_16px_rgba(34,197,94,0.35)] sm:w-auto"
+                data-testid="hero-cta"
               >
                 {t('landing.getStarted')} <ArrowRight size={18} />
               </MotionLink>

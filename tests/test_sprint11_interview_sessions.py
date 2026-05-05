@@ -20,15 +20,15 @@ def _fake_structured_ai_call(*, operation: str, **_kwargs):
         return SimpleNamespace(payload=payload)
 
     if operation == "interview_answer_evaluation":
-        question_index = 0
+        question_text = ""
         builder = _kwargs.get("attempt_kwargs_builder_with_exception")
         if callable(builder):
             try:
                 attempt_kwargs = builder(0, None)
             except TypeError:
                 attempt_kwargs = builder(0)
-            question_index = int(attempt_kwargs.get("question_index", 0))
-        score = 8 if question_index == 0 else 6
+            question_text = attempt_kwargs.get("question", "")
+        score = 8 if "backend workflow" in question_text else 6
         payload = SimpleNamespace(
             score=score,
             feedback="Good structure, but the answer needs more concrete evidence and outcome detail.",

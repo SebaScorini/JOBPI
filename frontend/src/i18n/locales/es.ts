@@ -570,6 +570,13 @@ const es: TranslationNode = {
     settingsAria: 'Ajustes de apariencia',
     settingsTitle: 'Apariencia',
   },
+  errorBoundary: {
+    title: 'Algo salio mal',
+    message: 'Ocurrio un error inesperado. Intenta de nuevo o navega al panel principal.',
+    retry: 'Intentar de nuevo',
+    goHome: 'Ir al panel',
+    details: 'Detalles del error',
+  },
 };
 
 export default es;

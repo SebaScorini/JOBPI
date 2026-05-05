@@ -565,6 +565,13 @@ const en: TranslationNode = {
     settingsAria: 'Appearance settings',
     settingsTitle: 'Appearance',
   },
+  errorBoundary: {
+    title: 'Something went wrong',
+    message: 'An unexpected error occurred. Please try again or navigate to the dashboard.',
+    retry: 'Try Again',
+    goHome: 'Go to Dashboard',
+    details: 'Error details',
+  },
 };
 
 export default en;

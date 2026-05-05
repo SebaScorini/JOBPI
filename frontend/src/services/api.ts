@@ -60,6 +60,7 @@ const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
   ERR_FORBIDDEN: 'You do not have permission to perform this action.',
   ERR_PDF_INVALID: "This file doesn't look like a valid PDF. Please try a different file.",
   ERR_CIRCUIT_BREAKER_OPEN: 'Our analysis service is temporarily busy. Please try again shortly.',
+  ERR_STORAGE_UNAVAILABLE: 'File storage is temporarily unavailable. Your data was saved but files may not upload right now.',
 };
 
 type ApiRequestOptions = Omit<RequestInit, 'headers'> & {

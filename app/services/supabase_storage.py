@@ -4,6 +4,11 @@ from typing import Any
 from urllib import error, parse, request
 
 from app.core.config import get_settings
+from app.core.service_circuit_breaker import (
+    ServiceCircuitBreaker,
+    ServiceCircuitBreakerConfig,
+    ServiceCircuitBreakerOpenError,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -15,13 +20,43 @@ class SupabaseStorageError(RuntimeError):
     pass
 
 
-def build_cv_storage_path(*, user_id: int, cv_id: int) -> str:
-    return f"{user_id}/{cv_id}.pdf"
+class SupabaseStorageUnavailableError(SupabaseStorageError):
+    """Raised when the storage circuit breaker is open."""
+
+    pass
+
+
+def _is_retryable_storage_error(exc: Exception) -> bool:
+    """Determine whether a storage error is worth retrying."""
+    if isinstance(exc, error.HTTPError):
+        return exc.code in {500, 502, 503, 504, 429}
+    if isinstance(exc, (error.URLError, ConnectionError, TimeoutError)):
+        return True
+    if isinstance(exc, SupabaseStorageError):
+        cause = exc.__cause__
+        if isinstance(cause, error.HTTPError):
+            return cause.code in {500, 502, 503, 504, 429}
+        return isinstance(cause, (error.URLError, ConnectionError, TimeoutError))
+    return False
 
 
 class SupabaseStorageService:
     def __init__(self) -> None:
         self.settings = get_settings()
+        self._circuit_breaker = ServiceCircuitBreaker(
+            "supabase_storage",
+            ServiceCircuitBreakerConfig(
+                failure_threshold=5,
+                recovery_timeout_seconds=30.0,
+                retries=2,
+                backoff_base_ms=100,
+                max_backoff_ms=2000,
+            ),
+        )
+
+    def is_available(self) -> bool:
+        """Check if the storage service circuit breaker is healthy."""
+        return self._circuit_breaker.is_available
 
     def upload_cv_pdf(self, *, path: str, file_bytes: bytes, upsert: bool = True) -> None:
         self._require_configuration()
@@ -30,7 +65,7 @@ class SupabaseStorageService:
             "Content-Type": "application/pdf",
             "x-upsert": "true" if upsert else "false",
         }
-        self._request(
+        self._protected_request(
             method="POST",
             path=f"/storage/v1/object/{CV_PDF_BUCKET}/{encoded_path}",
             data=file_bytes,
@@ -40,7 +75,7 @@ class SupabaseStorageService:
     def create_signed_download_url(self, *, path: str, expires_in: int = 60) -> str:
         self._require_configuration()
         encoded_path = _encode_object_path(path)
-        payload = self._request(
+        payload = self._protected_request(
             method="POST",
             path=f"/storage/v1/object/sign/{CV_PDF_BUCKET}/{encoded_path}",
             json_body={"expiresIn": expires_in},
@@ -54,7 +89,7 @@ class SupabaseStorageService:
 
     def delete_cv_pdf(self, *, path: str) -> None:
         self._require_configuration()
-        self._request(
+        self._protected_request(
             method="DELETE",
             path=f"/storage/v1/object/{CV_PDF_BUCKET}",
             json_body={"prefixes": [path]},
@@ -65,6 +100,19 @@ class SupabaseStorageService:
             raise SupabaseStorageError("SUPABASE_URL is not configured.")
         if not self.settings.supabase_service_role_key:
             raise SupabaseStorageError("SUPABASE_SERVICE_ROLE_KEY is not configured.")
+
+    def _protected_request(self, **kwargs: Any) -> dict[str, Any]:
+        """Execute a storage request through the circuit breaker."""
+        try:
+            return self._circuit_breaker.call(
+                self._request,
+                retryable=_is_retryable_storage_error,
+                **kwargs,
+            )
+        except ServiceCircuitBreakerOpenError:
+            raise SupabaseStorageUnavailableError(
+                "Supabase Storage is temporarily unavailable. Please try again shortly."
+            )
 
     def _request(
         self,
@@ -112,6 +160,11 @@ class SupabaseStorageService:
 
 def _encode_object_path(path: str) -> str:
     return parse.quote(path.lstrip("/"), safe="/")
+
+
+def build_cv_storage_path(*, user_id: int, cv_id: int) -> str:
+    """Build a deterministic storage path for a CV PDF."""
+    return f"{user_id}/{cv_id}.pdf"
 
 
 _service: SupabaseStorageService | None = None

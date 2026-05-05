@@ -6,6 +6,7 @@ import { AppThemeProvider } from './context/AppThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { ToastViewport } from './components/Toast';
 import { RouteFallback } from './components/RouteFallback';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const AuthLayout = lazy(() =>
   import('./components/layout/AuthLayout').then((module) => ({ default: module.AuthLayout })),
@@ -129,7 +130,12 @@ function LazyRoute({
   children: JSX.Element;
   variant: 'public' | 'auth' | 'app';
 }) {
-  return <Suspense fallback={<RouteFallback variant={variant} />}>{children}</Suspense>;
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary resetKeys={[pathname]}>
+      <Suspense fallback={<RouteFallback variant={variant} />}>{children}</Suspense>
+    </ErrorBoundary>
+  );
 }
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -302,7 +308,9 @@ function App() {
         <ToastProvider>
           <AuthProvider>
             <LanguageProvider>
-              <AppRouter />
+              <ErrorBoundary>
+                <AppRouter />
+              </ErrorBoundary>
               <ToastViewport />
             </LanguageProvider>
           </AuthProvider>

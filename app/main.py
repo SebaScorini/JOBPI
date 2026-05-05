@@ -22,6 +22,8 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.linkedin import router as linkedin_router
 from app.api.routes.matches import router as matches_router
 from app.core.config import get_settings
+from app.services.supabase_storage import SupabaseStorageUnavailableError, get_supabase_storage_service
+
 from app.core.logging import bind_request_context, bind_user_context, reset_context, reset_user_context, setup_logging
 from app.core.privacy import redact_email_for_observability, redact_pii
 from app.db.migration_runner import ensure_database_schema
@@ -126,6 +128,9 @@ def _http_error_code(request: Request, exc: HTTPException) -> str:
     if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
         return "ERR_AI_TIMEOUT"
     if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+        detail_lower = str(exc.detail).lower() if exc.detail else ""
+        if "storage" in detail_lower:
+            return "ERR_STORAGE_UNAVAILABLE"
         return "ERR_SERVICE_UNAVAILABLE"
     return f"ERR_HTTP_{exc.status_code}"
 
@@ -263,7 +268,9 @@ def create_app() -> FastAPI:
 
     @application.get("/health")
     def health_check() -> dict[str, str]:
-        return {"status": "ok"}
+        storage_service = get_supabase_storage_service()
+        storage_status = "ok" if storage_service.is_available() else "degraded"
+        return {"status": "ok", "storage": storage_status}
 
     return application
 
