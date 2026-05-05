@@ -748,7 +748,7 @@ def test_validate_ai_output_parses_fenced_json_and_normalizes_cv_labels(caplog):
     assert parsed.payload.fit_summary == "Strong fit for this backend role."
     assert parsed.payload.strengths == ["Python", "FastAPI"]
     assert parsed.payload.likely_fit_level == "Strong"
-    assert parsed.payload.resume_improvements == ["Add Docker evidence", "strengthen deployment stories"]
+    assert parsed.payload.resume_improvements == ["Add Docker evidence, strengthen deployment stories"]
     assert parsed.payload.ats_improvements == []
     assert parsed.payload.interview_focus == ["Explain scaling tradeoffs"]
 
