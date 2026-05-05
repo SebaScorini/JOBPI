@@ -6,6 +6,8 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import logging
+import re
+from types import SimpleNamespace
 
 from app.core.runtime import configure_runtime_environment
 
@@ -325,6 +327,15 @@ class InterviewSessionService:
         job_context = build_job_context(job.clean_description, title=job.title, company=job.company)
         cv_context = build_cv_context(cv.clean_text, summary=cv.summary, library_summary=cv.library_summary)
 
+        answer_record = {
+            "question_index": answer_payload.question_index,
+            "answer_text": answer_payload.answer_text.strip(),
+            "answered_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        answers.append(answer_record)
+        self._interview_repository.update_answers(session, interview_session=interview_session, answers=answers)
+
         try:
             evaluator = self._get_evaluator()
             logger.info(
@@ -345,7 +356,6 @@ class InterviewSessionService:
                     "question": question_text,
                     "question_category": question_category,
                     "difficulty": difficulty,
-                    "question_index": answer_payload.question_index,
                     "user_answer": answer_payload.answer_text,
                     "cv_context": cv_context,
                     "job_context": job_context,
@@ -356,20 +366,33 @@ class InterviewSessionService:
             )
         except HTTPException as exc:
             logger.warning("ai_call_http_error operation=interview_answer_evaluation status_code=%s", exc.status_code)
-            raise
+            parsed = self._build_fallback_evaluation_payload(
+                question=question_text,
+                question_category=question_category,
+                difficulty=difficulty,
+                user_answer=answer_payload.answer_text,
+                language=selected_language,
+            )
         except Exception as exc:
-            raise build_ai_failure_http_exception(
+            http_error = build_ai_failure_http_exception(
                 exc=exc,
                 logger=logger,
                 operation="interview_answer_evaluation",
                 default_detail="Failed to evaluate the interview answer. Please try again.",
-            ) from exc
+            )
+            logger.warning(
+                "ai_fallback operation=interview_answer_evaluation reason=%s status_code=%s",
+                type(exc).__name__,
+                http_error.status_code,
+            )
+            parsed = self._build_fallback_evaluation_payload(
+                question=question_text,
+                question_category=question_category,
+                difficulty=difficulty,
+                user_answer=answer_payload.answer_text,
+                language=selected_language,
+            )
 
-        answer_record = {
-            "question_index": answer_payload.question_index,
-            "answer_text": answer_payload.answer_text.strip(),
-            "answered_at": datetime.now(timezone.utc).isoformat(),
-        }
         evaluation_record = {
             "question_index": answer_payload.question_index,
             "score": parsed.payload.score,
@@ -379,7 +402,6 @@ class InterviewSessionService:
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        answers.append(answer_record)
         evaluations = list(interview_session.evaluations or [])
         evaluations.append(evaluation_record)
 
@@ -550,6 +572,55 @@ class InterviewSessionService:
             if len(result) >= limit:
                 break
         return result
+
+    def _build_fallback_evaluation_payload(
+        self,
+        *,
+        question: str,
+        question_category: str,
+        difficulty: str,
+        user_answer: str,
+        language: str,
+    ) -> SimpleNamespace:
+        answer_text = user_answer.strip()
+        word_count = len(re.findall(r"\b\w+\b", answer_text))
+        metric_count = len(re.findall(r"\b(?:\d+%?|\$\d+|x\d+|metrics?|impact|result|outcome)\b", answer_text, flags=re.IGNORECASE))
+        base_score = 6
+        if word_count >= 120:
+            base_score += 1
+        if metric_count >= 2:
+            base_score += 1
+        if any(token in answer_text.lower() for token in ("i did", "i built", "i improved", "i reduced", "i led")):
+            base_score += 1
+        if word_count < 40:
+            base_score -= 1
+        score = max(4, min(9, base_score))
+
+        category_label = question_category.replace("_", " ").strip() or "this question"
+        difficulty_label = difficulty.strip() or "medium"
+
+        feedback = (
+            "AI evaluation was unavailable, so this is a local fallback review. "
+            f"Your answer for the {category_label} question is a workable draft, but it should be more concrete about the actions, evidence, and outcome."
+        )
+        ideal_answer = (
+            f"A strong {difficulty_label} answer would restate the situation, name the exact actions you took, and quantify the result where possible."
+        )
+        improvement_tips = [
+            "Add one concrete metric or result.",
+            f"Tie the example back to the {category_label} competency the question is testing.",
+        ]
+        if len(answer_text.split()) < 60:
+            improvement_tips.insert(0, "Expand the answer with one more step from the situation, action, or result.")
+
+        return SimpleNamespace(
+            payload=SimpleNamespace(
+                score=score,
+                feedback=feedback,
+                ideal_answer=ideal_answer,
+                improvement_tips=improvement_tips[:3],
+            )
+        )
 
 
 _service: InterviewSessionService | None = None

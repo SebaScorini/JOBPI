@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from fastapi import HTTPException
+
 
 def _fake_structured_ai_call(*, operation: str, **_kwargs):
     if operation == "interview_question_generation":
@@ -108,3 +110,48 @@ def test_interview_session_flow(client, auth_headers, test_db, seeded_job, seede
     assert len(final_payload["answers"]) == 5
     assert len(final_payload["evaluations"]) == 5
     assert final_payload["summary"]["strong_areas"]
+
+
+def test_interview_answer_submit_uses_fallback_when_ai_evaluation_fails(client, auth_headers, test_db, seeded_job, seeded_cv, monkeypatch):
+    import app.services.interview_service as interview_service_module
+
+    service = interview_service_module.get_interview_session_service()
+    service.question_generator = lambda **_kwargs: None
+    service.evaluator = lambda **_kwargs: None
+
+    def failing_structured_ai_call(*, operation: str, **_kwargs):
+        if operation == "interview_question_generation":
+            return _fake_structured_ai_call(operation=operation, **_kwargs)
+        raise RuntimeError("openrouter unavailable")
+
+    monkeypatch.setattr(interview_service_module, "run_structured_ai_call", failing_structured_ai_call)
+
+    headers = auth_headers()
+    start_response = client.post(
+        f"/jobs/{seeded_job.id}/interview/start",
+        headers=headers,
+        json={"cv_id": seeded_cv.id, "session_type": "mixed", "language": "english"},
+    )
+    assert start_response.status_code == 200, start_response.text
+    session_id = start_response.json()["id"]
+
+    answer_response = client.post(
+        f"/jobs/{seeded_job.id}/interview/{session_id}/answer",
+        headers=headers,
+        json={"question_index": 0, "answer_text": "I improved the API workflow and measured the outcome."},
+    )
+
+    assert answer_response.status_code == 200, answer_response.text
+    feedback = answer_response.json()
+    assert feedback["question_index"] == 0
+    assert feedback["answer_text"] == "I improved the API workflow and measured the outcome."
+    assert feedback["feedback"].startswith("AI evaluation was unavailable")
+
+    saved_session = client.get(
+        f"/jobs/{seeded_job.id}/interview/{session_id}",
+        headers=headers,
+    )
+    assert saved_session.status_code == 200, saved_session.text
+    session_payload = saved_session.json()
+    assert session_payload["status"] == "in_progress"
+    assert session_payload["answers"][0]["answer_text"] == "I improved the API workflow and measured the outcome."

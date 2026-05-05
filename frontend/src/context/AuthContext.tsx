@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { User } from '../types';
-import { apiService, authStorage } from '../services/api';
+import { ApiError, apiService, authStorage } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -99,13 +99,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authStorage.clearToken();
 
     let supabaseError: Error | null = null;
+    let shouldTryLegacyAuth = false;
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw error;
-      return;
+
+      const {
+        data: { session: newSession },
+      } = await supabase.auth.getSession();
+
+      if (!newSession?.access_token) {
+        throw new Error('Supabase session is missing after login.');
+      }
+
+      try {
+        const userData = await apiService.getMe(newSession.access_token);
+        setSession(newSession);
+        setUser(userData);
+        return;
+      } catch (err: unknown) {
+        const backendAuthError = err instanceof ApiError && err.status === 401;
+        if (backendAuthError) {
+          // Backend rejected the Supabase token; clear local session and try
+          // legacy auth for bridge-period accounts.
+          await supabase.auth.signOut({ scope: 'local' });
+          setSession(null);
+          setUser(null);
+          shouldTryLegacyAuth = true;
+        }
+        throw err;
+      }
     } catch (err: unknown) {
       supabaseError = err instanceof Error ? err : new Error(String(err));
     }
@@ -120,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       supabaseMsg.includes('user not found') ||
       supabaseMsg.includes('email not confirmed');
 
-    if (!isUserNotInSupabase) {
+    if (!isUserNotInSupabase && !shouldTryLegacyAuth) {
       throw supabaseError;
     }
 

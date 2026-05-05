@@ -29,6 +29,7 @@ CV_LIST_COLUMNS = (
     CV.storage_path,
     CV.is_favorite,
     CV.tags,
+    CV.linkedin_profile_cache,
     CV.created_at,
 )
 
@@ -43,6 +44,7 @@ JOB_LIST_COLUMNS = (
     JobAnalysis.status,
     JobAnalysis.applied_date,
     JobAnalysis.notes,
+    JobAnalysis.linkedin_outreach_cache,
     JobAnalysis.created_at,
 )
 
@@ -344,6 +346,7 @@ def delete_multiple_cvs(session: Session, cvs: list[CV]) -> int:
                     cover_letter_cv_id=None,
                     cover_letter_language=None,
                     generated_cover_letter=None,
+                    linkedin_outreach_cache={},
                 )
             )
             # Soft-delete related matches
@@ -392,6 +395,14 @@ def delete_multiple_cvs(session: Session, cvs: list[CV]) -> int:
 
 def update_cv_library_summary(session: Session, cv: CV, library_summary: str) -> CV:
     cv.library_summary = library_summary
+    session.add(cv)
+    session.commit()
+    session.refresh(cv)
+    return cv
+
+
+def update_cv_linkedin_profile_cache(session: Session, cv: CV, cache: dict) -> CV:
+    cv.linkedin_profile_cache = cache
     session.add(cv)
     session.commit()
     session.refresh(cv)
@@ -583,6 +594,16 @@ def update_job_cover_letter(
     session.commit()
     session.refresh(job)
     return job
+
+
+def update_job_linkedin_outreach_cache(session: Session, job: JobAnalysis, cache: dict) -> JobAnalysis:
+    job.linkedin_outreach_cache = cache
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
 
 
 def create_match(

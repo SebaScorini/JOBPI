@@ -33,6 +33,63 @@ interface AnswerFeedback {
   suggestions: string[];
 }
 
+const INTERVIEW_DRAFT_STORAGE_KEY = 'jobpi.interview.sessionDraft';
+
+function mapSessionAnswersToNotes(session: InterviewSession): Record<number, string> {
+  const result: Record<number, string> = {};
+  for (const answer of session.answers ?? []) {
+    result[answer.question_index] = answer.answer_text;
+  }
+  return result;
+}
+
+function loadSessionDraft(sessionId: number): Record<number, string> {
+  try {
+    const raw = window.localStorage.getItem(`${INTERVIEW_DRAFT_STORAGE_KEY}:${sessionId}`);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    const result: Record<number, string> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const index = Number(key);
+      if (!Number.isInteger(index) || typeof value !== 'string') {
+        continue;
+      }
+      const trimmed = value.trim();
+      if (!trimmed) {
+        continue;
+      }
+      result[index] = value;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function hydrateNotesForSession(session: InterviewSession): Record<number, string> {
+  const savedAnswers = mapSessionAnswersToNotes(session);
+  const draftAnswers = loadSessionDraft(session.id);
+  return { ...draftAnswers, ...savedAnswers };
+}
+
+function mapSessionEvaluationsToFeedback(session: InterviewSession): Record<number, AnswerFeedback> {
+  const result: Record<number, AnswerFeedback> = {};
+  for (const evaluation of session.evaluations ?? []) {
+    result[evaluation.question_index] = {
+      score: Math.round(evaluation.score * 10),
+      explanation: evaluation.feedback,
+      suggestions: evaluation.improvement_tips,
+    };
+  }
+  return result;
+}
+
 function formatDate(value: string, language: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -136,6 +193,20 @@ export function InterviewPrepPage() {
   }, [activeSession]);
 
   useEffect(() => {
+    if (!activeSession) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(
+        `${INTERVIEW_DRAFT_STORAGE_KEY}:${activeSession.id}`,
+        JSON.stringify(notesByQuestion),
+      );
+    } catch {
+      // Ignore localStorage failures to avoid blocking the interview flow.
+    }
+  }, [activeSession, notesByQuestion]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadBaseData() {
@@ -229,8 +300,10 @@ export function InterviewPrepPage() {
       };
       const session = await apiService.startInterviewSession(Number(selectedJobId), payload);
       setActiveSession(session);
-      setNotesByQuestion({});
+      setNotesByQuestion(hydrateNotesForSession(session));
       setExpandedQuestions({});
+      setFeedbacks({});
+      setSubmittingQuestion({});
       setSessions((current) => {
         const next = [session, ...current.filter((item) => item.id !== session.id)];
         return next;
@@ -253,9 +326,9 @@ export function InterviewPrepPage() {
     try {
       const session = await apiService.getInterviewSession(Number(selectedJobId), sessionId);
       setActiveSession(session);
-      setNotesByQuestion({});
+      setNotesByQuestion(hydrateNotesForSession(session));
       setExpandedQuestions({});
-      setFeedbacks({});
+      setFeedbacks(mapSessionEvaluationsToFeedback(session));
       setSubmittingQuestion({});
     } catch (err) {
       const message = err instanceof Error ? err.message : t('interviewPrep.errorSession');
@@ -265,30 +338,51 @@ export function InterviewPrepPage() {
   }, [selectedJobId, showToast, t]);
 
   const handleSubmitAnswer = useCallback(async (index: number) => {
+    if (!selectedJobId || !activeSession) return;
+
     const answer = notesByQuestion[index]?.trim();
     if (!answer) return;
 
     setSubmittingQuestion((prev) => ({ ...prev, [index]: true }));
 
-    // Mock API delay to simulate answer evaluation
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const feedback = await apiService.submitInterviewAnswer(Number(selectedJobId), activeSession.id, {
+        question_index: index,
+        answer_text: answer,
+      });
 
-    // Mock structured feedback response
-    setFeedbacks((prev) => ({
-      ...prev,
-      [index]: {
-        score: Math.floor(Math.random() * 20) + 75, // 75-95 score
-        explanation: 'Good structure using the STAR method. You clearly defined the scenario and your specific actions. However, the impact could be quantified further.',
-        suggestions: [
-          'Add concrete metrics (e.g., "reduced latency by 20%").',
-          'Explicitly tie your actions back to the core requirements of this role.',
-        ],
-      },
-    }));
+      setFeedbacks((prev) => ({
+        ...prev,
+        [index]: {
+          score: Math.round(feedback.score * 10),
+          explanation: feedback.feedback,
+          suggestions: feedback.improvement_tips,
+        },
+      }));
 
-    setSubmittingQuestion((prev) => ({ ...prev, [index]: false }));
-    showToast(t('interviewPrep.feedbackSuccess'), 'success');
-  }, [notesByQuestion, showToast, t]);
+      const refreshedSession = await apiService.getInterviewSession(Number(selectedJobId), activeSession.id);
+      setActiveSession(refreshedSession);
+      setNotesByQuestion((current) => ({
+        ...current,
+        ...mapSessionAnswersToNotes(refreshedSession),
+      }));
+      setSessions((current) => [
+        refreshedSession,
+        ...current.filter((item) => item.id !== refreshedSession.id),
+      ]);
+
+      showToast(
+        feedback.is_complete ? t('interviewPrep.sessionComplete') : t('interviewPrep.feedbackSuccess'),
+        'success',
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('interviewPrep.errorSubmitAnswer');
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmittingQuestion((prev) => ({ ...prev, [index]: false }));
+    }
+  }, [activeSession, notesByQuestion, selectedJobId, showToast, t]);
 
   const handleCopyMarkdown = useCallback(async () => {
     if (!activeSession) {

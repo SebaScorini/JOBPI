@@ -59,6 +59,7 @@ class CV(SQLModel, table=True):
     )
     is_favorite: bool = Field(sa_column=Column(Boolean, nullable=False, default=False), default=False)
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON_FIELD, nullable=False, default=list))
+    linkedin_profile_cache: dict = Field(default_factory=dict, sa_column=Column(JSON_FIELD, nullable=False, default=dict))
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,
@@ -105,6 +106,7 @@ class JobAnalysis(SQLModel, table=True):
         default=None,
         sa_column=Column(String(20), nullable=True),
     )
+    linkedin_outreach_cache: dict = Field(default_factory=dict, sa_column=Column(JSON_FIELD, nullable=False, default=dict))
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True),
         default_factory=utc_now,

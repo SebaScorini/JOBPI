@@ -120,6 +120,33 @@ export interface CoverLetterResponse {
   generated_cover_letter: string;
 }
 
+export interface LinkedInProfileRequest {
+  cv_id: number;
+  job_ids?: number[];
+  language?: AIResponseLanguage;
+  regenerate?: boolean;
+}
+
+export interface LinkedInProfile {
+  headline: string;
+  about_summary: string;
+  keywords: string[];
+  optimization_tips: string[];
+}
+
+export interface ColdOutreachRequest {
+  job_id: number;
+  cv_id: number;
+  hiring_manager_name?: string | null;
+  language?: AIResponseLanguage;
+  regenerate?: boolean;
+}
+
+export interface ColdOutreach {
+  connection_message: string;
+  personalization_notes: string[];
+}
+
 export interface RecommendationMatch {
   cv_id: number;
   score: number;

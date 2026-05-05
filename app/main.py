@@ -19,6 +19,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.cvs import router as cvs_router
 from app.api.routes.interviews import router as interviews_router
 from app.api.routes.jobs import router as jobs_router
+from app.api.routes.linkedin import router as linkedin_router
 from app.api.routes.matches import router as matches_router
 from app.core.config import get_settings
 from app.core.logging import bind_request_context, bind_user_context, reset_context, reset_user_context, setup_logging
@@ -257,6 +258,7 @@ def create_app() -> FastAPI:
     application.include_router(cvs_router)
     application.include_router(interviews_router)
     application.include_router(jobs_router)
+    application.include_router(linkedin_router)
     application.include_router(matches_router)
 
     @application.get("/health")

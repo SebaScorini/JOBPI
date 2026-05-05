@@ -7,6 +7,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   Moon,
   Sun,
   Menu,
@@ -40,6 +41,7 @@ export function AppLayout() {
     { to: '/library', icon: FileText, label: t('nav.cvLibrary') },
     { to: '/tracker', icon: ClipboardList, label: t('nav.tracker') },
     { to: '/interviews', icon: ClipboardList, label: t('interviewPrep.title', { defaultValue: 'Interview Simulator' }) },
+    { to: '/linkedin', icon: MessageSquare, label: t('nav.linkedin') },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);

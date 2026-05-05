@@ -116,3 +116,7 @@ class JobRepository:
             language=language,
             cover_letter=cover_letter,
         )
+
+    def update_linkedin_outreach_cache(self, session: Session, *, job: JobAnalysis, cache: dict) -> JobAnalysis:
+        return crud.update_job_linkedin_outreach_cache(session, job, cache)
+

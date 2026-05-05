@@ -46,6 +46,9 @@ const JobDetailsPage = lazy(() =>
 const InterviewPrepPage = lazy(() =>
   import('./pages/InterviewPrepPage').then((module) => ({ default: module.InterviewPrepPage })),
 );
+const LinkedInOptimizerPage = lazy(() =>
+  import('./pages/LinkedInOptimizerPage').then((module) => ({ default: module.LinkedInOptimizerPage })),
+);
 const MatchesPage = lazy(() =>
   import('./pages/MatchesPage').then((module) => ({ default: module.MatchesPage })),
 );
@@ -62,6 +65,7 @@ function getRouteTitle(pathname: string): string {
   if (pathname === '/library') return `CV Library | ${SITE_NAME}`;
   if (pathname === '/jobs/new') return `Job Analysis | ${SITE_NAME}`;
   if (pathname === '/tracker') return `Tracker | ${SITE_NAME}`;
+  if (pathname === '/linkedin') return `LinkedIn Tools | ${SITE_NAME}`;
   if (pathname === '/login') return `Login | ${SITE_NAME}`;
   if (pathname === '/register') return `Register | ${SITE_NAME}`;
   if (pathname === '/jobs') return `Jobs | ${SITE_NAME}`;
@@ -129,13 +133,13 @@ function LazyRoute({
 }
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
-  const { session, isLoading } = useAuth();
+  const { session, user, isLoading } = useAuth();
 
   if (isLoading) {
     return <RouteFallback variant="app" />;
   }
 
-  if (!session) {
+  if (!session && !user) {
     return <Navigate to="/login" replace />;
   }
 
@@ -273,6 +277,14 @@ function AppRouter() {
             element={
               <LazyRoute variant="app">
                 <InterviewPrepPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/linkedin"
+            element={
+              <LazyRoute variant="app">
+                <LinkedInOptimizerPage />
               </LazyRoute>
             }
           />

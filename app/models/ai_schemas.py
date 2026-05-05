@@ -79,6 +79,36 @@ def _normalize_string_list(value: object, *, limit: int) -> list[str]:
     return normalized
 
 
+def _normalize_optimization_tips(value: object, *, limit: int) -> list[str]:
+    tips = _normalize_string_list(value, limit=limit)
+    if not tips:
+        return tips
+
+    merged: list[str] = []
+    for tip in tips:
+        current = tip.strip()
+        if not current:
+            continue
+
+        current_lower = current.lower()
+        previous = merged[-1] if merged else ""
+        previous_lower = previous.lower() if previous else ""
+
+        should_merge = bool(previous) and (
+            current_lower.startswith(("e.g.", "i.e.", "for example", "example:", "ej.", "p. ej."))
+            or current.startswith(("'", '"', "(", "["))
+            or previous_lower.endswith(("e.g.", "i.e.", "for example:", "example:"))
+        )
+
+        if should_merge:
+            merged[-1] = f"{previous} {current}".strip()
+            continue
+
+        merged.append(current)
+
+    return merged[:limit]
+
+
 def _normalize_short_text(value: object, *, limit: int) -> str:
     if not isinstance(value, str):
         if value is None:
@@ -321,6 +351,53 @@ class CoverLetterAIOutput(BaseModel):
     model_config = StrictModelConfig
 
     cover_letter: str = Field(min_length=1, max_length=3000)
+
+
+class LinkedInProfileAIOutput(BaseModel):
+    model_config = StrictModelConfig
+
+    headline: str = Field(min_length=1, max_length=220)
+    about_summary: str = Field(min_length=1, max_length=2600)
+    keywords: list[str] = Field(default_factory=list, max_length=10)
+    optimization_tips: list[str] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_profile(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "headline" in normalized:
+            normalized["headline"] = _normalize_short_text(normalized["headline"], limit=220)
+        if "about_summary" in normalized:
+            normalized["about_summary"] = _normalize_short_text(normalized["about_summary"], limit=2600)
+        if "keywords" in normalized:
+            normalized["keywords"] = _normalize_string_list(normalized["keywords"], limit=10)
+        if "optimization_tips" in normalized:
+            normalized["optimization_tips"] = _normalize_optimization_tips(normalized["optimization_tips"], limit=5)
+        return normalized
+
+
+class ColdOutreachAIOutput(BaseModel):
+    model_config = StrictModelConfig
+
+    connection_message: str = Field(min_length=1, max_length=300)
+    personalization_notes: list[str] = Field(default_factory=list, max_length=3)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_outreach(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "connection_message" in normalized:
+            normalized["connection_message"] = _normalize_short_text(normalized["connection_message"], limit=300)
+        if "personalization_notes" in normalized:
+            normalized["personalization_notes"] = _normalize_string_list(
+                normalized["personalization_notes"],
+                limit=3,
+            )
+        return normalized
 
 
 class CvLibrarySummaryAIOutput(BaseModel):

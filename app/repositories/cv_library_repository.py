@@ -15,6 +15,9 @@ class CvLibraryRepository:
     def update_cv_library_summary(self, session: Session, cv: CV, library_summary: str) -> CV:
         return crud.update_cv_library_summary(session, cv, library_summary)
 
+    def update_linkedin_profile_cache(self, session: Session, cv: CV, cache: dict) -> CV:
+        return crud.update_cv_linkedin_profile_cache(session, cv, cache)
+
     def create_cv(
         self,
         session: Session,

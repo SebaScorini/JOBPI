@@ -1,4 +1,5 @@
 import {
+  ColdOutreach,
   CoverLetterResponse,
   AIResponseLanguage,
   CVComparisonResult,
@@ -11,6 +12,7 @@ import {
   JobApplicationStatus,
   JobAnalysisRequest,
   JobAnalysisResponse,
+  LinkedInProfile,
   MatchLevel,
   PaginatedResult,
   PaginationMeta,
@@ -802,6 +804,78 @@ export const apiService = {
       }),
     });
   },
+
+  async generateLinkedInProfile(
+    cvId: number,
+    jobIds: number[] = [],
+    language: AIResponseLanguage = 'english',
+    options: RegenerateOption = {},
+  ): Promise<LinkedInProfile> {
+    return request<LinkedInProfile>('/linkedin/profile', {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cv_id: cvId,
+        job_ids: jobIds,
+        language,
+        regenerate: options.regenerate ?? false,
+      }),
+    });
+  },
+
+  async getCachedLinkedInProfile(
+    cvId: number,
+    jobIds: number[] = [],
+    language: AIResponseLanguage = 'english',
+  ): Promise<LinkedInProfile | null> {
+    const searchParams = new URLSearchParams({
+      cv_id: String(cvId),
+      language,
+    });
+    jobIds.forEach((jobId) => searchParams.append('job_ids', String(jobId)));
+    return request<LinkedInProfile | null>(`/linkedin/profile?${searchParams.toString()}`, { auth: true });
+  },
+
+  async generateColdOutreach(
+    jobId: number,
+    cvId: number,
+    hiringManagerName?: string | null,
+    language: AIResponseLanguage = 'english',
+    options: RegenerateOption = {},
+  ): Promise<ColdOutreach> {
+    return request<ColdOutreach>('/linkedin/outreach', {
+      method: 'POST',
+      auth: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: jobId,
+        cv_id: cvId,
+        hiring_manager_name: hiringManagerName?.trim() || null,
+        language,
+        regenerate: options.regenerate ?? false,
+      }),
+    });
+  },
+
+  async getCachedColdOutreach(
+    jobId: number,
+    cvId: number,
+    hiringManagerName?: string | null,
+    language: AIResponseLanguage = 'english',
+  ): Promise<ColdOutreach | null> {
+    const searchParams = new URLSearchParams({
+      job_id: String(jobId),
+      cv_id: String(cvId),
+      language,
+    });
+    const normalizedName = hiringManagerName?.trim();
+    if (normalizedName) {
+      searchParams.set('hiring_manager_name', normalizedName);
+    }
+    return request<ColdOutreach | null>(`/linkedin/outreach?${searchParams.toString()}`, { auth: true });
+  },
+
 
   async listMatches(): Promise<CVJobMatch[]> {
     const response = await this.listMatchesPage();
