@@ -2,12 +2,13 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import func, update
+from sqlalchemy import MetaData, Table, func, update
 from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import load_only
 from sqlmodel import Session, select
 
+from app.models.entities import utc_now
 from app.models import CV, CVJobMatch, InterviewSession, JobAnalysis, User
 from app.services.supabase_storage import SupabaseStorageError, get_supabase_storage_service
 
@@ -64,6 +65,13 @@ def _sha256_hex(value: str) -> str:
 
 def _postgres_sha256_expr(column):
     return func.encode(func.digest(column, "sha256"), "hex")
+
+
+def _job_analysis_table(session: Session) -> Table:
+    bind = session.get_bind()
+    if bind is None:
+        raise RuntimeError("Database session is not bound to an engine.")
+    return Table("job_analyses", MetaData(), autoload_with=bind)
 
 
 def create_user(session: Session, email: str, hashed_password: str) -> User:
@@ -418,22 +426,35 @@ def create_job_analysis(
     clean_description: str,
     analysis_result: dict,
 ) -> JobAnalysis:
-    job = JobAnalysis(
-        user_id=user_id,
-        title=title,
-        company=company,
-        description=description,
-        clean_description=clean_description,
-        analysis_result=analysis_result,
-        is_saved=False,
-    )
-    session.add(job)
+    job_table = _job_analysis_table(session)
+    now = utc_now()
+    values: dict[str, object] = {
+        "user_id": user_id,
+        "title": title,
+        "company": company,
+        "description": description,
+        "clean_description": clean_description,
+        "analysis_result": analysis_result,
+        "is_saved": False,
+        "status": "saved",
+        "created_at": now,
+        "updated_at": now,
+    }
+    if "linkedin_outreach_cache" in job_table.c:
+        values["linkedin_outreach_cache"] = {}
+    if "linkedin_follow_up_cache" in job_table.c:
+        values["linkedin_follow_up_cache"] = {}
+
     try:
+        result = session.execute(job_table.insert().values(**values))
         session.commit()
     except IntegrityError:
         session.rollback()
         raise
-    session.refresh(job)
+    inserted_id = result.inserted_primary_key[0]
+    job = session.get(JobAnalysis, inserted_id)
+    if job is None:
+        raise RuntimeError("Inserted job analysis could not be reloaded.")
     return job
 
 

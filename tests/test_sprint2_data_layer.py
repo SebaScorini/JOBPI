@@ -192,3 +192,71 @@ def test_job_analysis_status_check_constraint_is_enforced():
         engine.dispose()
         if db_path.exists():
             db_path.unlink()
+
+
+def test_create_job_analysis_populates_legacy_follow_up_cache_column():
+    from app.db import crud
+
+    tmp_dir = Path.cwd() / ".tmp-tests"
+    tmp_dir.mkdir(exist_ok=True)
+    db_path = tmp_dir / f"legacy-follow-up-cache-{uuid4().hex}.db"
+    engine = create_engine(f"sqlite:///{db_path.resolve().as_posix()}")
+
+    try:
+        SQLModel.metadata.create_all(engine)
+        with engine.begin() as connection:
+            connection.exec_driver_sql("DROP TABLE job_analyses")
+            connection.exec_driver_sql(
+                """
+                CREATE TABLE job_analyses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    company VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL,
+                    clean_description TEXT NOT NULL,
+                    analysis_result JSON NOT NULL,
+                    is_saved BOOLEAN NOT NULL,
+                    status VARCHAR(20) NOT NULL,
+                    applied_date DATETIME NULL,
+                    notes TEXT NULL,
+                    generated_cover_letter TEXT NULL,
+                    cover_letter_cv_id INTEGER NULL,
+                    cover_letter_language VARCHAR(20) NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    deleted_at DATETIME NULL,
+                    linkedin_outreach_cache JSON NOT NULL,
+                    linkedin_follow_up_cache JSON NOT NULL
+                )
+                """
+            )
+
+        with Session(engine) as session:
+            user = User(email="legacy-cache@example.com", hashed_password="hashed")
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+            job = crud.create_job_analysis(
+                session,
+                user_id=user.id,
+                title="Backend Engineer",
+                company="Acme",
+                description="Build APIs",
+                clean_description="Build APIs",
+                analysis_result={"summary": "ok"},
+            )
+
+            assert job.id is not None
+
+            row = session.connection().exec_driver_sql(
+                "SELECT linkedin_outreach_cache, linkedin_follow_up_cache FROM job_analyses WHERE id = ?",
+                (job.id,),
+            ).one()
+            assert row[0] == "{}"
+            assert row[1] == "{}"
+    finally:
+        engine.dispose()
+        if db_path.exists():
+            db_path.unlink()
